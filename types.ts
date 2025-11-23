@@ -16,6 +16,14 @@ export interface AppSettings {
   fontSize: 'small' | 'medium' | 'large';
 }
 
+// Helper interface for DB storage JSON
+export interface AvatarData {
+  color: string;
+  image?: string;
+  frame?: string;
+  nameColor?: string;
+}
+
 export interface User {
   name: string;
   studentId: string;

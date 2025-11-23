@@ -14,10 +14,15 @@ import { ExamScreen } from './screens/ExamScreen';
 import { WordChallengeScreen } from './screens/WordChallengeScreen';
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
 
-// Services & Mock Data
-import { INITIAL_QUESTIONS, INITIAL_RESOURCES, INITIAL_EXAMS, WORD_DATABASE, GAME_WEEKLY_LEADERBOARD } from './services/mockData';
+// Services
+import { WORD_DATABASE, GAME_WEEKLY_LEADERBOARD } from './services/mockData'; // Word DB can stay mock for now
 import { calculateLevel } from './services/levelService';
-import { mockLogin, saveUserHeartState } from './services/authService';
+import { login, updateUserInDb } from './services/authService';
+import { 
+    fetchQuestions, createQuestion, createReply, markBestAnswer, 
+    fetchResources, createResource, updateResourceLikes,
+    fetchExams, createExam 
+} from './services/dataService';
 
 // Helper to get frame styles (Used in Header)
 const getFrameStyle = (frameId?: string) => {
@@ -68,13 +73,14 @@ export default function App() {
   const [currentTab, setTab] = useState<Tab>(Tab.HOME);
   const [darkMode, setDarkMode] = useState(false);
   
-  // Data State
-  const [questions, setQuestions] = useState<Question[]>(INITIAL_QUESTIONS);
+  // Data State - Initialize empty, fetch via Effect
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
-  const [resources, setResources] = useState<Resource[]>(INITIAL_RESOURCES);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
-  const [exams, setExams] = useState<Exam[]>(INITIAL_EXAMS);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Navigation Stack
   const [showModeration, setShowModeration] = useState(false);
@@ -92,6 +98,26 @@ export default function App() {
     }
   }, [darkMode]);
 
+  // Load Data on Mount (or when user logs in)
+  useEffect(() => {
+      const loadData = async () => {
+          setIsLoading(true);
+          const [qs, rs, es] = await Promise.all([
+              fetchQuestions(),
+              fetchResources(),
+              fetchExams()
+          ]);
+          setQuestions(qs);
+          setResources(rs);
+          setExams(es);
+          setIsLoading(false);
+      };
+      
+      // Load data immediately or only if user is logged in?
+      // Better to load publicly visible data anyway
+      loadData();
+  }, [user]); // Reload if user changes (optional, but good for syncing)
+
   // Level Recalculation Effect
   useEffect(() => {
     if (user) {
@@ -102,7 +128,7 @@ export default function App() {
     }
   }, [user?.points]);
 
-  // Heart Daily Reset Check (Runs on mount and periodically)
+  // Heart Daily Reset Check
   useEffect(() => {
     const checkReset = () => {
         if (!user) return;
@@ -110,19 +136,24 @@ export default function App() {
         if (user.lastHeartReset !== today) {
             const updatedUser = { ...user, hearts: 3, lastHeartReset: today };
             setUser(updatedUser);
-            saveUserHeartState(updatedUser);
+            updateUserInDb(updatedUser);
         }
     };
-    const interval = setInterval(checkReset, 60000); // Check every minute
-    checkReset(); // Check immediately
+    const interval = setInterval(checkReset, 60000); 
+    checkReset(); 
     return () => clearInterval(interval);
-  }, [user?.name]); // Dependency on name ensures it runs after login
+  }, [user?.name]); 
 
   // --- Handlers ---
 
   const handleLogin = async (name: string, studentId: string) => {
-    const loggedInUser = await mockLogin(name, studentId);
-    setUser(loggedInUser);
+    try {
+        const loggedInUser = await login(name, studentId);
+        setUser(loggedInUser);
+    } catch (e) {
+        alert("登入失敗，請檢查網路連線");
+        console.error(e);
+    }
   };
 
   const handleLogout = () => {
@@ -137,89 +168,75 @@ export default function App() {
 
   const handleUpdateUser = (updatedUser: User) => {
     setUser(updatedUser);
-    if (updatedUser.avatarImage) {
-        localStorage.setItem(`avatar_${updatedUser.studentId}`, updatedUser.avatarImage);
-    }
+    updateUserInDb(updatedUser);
   };
 
-  // Hearts Logic
   const handleHeartUpdate = (newHearts: number) => {
       if(!user) return;
       const updatedUser = { ...user, hearts: newHearts };
       setUser(updatedUser);
-      saveUserHeartState(updatedUser);
+      updateUserInDb(updatedUser);
   };
 
-  const handlePostQuestion = (newQ: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => {
-    const question: Question = {
-      ...newQ,
-      id: Date.now(),
-      date: new Date().toLocaleDateString(),
-      replies: [],
-      views: 0,
-      replyCount: 0,
-      authorAvatarImage: user?.avatarImage,
-      authorAvatarFrame: user?.avatarFrame,
-      authorNameColor: user?.nameColor
-    };
-    setQuestions([question, ...questions]);
-    setTab(Tab.HOME);
-    if(user && !user.isAdmin) setUser({...user, points: user.points + 5}); 
-  };
-
-  const handleAddReply = (questionId: number, content: string, image?: string) => {
+  const handlePostQuestion = async (newQ: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => {
     if (!user) return;
-    setQuestions(questions.map(q => {
-      if (q.id === questionId) {
-        const newReply = {
-          id: Date.now(),
-          content,
-          image,
-          author: user.name,
-          avatarColor: user.avatarColor,
-          avatarImage: user.avatarImage,
-          avatarFrame: user.avatarFrame,
-          nameColor: user.nameColor,
-          date: new Date().toLocaleDateString()
-        };
-        const updatedQ = {
-          ...q,
-          replies: [...q.replies, newReply],
-          replyCount: q.replies.length + 1
-        };
-        if (selectedQuestion?.id === questionId) setSelectedQuestion(updatedQ);
-        return updatedQ;
-      }
-      return q;
-    }));
-    if (!user.isAdmin) setUser({...user, points: user.points + 10});
-    alert(`回答成功！獲得 10 PT`);
-  };
-
-  const handleMarkBest = (questionId: number, replyId: number) => {
-    if (!user) return;
-    const targetQuestion = questions.find(q => q.id === questionId);
-    if (!targetQuestion) return;
-    const targetReply = targetQuestion.replies.find(r => r.id === replyId);
-    if (!targetReply) return;
-    if (targetReply.author === user.name) {
-      alert("不能將自己的回答選為最佳解答喔！");
-      return;
+    try {
+        await createQuestion(user, newQ.title, newQ.content, newQ.tags, newQ.image);
+        const updatedQuestions = await fetchQuestions(); // Refresh
+        setQuestions(updatedQuestions);
+        setTab(Tab.HOME);
+        
+        if(!user.isAdmin) {
+             const updatedUser = {...user, points: user.points + 5};
+             setUser(updatedUser);
+             updateUserInDb(updatedUser);
+        }
+    } catch (e) {
+        alert("發佈失敗");
     }
-    setQuestions(questions.map(q => {
-      if (q.id === questionId) {
-        const updatedReplies = q.replies.map(r => {
-            if (r.id === replyId) return { ...r, isBestAnswer: true };
-            return r;
-        });
-        const updatedQ = { ...q, status: 'solved' as const, replies: updatedReplies };
-        if (selectedQuestion?.id === questionId) setSelectedQuestion(updatedQ);
-        return updatedQ;
-      }
-      return q;
-    }));
-    if (!user.isAdmin) setUser(prev => prev ? ({ ...prev, points: prev.points + 10 }) : null);
-    alert(`已選為最佳解答！\n\n🎉 對方獲得 +30 PT\n🎉 您獲得 +10 PT (結案獎勵)`);
+  };
+
+  const handleAddReply = async (questionId: number, content: string, image?: string) => {
+    if (!user) return;
+    try {
+        await createReply(user, questionId, content, image);
+        // Refresh Question Detail
+        const updatedQuestions = await fetchQuestions();
+        setQuestions(updatedQuestions);
+        
+        // Update selected question view if open
+        const updatedQ = updatedQuestions.find(q => q.id === questionId);
+        if (updatedQ) setSelectedQuestion(updatedQ);
+
+        if (!user.isAdmin) {
+            const updatedUser = {...user, points: user.points + 10};
+            setUser(updatedUser);
+            updateUserInDb(updatedUser);
+        }
+        alert(`回答成功！獲得 10 PT`);
+    } catch (e) {
+        alert("回覆失敗");
+    }
+  };
+
+  const handleMarkBest = async (questionId: number, replyId: number) => {
+    if (!user) return;
+    try {
+        await markBestAnswer(questionId, replyId);
+        const updatedQuestions = await fetchQuestions();
+        setQuestions(updatedQuestions);
+        const updatedQ = updatedQuestions.find(q => q.id === questionId);
+        if (updatedQ) setSelectedQuestion(updatedQ);
+
+        if (!user.isAdmin) {
+            const updatedUser = {...user, points: user.points + 10};
+            setUser(updatedUser);
+            updateUserInDb(updatedUser);
+        }
+        alert(`已選為最佳解答！\n\n🎉 對方獲得 +30 PT\n🎉 您獲得 +10 PT (結案獎勵)`);
+    } catch (e) {
+        alert("操作失敗");
+    }
   };
 
   const handleReport = (type: 'question' | 'reply', id: number, contentSnippet: string, reason: string) => {
@@ -233,6 +250,7 @@ export default function App() {
         reporter: user.name
     };
     setReports([...reports, newReport]);
+    // Note: Reports are currently local only. Create a 'reports' table in DB to persist.
   };
 
   const handleBuyProduct = (product: Product) => {
@@ -240,11 +258,15 @@ export default function App() {
     const isOwned = user.inventory.includes(product.id) || user.avatarFrame === product.id || user.nameColor === product.color;
     if (isOwned) {
         if (product.category === 'frame') {
-            setUser({ ...user, avatarFrame: product.id });
+            const u = { ...user, avatarFrame: product.id };
+            setUser(u);
+            updateUserInDb(u);
             alert(`已裝備：${product.name}`);
         } else if (product.category === 'cosmetic') {
             const textClass = product.color.split(' ').find(c => c.startsWith('text-'));
-            setUser({ ...user, nameColor: textClass });
+            const u = { ...user, nameColor: textClass };
+            setUser(u);
+            updateUserInDb(u);
             alert(`已啟用：${product.name}`);
         }
         return;
@@ -261,58 +283,65 @@ export default function App() {
              updatedUser.nameColor = textClass;
         }
         setUser(updatedUser);
+        updateUserInDb(updatedUser);
         alert(`購買成功：${product.name}`);
     } else {
         alert("積分不足！");
     }
   };
 
-  const handleAddResource = (title: string, description: string, tags: string[], images: string[]) => {
+  const handleAddResource = async (title: string, description: string, tags: string[], images: string[]) => {
       if(!user) return;
-      const newRes: Resource = {
-          id: Date.now(),
-          title, description, tags, images,
-          author: user.name,
-          authorAvatarColor: user.avatarColor,
-          authorAvatarImage: user.avatarImage,
-          authorAvatarFrame: user.avatarFrame,
-          authorNameColor: user.nameColor,
-          date: new Date().toLocaleDateString(),
-          likes: 0,
-          likedBy: []
-      };
-      setResources([newRes, ...resources]);
-      if(!user.isAdmin) setUser({...user, points: user.points + 20});
-      alert('發佈成功！獲得 20 PT');
-  };
+      try {
+          await createResource(user, title, description, tags, images);
+          const res = await fetchResources();
+          setResources(res);
 
-  const handleLikeResource = (resourceId: number) => {
-      if(!user) return;
-      setResources(resources.map(res => {
-          if (res.id === resourceId) {
-              const hasLiked = res.likedBy.includes(user.name);
-              const newLikedBy = hasLiked 
-                ? res.likedBy.filter(name => name !== user.name) 
-                : [...res.likedBy, user.name];
-              const updatedRes = { ...res, likes: newLikedBy.length, likedBy: newLikedBy };
-              if(selectedResource?.id === resourceId) setSelectedResource(updatedRes);
-              return updatedRes;
+          if(!user.isAdmin) {
+              const u = {...user, points: user.points + 20};
+              setUser(u);
+              updateUserInDb(u);
           }
-          return res;
-      }));
+          alert('發佈成功！獲得 20 PT');
+      } catch (e) {
+          alert("發佈失敗");
+      }
   };
 
-  const handleAddExam = (subject: string, title: string, date: string, time: string) => {
+  const handleLikeResource = async (resourceId: number) => {
       if(!user) return;
-      const newExam: Exam = { id: Date.now(), subject, title, date, time, author: user.name };
-      setExams([...exams, newExam]);
+      const res = resources.find(r => r.id === resourceId);
+      if (!res) return;
+
+      const hasLiked = res.likedBy.includes(user.name);
+      const newLikedBy = hasLiked 
+        ? res.likedBy.filter(name => name !== user.name) 
+        : [...res.likedBy, user.name];
+      
+      // Optimistic update locally
+      setResources(resources.map(r => r.id === resourceId ? { ...r, likes: newLikedBy.length, likedBy: newLikedBy } : r));
+      if (selectedResource?.id === resourceId) {
+          setSelectedResource({ ...selectedResource, likes: newLikedBy.length, likedBy: newLikedBy });
+      }
+
+      // Sync DB
+      await updateResourceLikes(resourceId, newLikedBy.length, newLikedBy);
+  };
+
+  const handleAddExam = async (subject: string, title: string, date: string, time: string) => {
+      if(!user) return;
+      await createExam(user, subject, title, date, time);
+      const es = await fetchExams();
+      setExams(es);
   };
 
   const handleFinishChallenge = (result: GameResult) => {
       if (!user) return;
-      const pointsWon = Math.floor(result.score / 50); // Adjusted reward
+      const pointsWon = Math.floor(result.score / 50); 
       if (!user.isAdmin && pointsWon > 0) {
-          setUser({ ...user, points: user.points + pointsWon });
+          const u = { ...user, points: user.points + pointsWon };
+          setUser(u);
+          updateUserInDb(u);
       }
   };
 
@@ -322,7 +351,6 @@ export default function App() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  // NOTE: background color is applied here to the root wrapper to fix "white space" issue
   const commonLayoutClasses = `${darkMode ? 'dark' : ''} bg-gray-100 dark:bg-gray-900 min-h-screen`;
 
   if (showModeration) {
@@ -341,7 +369,7 @@ export default function App() {
              <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
                 <WordChallengeScreen 
                     user={user}
-                    words={WORD_DATABASE}
+                    words={WORD_DATABASE} // Keeping Word DB static for now
                     leaderboard={GAME_WEEKLY_LEADERBOARD}
                     onBack={() => setShowWordChallenge(false)}
                     onFinish={handleFinishChallenge}
@@ -445,7 +473,11 @@ export default function App() {
         <main className="max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col transition-colors duration-300">
             <Header user={user} />
             <div className="flex-1 overflow-y-auto">
-                {renderScreen()}
+                {isLoading ? (
+                    <div className="flex items-center justify-center h-40 text-gray-400">載入資料中...</div>
+                ) : (
+                    renderScreen()
+                )}
             </div>
             <BottomNav 
                 currentTab={currentTab === Tab.ASK ? Tab.HOME : currentTab} 
