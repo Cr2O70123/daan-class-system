@@ -47,6 +47,9 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
   const [showAiChat, setShowAiChat] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // LIGHTBOX STATE
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,7 +165,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
       setAiResponse(response.text || "抱歉，AI 暫時無法分析此問題。");
     } catch (error) {
       console.error("AI Error:", error);
-      setAiResponse("連線錯誤，請稍後再試。(請確認您已設定 API Key)");
+      setAiResponse("連線錯誤，請稍後再試。");
     } finally {
       setIsAiLoading(false);
     }
@@ -208,6 +211,16 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
   return (
     <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col pb-safe relative transition-colors">
       
+      {/* --- LIGHTBOX MODAL --- */}
+      {lightboxImage && (
+          <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center animate-in fade-in duration-200" onClick={() => setLightboxImage(null)}>
+              <button className="absolute top-4 right-4 text-white p-2 bg-gray-800/50 rounded-full">
+                  <X size={24} />
+              </button>
+              <img src={lightboxImage} alt="Full View" className="max-w-full max-h-full object-contain p-2" />
+          </div>
+      )}
+
       {/* --- REPORT MODAL --- */}
       {reportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -295,8 +308,11 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
           </div>
           
           {question.image && (
-            <div className="mt-3 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700">
-                <img src={question.image} alt="Question Attachment" className="w-full object-cover" />
+            <div 
+                className="mt-3 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 cursor-zoom-in"
+                onClick={() => setLightboxImage(question.image || null)}
+            >
+                <img src={question.image} alt="Question Attachment" className="w-full object-cover max-h-64" />
             </div>
           )}
 
@@ -445,7 +461,12 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
                     {renderContent(reply.content)}
                 </div>
                 {reply.image && (
-                    <img src={reply.image} alt="Reply attachment" className="mt-3 rounded-lg max-h-48 border border-gray-100 dark:border-gray-700" />
+                    <div 
+                        className="mt-3 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 cursor-zoom-in w-fit"
+                        onClick={() => setLightboxImage(reply.image || null)}
+                    >
+                        <img src={reply.image} alt="Reply attachment" className="max-h-48 object-cover" />
+                    </div>
                 )}
               </div>
             ))

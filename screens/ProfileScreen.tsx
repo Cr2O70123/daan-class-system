@@ -77,6 +77,55 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setTimeout(() => setIsSaved(false), 2000);
   };
 
+  const renderHistoryContent = () => {
+      if (activeHistoryTab === 'questions') {
+          if (userQuestions.length === 0) {
+              return <p className="text-center text-xs text-gray-400 py-4">尚無提問記錄</p>;
+          }
+          return (
+              <div className="space-y-2">
+                  {userQuestions.map(q => (
+                      <div key={q.id} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg truncate text-gray-700 dark:text-gray-300">
+                          {q.title}
+                      </div>
+                  ))}
+              </div>
+          );
+      }
+
+      if (activeHistoryTab === 'answers') {
+          if (userReplies.length === 0) {
+              return <p className="text-center text-xs text-gray-400 py-4">尚無回答記錄</p>;
+          }
+          return (
+              <div className="space-y-2">
+                   {userReplies.map(q => (
+                      <div key={`reply_${q.id}`} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-700 dark:text-gray-300">
+                          <span className="text-gray-400 text-xs mr-2">回覆了:</span>
+                          {q.title}
+                      </div>
+                  ))}
+              </div>
+          );
+      }
+
+      if (activeHistoryTab === 'resources') {
+          if (userResources.length === 0) {
+              return <p className="text-center text-xs text-gray-400 py-4">尚無分享記錄</p>;
+          }
+          return (
+              <div className="space-y-2">
+                  {userResources.map(r => (
+                      <div key={r.id} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg truncate text-gray-700 dark:text-gray-300">
+                          {r.title}
+                      </div>
+                  ))}
+              </div>
+          );
+      }
+      return null;
+  };
+
   return (
     <div className="pb-24">
       {/* Privacy Modal */}
@@ -190,37 +239,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
                 
                 <div className="p-4 max-h-60 overflow-y-auto">
-                    {activeHistoryTab === 'questions' && (
-                        userQuestions.length === 0 ? <p className="text-center text-xs text-gray-400 py-4">尚無提問記錄</p> : 
-                        <div className="space-y-2">
-                            {userQuestions.map(q => (
-                                <div key={q.id} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg truncate text-gray-700 dark:text-gray-300">
-                                    {q.title}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {activeHistoryTab === 'answers' && (
-                        userReplies.length === 0 ? <p className="text-center text-xs text-gray-400 py-4">尚無回答記錄</p> :
-                        <div className="space-y-2">
-                             {userReplies.map(q => (
-                                <div key={`reply_${q.id}`} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-700 dark:text-gray-300">
-                                    <span className="text-gray-400 text-xs mr-2">回覆了:</span>
-                                    {q.title}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    {activeHistoryTab === 'resources' && (
-                        userResources.length === 0 ? <p className="text-center text-xs text-gray-400 py-4">尚無分享記錄</p> :
-                        <div className="space-y-2">
-                            {userResources.map(r => (
-                                <div key={r.id} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg truncate text-gray-700 dark:text-gray-300">
-                                    {r.title}
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    {renderHistoryContent()}
                 </div>
             </div>
 
@@ -259,7 +278,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                     <LogOut size={12} /> 登出帳號
                 </button>
-                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.1.1 Build 20251127</p>
+                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.1.2 Build 20251128</p>
             </div>
         </div>
     </div>
