@@ -305,7 +305,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                           <div className="space-y-3 text-sm text-gray-600">
                               <p>🎯 <span className="font-bold text-gray-800">目標：</span>在限時內答對越多單字越好。</p>
                               <p>⚡ <span className="font-bold text-gray-800">連擊 (Combo)：</span>連續答對會增加得分倍率。答錯會重置連擊並扣除時間。</p>
-                              <p>🆙 <span className="font-bold text-gray-800">難度：</span>每答對 5 題，單字難度會提升 (Level 3 -> 6)。</p>
+                              <p>🆙 <span className="font-bold text-gray-800">難度：</span>每答對 5 題，單字難度會提升 (Level 3 ~ 6)。</p>
                               <p>💰 <span className="font-bold text-gray-800">獎勵：</span>遊戲結束後，獲得積分 = 分數 / 50。</p>
                           </div>
                           <button onClick={() => setShowHelp(false)} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mt-6">我知道了</button>
