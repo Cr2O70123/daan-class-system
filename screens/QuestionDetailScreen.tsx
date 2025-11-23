@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Send, Sparkles, Bot, Clock, Flag, Image as ImageIcon, X, Crown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Send, Clock, Flag, Image as ImageIcon, X, Crown, AlertTriangle } from 'lucide-react';
 import { Question, User } from '../types';
-import { GoogleGenAI } from "@google/genai";
 
 interface QuestionDetailScreenProps {
   question: Question;
@@ -40,12 +39,6 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
   const [bestAnswerModalOpen, setBestAnswerModalOpen] = useState(false);
   const [selectedBestAnswerId, setSelectedBestAnswerId] = useState<number | null>(null);
 
-  // AI State
-  const [aiResponse, setAiResponse] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiChatInput, setAiChatInput] = useState('');
-  const [showAiChat, setShowAiChat] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // LIGHTBOX STATE
@@ -137,76 +130,6 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
     }
   };
   // -----------------------
-
-  const handleCallAi = async () => {
-    setShowAiChat(true);
-    if (aiResponse) return;
-
-    setIsAiLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `
-        Role: You are a friendly and encouraging high school electronics tutor.
-        Task: Analyze the following question asked by a student and provide a helpful hint or explanation of the concepts involved. 
-        Constraint: Do NOT give the direct final numerical answer if it's a calculation problem. Guide them on how to solve it.
-        
-        Question Title: ${question.title}
-        Question Content: ${question.content}
-        Tags: ${question.tags.join(', ')}
-        
-        Response in Traditional Chinese (Taiwan).
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-      });
-
-      setAiResponse(response.text || "抱歉，AI 暫時無法分析此問題。");
-    } catch (error) {
-      console.error("AI Error:", error);
-      setAiResponse("連線錯誤，請稍後再試。");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const handleSendAiMessage = async () => {
-    if (!aiChatInput.trim()) return;
-    
-    const userMessage = aiChatInput;
-    setAiChatInput('');
-    setAiResponse(prev => prev + `\n\n🧑‍🎓 學生: ${userMessage}\n\n🤖 AI: `);
-    setIsAiLoading(true);
-
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `
-        Context: The student is asking about: "${question.title}: ${question.content}".
-        Previous AI explanation: "${aiResponse}"
-        New Student Question: "${userMessage}"
-        
-        Provide a helpful, short response in Traditional Chinese.
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-      });
-
-      setAiResponse(prev => prev + (response.text || "抱歉，我無法回答。"));
-    } catch (error) {
-      setAiResponse(prev => prev + "連線錯誤。");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [aiResponse]);
 
   return (
     <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col pb-safe relative transition-colors">
@@ -334,68 +257,6 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
               {question.views} 次瀏覽
             </div>
           </div>
-        </div>
-
-        {/* AI Tutor Section */}
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl p-1 border border-indigo-100 dark:border-indigo-800 shadow-sm overflow-hidden">
-          {!showAiChat ? (
-            <div className="p-4 flex items-center justify-between cursor-pointer" onClick={handleCallAi}>
-              <div className="flex items-center space-x-3">
-                <div className="bg-white dark:bg-indigo-900 p-2 rounded-full shadow-sm text-indigo-600 dark:text-indigo-300">
-                  <Sparkles size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-indigo-900 dark:text-indigo-100 text-sm">卡關了嗎？</h3>
-                  <p className="text-indigo-600 dark:text-indigo-400 text-xs">讓 AI 小老師來幫你分析題目</p>
-                </div>
-              </div>
-              <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors">
-                呼叫 AI
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col h-[300px]">
-              <div className="bg-indigo-600 px-4 py-2 flex items-center justify-between text-white">
-                <div className="flex items-center space-x-2">
-                  <Bot size={16} />
-                  <span className="font-bold text-sm">AI 解題小老師</span>
-                </div>
-                <button onClick={() => setShowAiChat(false)} className="text-xs opacity-80 hover:opacity-100">
-                  收起
-                </button>
-              </div>
-              
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-white/50 dark:bg-gray-800/50">
-                {isAiLoading && !aiResponse && (
-                  <div className="flex items-center justify-center h-full text-indigo-400 text-sm animate-pulse">
-                    <Sparkles size={16} className="mr-2" />
-                    正在分析題目...
-                  </div>
-                )}
-                <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
-                  {aiResponse}
-                </div>
-              </div>
-
-              <div className="p-2 bg-white dark:bg-gray-800 border-t border-indigo-100 dark:border-gray-700 flex gap-2">
-                <input 
-                  type="text" 
-                  value={aiChatInput}
-                  onChange={(e) => setAiChatInput(e.target.value)}
-                  placeholder="追問 AI..."
-                  className="flex-1 bg-gray-100 dark:bg-gray-700 dark:text-white text-sm px-3 py-2 rounded-lg outline-none focus:ring-1 focus:ring-indigo-500"
-                  onKeyDown={(e) => e.key === 'Enter' && handleSendAiMessage()}
-                />
-                <button 
-                  onClick={handleSendAiMessage}
-                  disabled={isAiLoading || !aiChatInput.trim()}
-                  className="bg-indigo-600 text-white p-2 rounded-lg disabled:opacity-50"
-                >
-                  <Send size={16} />
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Replies Section */}
