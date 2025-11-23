@@ -19,8 +19,32 @@ export const AskScreen: React.FC<AskScreenProps> = ({ onPostQuestion }) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImage(reader.result as string);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX_WIDTH = 800; // Max width constraint to reduce size
+
+          if (width > MAX_WIDTH) {
+            height = (height * MAX_WIDTH) / width;
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height);
+              // Compress to JPEG with 0.7 quality
+              const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+              setImage(compressedDataUrl);
+          }
+        };
+        if (event.target?.result) {
+            img.src = event.target.result as string;
+        }
       };
       reader.readAsDataURL(file);
     }

@@ -6,7 +6,6 @@ import { fetchGameLeaderboard, submitGameScore } from '../services/dataService';
 interface WordChallengeScreenProps {
   user: User;
   words: Word[];
-  // Removed passed leaderboard prop, fetch internally
   onBack: () => void;
   onFinish: (result: GameResult) => void;
   onUpdateHearts: (hearts: number) => void;
@@ -166,7 +165,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // Using fixed inset-0 to ensure it covers entire viewport and ignores layout padding
   const containerClass = "fixed inset-0 z-50 flex flex-col bg-gradient-to-br from-indigo-600 to-purple-700 text-white overflow-hidden";
 
-  // Prepare button content variable to avoid JSX syntax error inside ternary
+  // Fix JSX syntax error by moving conditional logic outside return
   const startButtonContent = user.hearts > 0 ? (
       <>
         <Play size={24} fill="currentColor" /> 開始挑戰

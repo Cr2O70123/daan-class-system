@@ -48,26 +48,33 @@ export const fetchQuestions = async (): Promise<Question[]> => {
 };
 
 export const createQuestion = async (user: User, title: string, content: string, tags: string[], image?: string) => {
+    // Data Sanitization
+    const sanitizedImage = image || null; // Convert undefined to null for SQL
+    const sanitizedTags = Array.isArray(tags) ? tags : []; // Ensure tags is array
+    
     const avatarData = {
-        color: user.avatarColor,
-        image: user.avatarImage,
-        frame: user.avatarFrame,
-        nameColor: user.nameColor
+        color: user.avatarColor || 'bg-gray-400',
+        image: user.avatarImage || null,
+        frame: user.avatarFrame || null,
+        nameColor: user.nameColor || null
     };
 
     const { error } = await supabase.from('questions').insert([{
         title,
         content,
-        image: image || null,
+        image: sanitizedImage,
         author_name: user.name,
         author_student_id: user.studentId,
         author_avatar_data: avatarData,
-        tags: tags,
+        tags: sanitizedTags,
         status: 'open',
         views: 0
     }]);
     
-    if (error) throw error;
+    if (error) {
+        console.error("Supabase create question failed:", error);
+        throw error;
+    }
 };
 
 export const deleteQuestion = async (id: number) => {
