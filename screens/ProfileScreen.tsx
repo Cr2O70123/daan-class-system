@@ -166,7 +166,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
 
         <div className="px-4 space-y-4">
-            {/* History Tabs Section - Added MT-8 for spacing */}
+            {/* History Tabs Section */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors mt-8">
                 <div className="flex border-b border-gray-100 dark:border-gray-700">
                     <button 
