@@ -46,7 +46,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             <BookOpen size={40} className="text-blue-600" />
           </div>
           <h1 className="text-2xl font-bold tracking-wider">電子三乙功課系統</h1>
-          <p className="text-blue-200 text-sm mt-1 tracking-widest">班級專屬 • 資源共享</p>
+          <p className="text-blue-200 text-sm mt-1 tracking-widest">內部測試中!</p>
         </div>
 
         {/* Form Card */}

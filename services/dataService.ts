@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Question, Resource, Exam, User } from '../types';
+import { Question, Resource, Exam, User, GameLeaderboardEntry } from '../types';
 
 // --- Questions ---
 
@@ -227,4 +227,59 @@ export const unbanUser = async (studentId: string) => {
         .update({ is_banned: false })
         .eq('student_id', studentId);
     if (error) throw error;
+};
+
+// --- Game System ---
+
+export const submitGameScore = async (user: User, score: number) => {
+    const avatarData = {
+        color: user.avatarColor,
+        frame: user.avatarFrame
+    };
+
+    const { error } = await supabase.from('game_scores').insert([{
+        student_id: user.studentId,
+        name: user.name,
+        score: score,
+        avatar_data: avatarData
+    }]);
+
+    if (error) console.error("Score submit failed", error);
+};
+
+export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> => {
+    const { data, error } = await supabase
+        .from('game_scores')
+        .select('*')
+        .order('score', { ascending: false })
+        .limit(10); // Top 10
+
+    if (error) {
+        // If table doesn't exist yet, return empty to prevent crash
+        return [];
+    }
+
+    // Basic deduplication logic: keep highest score per student
+    // In a real complex SQL, we would use DISTINCT ON or GROUP BY
+    // Here we filter in JS for simplicity
+    const uniqueEntries: Record<string, GameLeaderboardEntry> = {};
+    
+    data.forEach((entry: any) => {
+        if (!uniqueEntries[entry.student_id] || entry.score > uniqueEntries[entry.student_id].score) {
+            uniqueEntries[entry.student_id] = {
+                rank: 0,
+                name: entry.name,
+                score: entry.score,
+                avatarColor: entry.avatar_data?.color || 'bg-gray-400',
+                avatarFrame: entry.avatar_data?.frame
+            };
+        }
+    });
+
+    const sorted = Object.values(uniqueEntries).sort((a, b) => b.score - a.score);
+    
+    return sorted.map((entry, index) => ({
+        ...entry,
+        rank: index + 1
+    }));
 };

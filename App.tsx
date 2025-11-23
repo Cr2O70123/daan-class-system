@@ -16,7 +16,7 @@ import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from
 import { WifiOff, RefreshCcw } from 'lucide-react';
 
 // Services
-import { WORD_DATABASE, GAME_WEEKLY_LEADERBOARD } from './services/mockData'; 
+import { WORD_DATABASE } from './services/mockData'; 
 import { calculateLevel } from './services/levelService';
 import { login, updateUserInDb, checkSession, logout } from './services/authService';
 import { 
@@ -495,7 +495,6 @@ export default function App() {
                 <WordChallengeScreen 
                     user={user}
                     words={WORD_DATABASE}
-                    leaderboard={GAME_WEEKLY_LEADERBOARD}
                     onBack={() => setShowWordChallenge(false)}
                     onFinish={handleFinishChallenge}
                     onUpdateHearts={handleHeartUpdate}
