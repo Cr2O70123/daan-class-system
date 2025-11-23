@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { RefreshCw, Save, Check, LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
 
 interface ProfileScreenProps {
@@ -45,20 +45,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     userReplies,
     userResources
 }) => {
-  const [name, setName] = useState(user.name);
   const [avatarImage, setAvatarImage] = useState<string | undefined>(user.avatarImage);
-  const [isSaved, setIsSaved] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [activeHistoryTab, setActiveHistoryTab] = useState<'questions' | 'answers' | 'resources'>('questions');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const progressPercent = calculateProgress(user.points);
-
-  const handleRandomAvatar = () => {
-    const randomColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
-    setAvatarImage(undefined);
-    setUser({ ...user, avatarColor: randomColor, avatarImage: undefined });
-  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -66,23 +58,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarImage(reader.result as string);
+        setUser({ ...user, avatarImage: reader.result as string });
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleSave = () => {
-    setUser({ ...user, name, avatarImage });
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 2000);
-  };
-
-  // Helper function to render history content cleanly
-  const HistoryContent = () => {
+  const renderHistoryList = () => {
     if (activeHistoryTab === 'questions') {
-      if (userQuestions.length === 0) {
-        return <p className="text-center text-xs text-gray-400 py-4">尚無提問記錄</p>;
-      }
+      if (userQuestions.length === 0) return <p className="text-center text-xs text-gray-400 py-4">尚無提問記錄</p>;
       return (
         <div className="space-y-2">
           {userQuestions.map(q => (
@@ -93,27 +77,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       );
     }
-
     if (activeHistoryTab === 'answers') {
-      if (userReplies.length === 0) {
-        return <p className="text-center text-xs text-gray-400 py-4">尚無回答記錄</p>;
-      }
+      if (userReplies.length === 0) return <p className="text-center text-xs text-gray-400 py-4">尚無回答記錄</p>;
       return (
         <div className="space-y-2">
           {userReplies.map(q => (
             <div key={`reply_${q.id}`} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-700 dark:text-gray-300">
-              <span className="text-gray-400 text-xs mr-2">回覆了:</span>
+              <span className="text-gray-400 text-xs mr-2">回覆:</span>
               {q.title}
             </div>
           ))}
         </div>
       );
     }
-
     if (activeHistoryTab === 'resources') {
-      if (userResources.length === 0) {
-        return <p className="text-center text-xs text-gray-400 py-4">尚無分享記錄</p>;
-      }
+      if (userResources.length === 0) return <p className="text-center text-xs text-gray-400 py-4">尚無分享記錄</p>;
       return (
         <div className="space-y-2">
           {userResources.map(r => (
@@ -124,7 +102,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       );
     }
-
     return null;
   };
 
@@ -154,7 +131,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       )}
 
-      {/* Header Profile */}
+      {/* Header Profile Section */}
       <div className="bg-white dark:bg-gray-800 pb-6 rounded-b-[2rem] shadow-sm mb-6 overflow-hidden transition-colors">
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 h-32 relative">
             <div className="absolute top-0 left-0 w-full h-full opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-400 via-transparent to-transparent"></div>
@@ -215,22 +192,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
             </div>
         </div>
+      </div>
 
-        <div className="px-4 space-y-4">
+      {/* Main Content Section */}
+      <div className="px-4 space-y-4">
             {/* History Tabs Section */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors mt-8">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors">
                 <div className="flex border-b border-gray-100 dark:border-gray-700">
                     <button 
                         onClick={() => setActiveHistoryTab('questions')}
                         className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'questions' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
                     >
-                        <HelpCircle size={14} /> 我的提問 ({userQuestions.length})
+                        <HelpCircle size={14} /> 提問 ({userQuestions.length})
                     </button>
                     <button 
                         onClick={() => setActiveHistoryTab('answers')}
                         className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'answers' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
                     >
-                        <MessageCircle size={14} /> 我的回答 ({userReplies.length})
+                        <MessageCircle size={14} /> 回答 ({userReplies.length})
                     </button>
                     <button 
                         onClick={() => setActiveHistoryTab('resources')}
@@ -241,7 +220,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
                 
                 <div className="p-4 max-h-60 overflow-y-auto">
-                   <HistoryContent />
+                   {renderHistoryList()}
                 </div>
             </div>
 
@@ -282,7 +261,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </button>
                 <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.1.2 Build 20251128</p>
             </div>
-        </div>
+      </div>
     </div>
   );
 };
