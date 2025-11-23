@@ -31,7 +31,7 @@ export interface User {
   avatarImage?: string; 
   avatarFrame?: string;
   points: number;
-  level: number; // New
+  level: number;
   isAdmin?: boolean;
   inventory: string[];
   settings?: AppSettings;
@@ -40,6 +40,10 @@ export interface User {
   // Game System
   hearts: number; // Max 3
   lastHeartReset: string; // Date string to track daily reset
+
+  // Moderation
+  isBanned?: boolean;
+  banExpiresAt?: string;
 }
 
 export interface Reply {

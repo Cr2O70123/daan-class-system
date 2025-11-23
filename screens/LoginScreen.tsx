@@ -12,17 +12,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
 
   const handleSubmit = () => {
-    if (!name || !studentId || !passcode) {
-      setError('請填寫所有欄位');
+    if (!name || !studentId) {
+      setError('請填寫姓名與學號');
       return;
     }
-    // Admin override or standard check
-    if (name.toLowerCase() !== 'admin' && passcode.toUpperCase() !== 'DAAN-E3Y') {
+
+    // Admin Override: admin1204 grants access without standard passcode
+    if (name === 'admin1204') {
+        onLogin(name, studentId);
+        return;
+    }
+
+    if (!passcode) {
+        setError('請填寫驗證碼');
+        return;
+    }
+
+    if (passcode.toUpperCase() !== 'DAAN-E3Y') {
       setError('驗證碼錯誤');
       return;
     }
-    // If name is admin, we allow it (App.tsx handles the infinite points/role)
-    // Or if passcode is correct
     
     onLogin(name, studentId);
   };
@@ -74,7 +83,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               placeholder="請輸入驗證碼"
               className="w-full bg-gray-600 text-white placeholder-gray-400 border-none rounded-md px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
             />
-            {/* Hint removed as requested */}
           </div>
 
           {error && (

@@ -13,15 +13,16 @@ import { ResourceDetailScreen } from './screens/ResourceDetailScreen';
 import { ExamScreen } from './screens/ExamScreen';
 import { WordChallengeScreen } from './screens/WordChallengeScreen';
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
+import { WifiOff, RefreshCcw } from 'lucide-react';
 
 // Services
-import { WORD_DATABASE, GAME_WEEKLY_LEADERBOARD } from './services/mockData'; // Word DB can stay mock for now
+import { WORD_DATABASE, GAME_WEEKLY_LEADERBOARD } from './services/mockData'; 
 import { calculateLevel } from './services/levelService';
-import { login, updateUserInDb } from './services/authService';
+import { login, updateUserInDb, checkSession, logout } from './services/authService';
 import { 
-    fetchQuestions, createQuestion, createReply, markBestAnswer, 
-    fetchResources, createResource, updateResourceLikes,
-    fetchExams, createExam 
+    fetchQuestions, createQuestion, deleteQuestion, createReply, deleteReply, markBestAnswer, 
+    fetchResources, createResource, deleteResource, updateResourceLikes,
+    fetchExams, createExam, deleteExam, banUser, unbanUser
 } from './services/dataService';
 
 // Helper to get frame styles (Used in Header)
@@ -39,7 +40,6 @@ const Header = ({ user }: { user: User }) => (
   <div className="bg-white dark:bg-gray-800 px-4 py-3 sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
     <div className="flex flex-col">
         <h1 className="text-lg font-bold text-gray-800 dark:text-white tracking-wide">電子三乙功課系統</h1>
-        {/* Level Indicator */}
         <div className="flex items-center gap-2 mt-0.5">
             <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] px-1.5 py-0.5 rounded font-bold">
                 Lv.{user.level}
@@ -72,8 +72,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [currentTab, setTab] = useState<Tab>(Tab.HOME);
   const [darkMode, setDarkMode] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
   
-  // Data State - Initialize empty, fetch via Effect
+  // Data State
   const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [reports, setReports] = useState<Report[]>([]);
@@ -89,19 +90,26 @@ export default function App() {
 
   // --- Effects ---
 
-  // Dark Mode
+  // Auto Login Check
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
+    const tryAutoLogin = async () => {
+        setIsLoading(true);
+        try {
+            const sessionUser = await checkSession();
+            if (sessionUser) {
+                setUser(sessionUser);
+                await loadAllData();
+            }
+        } catch (e) {
+            console.error("Auto Login Failed:", e);
+        }
+        setIsLoading(false);
+    };
+    tryAutoLogin();
+  }, []);
 
-  // Load Data on Mount (or when user logs in)
-  useEffect(() => {
-      const loadData = async () => {
-          setIsLoading(true);
+  const loadAllData = async () => {
+      try {
           const [qs, rs, es] = await Promise.all([
               fetchQuestions(),
               fetchResources(),
@@ -110,13 +118,21 @@ export default function App() {
           setQuestions(qs);
           setResources(rs);
           setExams(es);
-          setIsLoading(false);
-      };
-      
-      // Load data immediately or only if user is logged in?
-      // Better to load publicly visible data anyway
-      loadData();
-  }, [user]); // Reload if user changes (optional, but good for syncing)
+          setConnectionError(false);
+      } catch (e) {
+          console.error("Data Fetch Failed:", e);
+          setConnectionError(true);
+      }
+  };
+
+  // Dark Mode
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   // Level Recalculation Effect
   useEffect(() => {
@@ -150,13 +166,20 @@ export default function App() {
     try {
         const loggedInUser = await login(name, studentId);
         setUser(loggedInUser);
-    } catch (e) {
-        alert("登入失敗，請檢查網路連線");
-        console.error(e);
+        await loadAllData();
+    } catch (e: any) {
+        if (e.message === "ACCOUNT_BANNED") {
+            alert("此帳號已被停權，請聯絡管理員。");
+        } else if (e.message === "DB_CONNECTION_FAILED") {
+            setConnectionError(true);
+        } else {
+            alert("登入失敗，請檢查網路連線");
+        }
     }
   };
 
   const handleLogout = () => {
+    logout();
     setUser(null);
     setTab(Tab.HOME);
     setShowModeration(false);
@@ -182,8 +205,7 @@ export default function App() {
     if (!user) return;
     try {
         await createQuestion(user, newQ.title, newQ.content, newQ.tags, newQ.image);
-        const updatedQuestions = await fetchQuestions(); // Refresh
-        setQuestions(updatedQuestions);
+        await loadAllData();
         setTab(Tab.HOME);
         
         if(!user.isAdmin) {
@@ -192,19 +214,65 @@ export default function App() {
              updateUserInDb(updatedUser);
         }
     } catch (e) {
-        alert("發佈失敗");
+        alert("發佈失敗，請檢查網路連線");
     }
+  };
+
+  const handleDeleteQuestion = async (id: number) => {
+      if (!confirm("確定要刪除這個問題嗎？")) return;
+      try {
+          await deleteQuestion(id);
+          await loadAllData();
+          setSelectedQuestion(null);
+      } catch (e) {
+          alert("刪除失敗");
+      }
+  };
+
+  const handleDeleteReply = async (id: number) => {
+      if (!confirm("確定要刪除這個回覆嗎？")) return;
+      try {
+          await deleteReply(id);
+          await loadAllData();
+          if (selectedQuestion) {
+              // Re-select logic handled by effect or simple re-find
+              const updatedQs = await fetchQuestions(); // Optimize?
+              const q = updatedQs.find(q => q.id === selectedQuestion.id);
+              if (q) setSelectedQuestion(q);
+          }
+      } catch (e) {
+          alert("刪除失敗");
+      }
+  };
+
+  const handleDeleteResource = async (id: number) => {
+      if (!confirm("確定要刪除這個資源嗎？")) return;
+      try {
+          await deleteResource(id);
+          await loadAllData();
+          setSelectedResource(null);
+      } catch (e) {
+          alert("刪除失敗");
+      }
+  };
+
+  const handleDeleteExam = async (id: number) => {
+      if (!confirm("確定要刪除這個考試嗎？")) return;
+      try {
+          await deleteExam(id);
+          await loadAllData();
+      } catch (e) {
+          alert("刪除失敗");
+      }
   };
 
   const handleAddReply = async (questionId: number, content: string, image?: string) => {
     if (!user) return;
     try {
         await createReply(user, questionId, content, image);
-        // Refresh Question Detail
         const updatedQuestions = await fetchQuestions();
         setQuestions(updatedQuestions);
         
-        // Update selected question view if open
         const updatedQ = updatedQuestions.find(q => q.id === questionId);
         if (updatedQ) setSelectedQuestion(updatedQ);
 
@@ -223,9 +291,10 @@ export default function App() {
     if (!user) return;
     try {
         await markBestAnswer(questionId, replyId);
-        const updatedQuestions = await fetchQuestions();
-        setQuestions(updatedQuestions);
-        const updatedQ = updatedQuestions.find(q => q.id === questionId);
+        await loadAllData();
+        // Update selection
+        const updatedQs = await fetchQuestions();
+        const updatedQ = updatedQs.find(q => q.id === questionId);
         if (updatedQ) setSelectedQuestion(updatedQ);
 
         if (!user.isAdmin) {
@@ -233,7 +302,7 @@ export default function App() {
             setUser(updatedUser);
             updateUserInDb(updatedUser);
         }
-        alert(`已選為最佳解答！\n\n🎉 對方獲得 +30 PT\n🎉 您獲得 +10 PT (結案獎勵)`);
+        alert(`已選為最佳解答！`);
     } catch (e) {
         alert("操作失敗");
     }
@@ -250,7 +319,24 @@ export default function App() {
         reporter: user.name
     };
     setReports([...reports, newReport]);
-    // Note: Reports are currently local only. Create a 'reports' table in DB to persist.
+  };
+
+  const handleBanUser = async (studentId: string) => {
+      try {
+          await banUser(studentId);
+          alert(`使用者 ${studentId} 已停權`);
+      } catch(e) {
+          alert("停權失敗");
+      }
+  };
+
+  const handleUnbanUser = async (studentId: string) => {
+      try {
+          await unbanUser(studentId);
+          alert(`使用者 ${studentId} 已解除停權`);
+      } catch(e) {
+          alert("解除失敗");
+      }
   };
 
   const handleBuyProduct = (product: Product) => {
@@ -294,8 +380,7 @@ export default function App() {
       if(!user) return;
       try {
           await createResource(user, title, description, tags, images);
-          const res = await fetchResources();
-          setResources(res);
+          await loadAllData();
 
           if(!user.isAdmin) {
               const u = {...user, points: user.points + 20};
@@ -324,15 +409,17 @@ export default function App() {
           setSelectedResource({ ...selectedResource, likes: newLikedBy.length, likedBy: newLikedBy });
       }
 
-      // Sync DB
       await updateResourceLikes(resourceId, newLikedBy.length, newLikedBy);
   };
 
   const handleAddExam = async (subject: string, title: string, date: string, time: string) => {
       if(!user) return;
-      await createExam(user, subject, title, date, time);
-      const es = await fetchExams();
-      setExams(es);
+      try {
+          await createExam(user, subject, title, date, time);
+          await loadAllData();
+      } catch (e) {
+          alert("新增失敗");
+      }
   };
 
   const handleFinishChallenge = (result: GameResult) => {
@@ -347,6 +434,29 @@ export default function App() {
 
   // --- Render ---
 
+  if (connectionError) {
+      return (
+          <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 text-center">
+              <div className="bg-red-100 p-6 rounded-full text-red-500 mb-6">
+                  <WifiOff size={48} />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">無法連接伺服器</h2>
+              <p className="text-gray-500 mb-6">請檢查您的網路連線，或稍後再試。</p>
+              <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2">
+                  <RefreshCcw size={18} /> 重新整理
+              </button>
+          </div>
+      );
+  }
+
+  if (isLoading && !user) {
+      return (
+          <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+              <div className="text-gray-500 font-bold animate-pulse">系統載入中...</div>
+          </div>
+      );
+  }
+
   if (!user) {
     return <LoginScreen onLogin={handleLogin} />;
   }
@@ -357,7 +467,22 @@ export default function App() {
     return (
         <div className={commonLayoutClasses}>
             <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <ModerationScreen user={user} reports={reports} onBack={() => setShowModeration(false)} />
+                <ModerationScreen 
+                    user={user} 
+                    reports={reports}
+                    allQuestions={questions}
+                    allResources={resources}
+                    allExams={exams}
+                    onBack={() => setShowModeration(false)}
+                    onBanUser={handleBanUser}
+                    onUnbanUser={handleUnbanUser}
+                    onDeleteContent={(type, id) => {
+                        if (type === 'question') handleDeleteQuestion(id);
+                        else if (type === 'reply') handleDeleteReply(id);
+                        else if (type === 'resource') handleDeleteResource(id);
+                        else if (type === 'exam') handleDeleteExam(id);
+                    }}
+                />
             </main>
         </div>
     );
@@ -369,7 +494,7 @@ export default function App() {
              <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
                 <WordChallengeScreen 
                     user={user}
-                    words={WORD_DATABASE} // Keeping Word DB static for now
+                    words={WORD_DATABASE}
                     leaderboard={GAME_WEEKLY_LEADERBOARD}
                     onBack={() => setShowWordChallenge(false)}
                     onFinish={handleFinishChallenge}
@@ -447,7 +572,7 @@ export default function App() {
                   currentUser={user}
                 />;
       case Tab.EXAM:
-        return <ExamScreen exams={exams} onAddExam={handleAddExam} onDeleteExam={(id) => setExams(exams.filter(e => e.id !== id))} />;
+        return <ExamScreen exams={exams} onAddExam={handleAddExam} onDeleteExam={handleDeleteExam} />;
       case Tab.STORE: 
         return <ShopScreen user={user} onBuy={handleBuyProduct} />;
       case Tab.PROFILE: 
@@ -462,6 +587,9 @@ export default function App() {
                     userQuestions={questions.filter(q => q.author === user.name)}
                     userReplies={questions.filter(q => q.replies.some(r => r.author === user.name))}
                     userResources={resources.filter(r => r.author === user.name)}
+                    onDeleteQuestion={handleDeleteQuestion}
+                    onDeleteReply={handleDeleteReply}
+                    onDeleteResource={handleDeleteResource}
                />;
       default: 
         return <HomeScreen questions={questions} onQuestionClick={setSelectedQuestion} onAskClick={() => setTab(Tab.ASK)} />;
@@ -473,11 +601,7 @@ export default function App() {
         <main className="max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col transition-colors duration-300">
             <Header user={user} />
             <div className="flex-1 overflow-y-auto">
-                {isLoading ? (
-                    <div className="flex items-center justify-center h-40 text-gray-400">載入資料中...</div>
-                ) : (
-                    renderScreen()
-                )}
+                {renderScreen()}
             </div>
             <BottomNav 
                 currentTab={currentTab === Tab.ASK ? Tab.HOME : currentTab} 

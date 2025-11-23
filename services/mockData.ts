@@ -1,65 +1,13 @@
 import { Question, Resource, Exam, Word, GameLeaderboardEntry } from '../types';
 
 // --- Questions ---
-export const INITIAL_QUESTIONS: Question[] = [
-  {
-    id: 1,
-    title: 'C語言 指標與陣列問題',
-    content: '請問這段程式碼為什麼會報錯？\n```c\n#include <stdio.h>\nint main() {\n  int arr[5] = {1, 2, 3, 4, 5};\n  int *p = arr;\n  printf("%d", *p++);\n  return 0;\n}\n```\n我想要印出第一個元素，但指標移動好像有問題。',
-    author: '張美麗',
-    authorAvatarColor: 'bg-red-500',
-    authorNameColor: 'text-pink-600',
-    date: '2025/11/23',
-    tags: ['程式設計', 'C語言'],
-    status: 'open',
-    replyCount: 0,
-    views: 12,
-    replies: []
-  },
-  {
-    id: 2,
-    title: '基本電學 戴維寧計算',
-    content: '請問這題的戴維寧等效電阻 $$R_{th}$$ 怎麼算？\n電源是 $$12V$$，電阻分別是 $$3\\Omega$$ 和 $$6\\Omega$$ 並聯。\n我算出來是 $$2\\Omega$$ 對嗎？',
-    author: '王小明',
-    authorAvatarColor: 'bg-purple-500',
-    date: '2025/11/22',
-    tags: ['基本電學', '已解決'],
-    status: 'solved',
-    replyCount: 1,
-    views: 45,
-    replies: [
-      {
-        id: 101,
-        author: '李大同',
-        avatarColor: 'bg-green-500',
-        content: '沒錯！並聯公式：\n$$R_{th} = \\frac{R1 \\times R2}{R1 + R2} = \\frac{3 \\times 6}{3 + 6} = 2\\Omega$$\n觀念正確喔！',
-        date: '2025/11/22',
-        isBestAnswer: true
-      }
-    ]
-  }
-];
+export const INITIAL_QUESTIONS: Question[] = [];
 
 // --- Resources ---
-export const INITIAL_RESOURCES: Resource[] = [
-    {
-        id: 1, 
-        title: '電子學 Ch1 筆記', 
-        description: '整理了關於二極體的重點，包含順向偏壓與逆向偏壓的特性曲線。\n\n$$I_D = I_S(e^{V_D/n V_T} - 1)$$', 
-        tags: ['筆記'], 
-        author: '王小明', 
-        authorAvatarColor: 'bg-purple-500', 
-        date: '2025/11/25', 
-        likes: 5,
-        likedBy: [],
-        images: []
-    }
-];
+export const INITIAL_RESOURCES: Resource[] = [];
 
 // --- Exams ---
-export const INITIAL_EXAMS: Exam[] = [
-    {id: 1, subject: '電子學', title: 'Ch1-Ch3 第一次段考', date: '2025-12-01', time: '08:10', author: 'Admin'}
-];
+export const INITIAL_EXAMS: Exam[] = [];
 
 // --- Word Database (Level 3-6) ---
 export const WORD_DATABASE: Word[] = [

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
 
 interface ProfileScreenProps {
@@ -15,13 +15,11 @@ interface ProfileScreenProps {
   userQuestions: Question[];
   userReplies: Question[];
   userResources: Resource[];
+  
+  onDeleteQuestion: (id: number) => void;
+  onDeleteReply: (id: number) => void;
+  onDeleteResource: (id: number) => void;
 }
-
-const AVATAR_COLORS = [
-  'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-500', 'bg-emerald-500',
-  'bg-teal-500', 'bg-cyan-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 
-  'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500'
-];
 
 const getFrameStyle = (frameId?: string) => {
     switch(frameId) {
@@ -43,7 +41,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     toggleDarkMode,
     userQuestions,
     userReplies,
-    userResources
+    userResources,
+    onDeleteQuestion,
+    onDeleteReply,
+    onDeleteResource
 }) => {
   const [avatarImage, setAvatarImage] = useState<string | undefined>(user.avatarImage);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -70,8 +71,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       return (
         <div className="space-y-2">
           {userQuestions.map(q => (
-            <div key={q.id} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg truncate text-gray-700 dark:text-gray-300">
-              {q.title}
+            <div key={q.id} className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-300">
+              <span className="truncate flex-1">{q.title}</span>
+              <button 
+                onClick={() => onDeleteQuestion(q.id)}
+                className="text-gray-400 hover:text-red-500 p-1 ml-2 transition-colors"
+                title="刪除"
+              >
+                  <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>
@@ -81,12 +89,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       if (userReplies.length === 0) return <p className="text-center text-xs text-gray-400 py-4">尚無回答記錄</p>;
       return (
         <div className="space-y-2">
-          {userReplies.map(q => (
-            <div key={`reply_${q.id}`} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-gray-700 dark:text-gray-300">
-              <span className="text-gray-400 text-xs mr-2">回覆:</span>
-              {q.title}
-            </div>
-          ))}
+          {userReplies.map(q => {
+            const myReplies = q.replies.filter(r => r.author === user.name);
+            return myReplies.map(r => (
+                 <div key={`reply_${r.id}`} className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-300">
+                    <div className="truncate flex-1">
+                        <span className="text-gray-400 text-xs mr-2">Re: {q.title}</span>
+                        <span>{r.content.substring(0, 20)}...</span>
+                    </div>
+                    <button 
+                        onClick={() => onDeleteReply(r.id)}
+                        className="text-gray-400 hover:text-red-500 p-1 ml-2 transition-colors"
+                        title="刪除"
+                    >
+                        <Trash2 size={14} />
+                    </button>
+                </div>
+            ));
+          })}
         </div>
       );
     }
@@ -95,8 +115,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       return (
         <div className="space-y-2">
           {userResources.map(r => (
-            <div key={r.id} className="text-sm p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg truncate text-gray-700 dark:text-gray-300">
-              {r.title}
+            <div key={r.id} className="text-sm p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg flex justify-between items-center text-gray-700 dark:text-gray-300">
+              <span className="truncate flex-1">{r.title}</span>
+              <button 
+                onClick={() => onDeleteResource(r.id)}
+                className="text-gray-400 hover:text-red-500 p-1 ml-2 transition-colors"
+                title="刪除"
+              >
+                  <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>
@@ -178,7 +205,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     </div>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 w-full mt-2">
+                {/* Stats & Actions Grid */}
+                <div className={`grid ${user.isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-4 w-full mt-2`}>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center">
                         <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{user.points}</div>
                         <div className="text-xs text-blue-400 dark:text-blue-300 font-bold">目前積分</div>
@@ -189,6 +217,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         </div>
                         <div className="text-xs text-yellow-500 dark:text-yellow-300 font-bold">班級榜單</div>
                     </button>
+                    
+                    {/* Admin Button - Only visible if isAdmin is true */}
+                    {user.isAdmin && (
+                         <button onClick={onNavigateToModeration} className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-3 text-center hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                            <div className="text-2xl font-bold text-red-600 dark:text-red-400 flex items-center justify-center gap-1">
+                                <ShieldAlert size={20} />
+                            </div>
+                            <div className="text-xs text-red-500 dark:text-red-300 font-bold">管理後台</div>
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -209,7 +247,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         onClick={() => setActiveHistoryTab('answers')}
                         className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'answers' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
                     >
-                        <MessageCircle size={14} /> 回答 ({userReplies.length})
+                        <MessageCircle size={14} /> 回答 ({userReplies.reduce((acc, q) => acc + q.replies.filter(r=>r.author === user.name).length, 0)})
                     </button>
                     <button 
                         onClick={() => setActiveHistoryTab('resources')}
@@ -259,7 +297,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                     <LogOut size={12} /> 登出帳號
                 </button>
-                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.1.2 Build 20251128</p>
+                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.3.0 Build 20251130</p>
             </div>
       </div>
     </div>

@@ -3,95 +3,144 @@ import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
 
 export const login = async (name: string, studentId: string): Promise<User> => {
+    const isAdmin = name === 'admin1204'; 
     
-    try {
-        // 1. Try to fetch user from Supabase
-        let { data: user, error } = await supabase
-            .from('users')
-            .select('*')
-            .eq('student_id', studentId)
-            .single();
+    // 1. Try to fetch user from Supabase
+    let { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('student_id', studentId)
+        .single();
+    
+    if (error && error.code !== 'PGRST116') { 
+        console.error('Supabase Auth Error:', error);
+        throw new Error("DB_CONNECTION_FAILED");
+    }
+
+    // 2. If user not found, create new one
+    if (!user) {
+        const initialPoints = isAdmin ? 999999 : 100;
         
-        // Handle case where connection succeeds but user not found (PGRST116)
-        if (error && error.code !== 'PGRST116') { 
-            console.warn('Supabase Auth Error, falling back to mock user:', error);
-            throw new Error("DB_CONNECTION_FAILED");
-        }
+        const newUserPayload = {
+            student_id: studentId,
+            name: name,
+            points: initialPoints,
+            hearts: 3,
+            last_heart_reset: new Date().toDateString(),
+            inventory: [],
+            avatar_image: null,
+            is_banned: false
+        };
 
-        // 2. If user not found, create new one
-        if (!user) {
-            const isAdmin = name.toLowerCase() === 'admin';
-            const initialPoints = isAdmin ? 999999 : 100;
+        const { data: createdUser, error: createError } = await supabase
+            .from('users')
+            .insert([newUserPayload])
+            .select()
+            .single();
             
-            const newUserPayload = {
-                student_id: studentId,
-                name: name,
-                points: initialPoints,
-                hearts: 3,
-                last_heart_reset: new Date().toDateString(),
-                inventory: [],
-                avatar_image: null,
-            };
-
-            const { data: createdUser, error: createError } = await supabase
-                .from('users')
-                .insert([newUserPayload])
-                .select()
-                .single();
-                
-            if (createError) {
-                console.warn('Error creating user in DB, falling back to mock:', createError);
-                throw new Error("DB_CREATE_FAILED");
-            }
-            user = createdUser;
+        if (createError) {
+            console.error('Error creating user in DB:', createError);
+            throw new Error("DB_CREATE_FAILED");
         }
+        user = createdUser;
+    }
 
-        // 3. Transform DB user to App User
-        let inventory: string[] = [];
-        if (user.inventory) {
+    // Check Ban Status
+    if (user.is_banned) {
+        throw new Error("ACCOUNT_BANNED");
+    }
+
+    // 3. Transform DB user to App User
+    let inventory: string[] = [];
+    if (user.inventory) {
+        if (typeof user.inventory === 'string') {
+            try { inventory = JSON.parse(user.inventory); } catch(e) {}
+        } else {
+            inventory = user.inventory;
+        }
+    }
+
+    const appUser: User = {
+        name: user.name,
+        studentId: user.student_id,
+        avatarColor: user.avatar_color || 'bg-purple-500', 
+        avatarImage: user.avatar_image || undefined,
+        avatarFrame: user.avatar_frame || undefined,
+        points: user.points,
+        level: calculateLevel(user.points),
+        isAdmin: isAdmin, 
+        inventory: inventory,
+        settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
+        nameColor: user.name_color || undefined,
+        hearts: user.hearts ?? 3,
+        lastHeartReset: user.last_heart_reset || new Date().toDateString(),
+        isBanned: user.is_banned,
+        banExpiresAt: user.ban_expires_at
+    };
+
+    // Persist session
+    localStorage.setItem('student_id', studentId);
+    
+    return appUser;
+};
+
+export const checkSession = async (): Promise<User | null> => {
+    const storedId = localStorage.getItem('student_id');
+    
+    if (!storedId) return null;
+
+    const { data: user, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('student_id', storedId)
+        .single();
+
+    if (error || !user) {
+            // Strict mode: If DB fails, session is invalid.
+            // We do NOT return a mock user.
+            throw new Error("SESSION_VERIFY_FAILED");
+    }
+
+    if (user.is_banned) {
+        localStorage.removeItem('student_id');
+        return null;
+    }
+
+    let inventory: string[] = [];
+    if (user.inventory) {
             if (typeof user.inventory === 'string') {
                 try { inventory = JSON.parse(user.inventory); } catch(e) {}
             } else {
                 inventory = user.inventory;
             }
         }
+    
+    const isAdmin = user.name === 'admin1204';
 
-        return {
-            name: user.name,
-            studentId: user.student_id,
-            avatarColor: user.avatar_color || 'bg-purple-500', 
-            avatarImage: user.avatar_image || undefined,
-            avatarFrame: user.avatar_frame || undefined,
-            points: user.points,
-            level: calculateLevel(user.points),
-            isAdmin: user.name.toLowerCase() === 'admin',
-            inventory: inventory,
-            settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
-            nameColor: user.name_color || undefined,
-            hearts: user.hearts ?? 3,
-            lastHeartReset: user.last_heart_reset || new Date().toDateString()
-        };
+    return {
+        name: user.name,
+        studentId: user.student_id,
+        avatarColor: user.avatar_color || 'bg-purple-500',
+        avatarImage: user.avatar_image || undefined,
+        avatarFrame: user.avatar_frame || undefined,
+        points: user.points,
+        level: calculateLevel(user.points),
+        isAdmin: isAdmin,
+        inventory: inventory,
+        settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
+        nameColor: user.name_color || undefined,
+        hearts: user.hearts ?? 3,
+        lastHeartReset: user.last_heart_reset || new Date().toDateString(),
+        isBanned: user.is_banned,
+        banExpiresAt: user.ban_expires_at
+    };
+};
 
-    } catch (e) {
-        console.warn("Using Fallback Mock User due to DB Error");
-        // Fallback Mock User to allow app usage without DB setup
-        const isAdmin = name.toLowerCase() === 'admin';
-        return {
-            name: name,
-            studentId: studentId,
-            avatarColor: 'bg-purple-500',
-            points: isAdmin ? 999999 : 100,
-            level: 1,
-            isAdmin: isAdmin,
-            inventory: [],
-            hearts: 3,
-            lastHeartReset: new Date().toDateString()
-        };
-    }
+export const logout = () => {
+    localStorage.removeItem('student_id');
 };
 
 export const updateUserInDb = async (user: User) => {
-    // Sync critical stats back to DB
     const updatePayload = {
         points: user.points,
         hearts: user.hearts,
