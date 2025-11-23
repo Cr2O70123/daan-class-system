@@ -1,4 +1,3 @@
-
 import { User } from '../types';
 import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
