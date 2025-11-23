@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { RefreshCw, Save, Check, ShieldAlert, LogOut, Moon, Bell, Type, Info, FileText, ChevronRight, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X } from 'lucide-react';
-import { calculateProgress, getNextLevelThreshold } from '../services/levelService';
+import { RefreshCw, Save, Check, LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X } from 'lucide-react';
+import { calculateProgress } from '../services/levelService';
 
 interface ProfileScreenProps {
   user: User;
@@ -52,9 +52,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [activeHistoryTab, setActiveHistoryTab] = useState<'questions' | 'answers' | 'resources'>('questions');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const [notifications, setNotifications] = useState(true);
-  const [fontSize, setFontSize] = useState<'small' | 'medium' | 'large'>('medium');
-
   const progressPercent = calculateProgress(user.points);
 
   const handleRandomAvatar = () => {
@@ -227,7 +224,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
             </div>
 
-            {/* Settings Components (Same as before) */}
+            {/* Settings Components */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors">
                  <div className="p-4 border-b border-gray-50 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
                      <h3 className="font-bold text-gray-800 dark:text-gray-100 text-sm">應用程式設定</h3>
@@ -244,6 +241,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${isDarkMode ? 'translate-x-5' : 'translate-x-0'}`} />
                     </button>
                  </div>
+                 <div 
+                    onClick={() => setShowPrivacyModal(true)}
+                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                 >
+                     <div className="flex items-center gap-3">
+                        <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded-lg text-gray-600 dark:text-gray-300"><FileText size={18} /></div>
+                        <span className="text-sm font-bold text-gray-700 dark:text-gray-200">隱私權政策</span>
+                     </div>
+                 </div>
             </div>
 
             <div className="text-center pt-4">
@@ -253,7 +259,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                     <LogOut size={12} /> 登出帳號
                 </button>
-                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.1.0 Build 20251127</p>
+                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.1.1 Build 20251127</p>
             </div>
         </div>
     </div>
