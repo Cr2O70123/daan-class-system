@@ -166,6 +166,17 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // Using fixed inset-0 to ensure it covers entire viewport and ignores layout padding
   const containerClass = "fixed inset-0 z-50 flex flex-col bg-gradient-to-br from-indigo-600 to-purple-700 text-white overflow-hidden";
 
+  // Prepare button content variable to avoid JSX syntax error inside ternary
+  const startButtonContent = user.hearts > 0 ? (
+      <>
+        <Play size={24} fill="currentColor" /> 開始挑戰
+      </>
+  ) : (
+      <>
+        <Lock size={24} /> 明日再來
+      </>
+  );
+
   // --- MENU ---
   if (gameState === 'menu') {
       return (
@@ -247,11 +258,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                                 : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                             }`}
                         >
-                            {user.hearts > 0 ? (
-                                <><Play size={24} fill="currentColor" /> 開始挑戰</>
-                            ) : (
-                                <><Lock size={24} /> 明日再來</>
-                            )}
+                            {startButtonContent}
                         </button>
                         {user.hearts <= 0 && <p className="text-xs text-indigo-300 mt-2 bg-black/20 px-3 py-1 rounded-full">愛心將於午夜重置</p>}
                     </div>
