@@ -151,21 +151,28 @@ export default function App() {
   useEffect(() => {
     const checkReset = async () => {
         if (!user) return;
+        
         const today = new Date().toDateString();
+        // Reset if stored date is different from today
         if (user.lastHeartReset !== today) {
+            console.log("Resetting hearts for new day...");
             const updatedUser = { ...user, hearts: 3, lastHeartReset: today };
             try {
                 await updateUserInDb(updatedUser);
                 setUser(updatedUser);
             } catch (e) {
-                console.error("Reset hearts failed", e);
+                console.error("Reset hearts failed - likely missing DB columns", e);
             }
         }
     };
+    
+    // Check immediately on load/user change
+    checkReset();
+    
+    // Check every minute (e.g., if user stays on page past midnight)
     const interval = setInterval(checkReset, 60000); 
-    checkReset(); 
     return () => clearInterval(interval);
-  }, [user?.name]); 
+  }, [user?.studentId, user?.lastHeartReset]); 
 
   // --- Handlers ---
 
@@ -210,10 +217,11 @@ export default function App() {
       const updatedUser = { ...user, hearts: newHearts };
       try {
           await updateUserInDb(updatedUser);
+          // Only update UI state if DB write succeeded
           setUser(updatedUser);
       } catch (e: any) {
           console.error("Update hearts failed", e);
-          alert(`更新愛心失敗: ${e.message}`);
+          alert(`更新愛心失敗: ${e.message}\n請確認 SQL 資料庫已執行更新指令。`);
       }
   };
 

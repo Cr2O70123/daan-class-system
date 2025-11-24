@@ -73,7 +73,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         inventory: inventory,
         settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
         nameColor: user.name_color || undefined,
-        hearts: user.hearts ?? 3,
+        hearts: user.hearts ?? 3, // Default to 3 if null
         lastHeartReset: user.last_heart_reset || new Date().toDateString(),
         isBanned: user.is_banned,
         banExpiresAt: user.ban_expires_at
@@ -97,7 +97,6 @@ export const checkSession = async (): Promise<User | null> => {
         .single();
 
     if (error) {
-        // If offline or other error, return null to force re-login or handle gracefully
         console.error("Session check error:", error);
         return null;
     }
@@ -165,6 +164,10 @@ export const updateUserInDb = async (user: User) => {
         
     if (error) {
         console.error('Error updating user:', error);
+        // Specifically check for column errors
+        if (error.message.includes('column') && error.message.includes('hearts')) {
+             throw new Error("資料庫缺少 hearts 欄位，請執行 SQL 更新");
+        }
         throw new Error(error.message);
     }
     return true;
