@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Heart, Lock, BarChart, HelpCircle, X } from 'lucide-react';
+import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, BookOpen } from 'lucide-react';
 import { User, Word, GameResult, GameLeaderboardEntry } from '../types';
 import { fetchGameLeaderboard, submitGameScore } from '../services/dataService';
 
@@ -31,6 +31,10 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   const [correctCount, setCorrectCount] = useState(0);
   const [level, setLevel] = useState(3); // Start at Level 3
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  
+  // Mistake Tracking
+  const [wrongWords, setWrongWords] = useState<Word[]>([]);
+  const [hasReviewed, setHasReviewed] = useState(false);
 
   const timerRef = useRef<number | null>(null);
 
@@ -43,17 +47,31 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       loadLeaderboard();
   }, []);
 
-  // Filter words by level logic
+  // Filter words by strict level logic to ensure all levels are played
   const getPool = (currentLvl: number) => {
-      // Return words suitable for current difficulty
-      // Game progress: Lv3 -> Lv4 -> Lv5 -> Lv6
-      return words.filter(w => w.level <= currentLvl && w.level >= Math.max(3, currentLvl - 1));
+      // Strictly return words for the current level to force progression
+      return words.filter(w => w.level === currentLvl);
   };
 
   const generateQuestion = () => {
-    const pool = getPool(level);
-    const target = pool[Math.floor(Math.random() * pool.length)];
-    if (!target) return; // Safety
+    // Difficulty Progression Logic
+    // 0-4 Correct: Level 3
+    // 5-9 Correct: Level 4
+    // 10-14 Correct: Level 5
+    // 15+ Correct: Level 6
+    let nextLevel = 3;
+    if (correctCount >= 15) nextLevel = 6;
+    else if (correctCount >= 10) nextLevel = 5;
+    else if (correctCount >= 5) nextLevel = 4;
+    
+    setLevel(nextLevel);
+
+    const pool = getPool(nextLevel);
+    // Fallback to all words if pool is empty (safety)
+    const safePool = pool.length > 0 ? pool : words;
+    
+    const target = safePool[Math.floor(Math.random() * safePool.length)];
+    if (!target) return;
 
     setCurrentWord(target);
 
@@ -71,11 +89,11 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
   const handleStartGame = () => {
       if (user.hearts <= 0) {
-          alert("今日愛心已用完，請明天再來挑戰！");
+          alert("今日遊玩次數已達上限，請明天再來挑戰！");
           return;
       }
       
-      // Deduct Heart
+      // Update Play Count (Hearts)
       onUpdateHearts(user.hearts - 1);
 
       setGameState('playing');
@@ -84,7 +102,9 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       setCombo(0);
       setMaxCombo(0);
       setCorrectCount(0);
-      setLevel(3); // Reset to base level
+      setWrongWords([]);
+      setHasReviewed(false);
+      setLevel(3);
       generateQuestion();
 
       if (timerRef.current) clearInterval(timerRef.current);
@@ -120,22 +140,30 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
           setCorrectCount(prev => prev + 1);
           setFeedback('correct');
 
-          // Difficulty Progression
-          if ((correctCount + 1) % 5 === 0) {
-              setLevel(prev => Math.min(prev + 1, 6)); // Cap at level 6
-          }
-
       } else {
           // Wrong
           setTimeLeft(prev => Math.max(prev - 5, 0));
           setCombo(0);
           setFeedback('wrong');
+          
+          // Track Mistake
+          if (!wrongWords.find(w => w.id === currentWord.id)) {
+              setWrongWords(prev => [...prev, currentWord]);
+          }
       }
 
       setTimeout(() => {
           setFeedback(null);
           if (timeLeft > 0) generateQuestion();
-      }, 200);
+      }, 300);
+  };
+
+  const handleReviewDone = () => {
+      if (!hasReviewed) {
+          setScore(prev => prev + 500); // Bonus score for review (equivalent to 10PT)
+          setHasReviewed(true);
+          alert("複習完成！獲得額外分數獎勵！");
+      }
   };
 
   const handleClaim = async () => {
@@ -158,143 +186,111 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
       case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
       case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
-      default: return 'ring-2 ring-white/30';
+      default: return 'ring-2 ring-white dark:ring-gray-700';
     }
   };
 
-  // Visual Enhancement: More engaging background gradient
-  const containerClass = "fixed inset-0 z-50 flex flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-500 via-purple-700 to-slate-900 text-white overflow-hidden";
-
-  // --- BUTTON LOGIC ---
-  let startButtonContent;
-  if (user.hearts > 0) {
-      startButtonContent = (
-          <>
-            <Play size={24} fill="currentColor" /> 開始挑戰
-          </>
-      );
-  } else {
-      startButtonContent = (
-          <>
-            <Lock size={24} /> 明日再來
-          </>
-      );
-  }
+  // Standard background for consistency
+  const containerClass = "fixed inset-0 z-50 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden transition-colors";
 
   // --- MENU ---
   if (gameState === 'menu') {
+      const playCount = 3 - user.hearts; // Hearts starts at 3, decreases on play. Play count is 3 - hearts.
+      // Wait, logic in App.tsx sets hearts to 3 daily. 
+      // handleStartGame does: hearts - 1.
+      // So "Remaining Plays" is simply user.hearts.
+      const remainingPlays = Math.max(0, user.hearts);
+
       return (
           <div className={containerClass}>
-              {/* Background FX */}
-              <div className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none">
-                  <div className="absolute top-[-50px] left-1/2 transform -translate-x-1/2 w-96 h-96 bg-blue-400 rounded-full blur-[128px]"></div>
-                  <div className="absolute bottom-[-50px] right-[-50px] w-64 h-64 bg-pink-500 rounded-full blur-[100px]"></div>
-              </div>
-
               {/* Header */}
-              <div className="p-6 flex justify-between items-center relative z-10">
-                  <button onClick={onBack} className="bg-white/10 backdrop-blur-md p-2 rounded-full hover:bg-white/20 transition-all duration-300 hover:scale-110">
-                      <ArrowLeft size={24} />
+              <div className="p-4 bg-white dark:bg-gray-800 shadow-sm flex justify-between items-center z-10">
+                  <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
+                      <ArrowLeft size={24} className="text-gray-600 dark:text-gray-300" />
                   </button>
-                  <div className="flex gap-3">
-                        <button onClick={() => setShowHelp(true)} className="bg-white/10 backdrop-blur-md p-2 rounded-full hover:bg-white/20 transition-all duration-300 hover:scale-110">
-                            <HelpCircle size={20} />
+                  <div className="flex gap-3 items-center">
+                        <button onClick={() => setShowHelp(true)} className="text-gray-400 hover:text-blue-500 transition-colors">
+                            <HelpCircle size={22} />
                         </button>
-                        <div className="flex gap-1 items-center bg-black/30 backdrop-blur-md px-3 py-1 rounded-full border border-white/10">
-                            {[1, 2, 3].map(i => (
-                                <Heart 
-                                    key={i} 
-                                    size={18} 
-                                    className={`${i <= user.hearts ? 'fill-red-500 text-red-500 animate-pulse' : 'text-white/20'} transition-all`} 
-                                />
-                            ))}
+                        <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-800">
+                            <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
+                                今日剩餘次數：{remainingPlays} / 3
+                            </span>
                         </div>
                   </div>
               </div>
 
-              <div className="px-6 flex-1 flex flex-col">
+              <div className="p-4 flex-1 flex flex-col overflow-y-auto">
                 {/* Tabs */}
-                <div className="flex bg-black/20 backdrop-blur-md p-1 rounded-2xl mb-6 relative z-10 border border-white/10">
+                <div className="flex bg-gray-200 dark:bg-gray-700 p-1 rounded-xl mb-6">
                     <button 
                         onClick={() => setActiveTab('play')}
-                        className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'play' ? 'bg-white text-indigo-700 shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'text-indigo-200 hover:text-white'}`}
+                        className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === 'play' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
                     >
-                        <Zap size={18} className={activeTab === 'play' ? 'fill-current' : ''} /> 挑戰
+                        <Zap size={16} /> 挑戰
                     </button>
                     <button 
                         onClick={() => setActiveTab('rank')}
-                        className={`flex-1 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all duration-300 ${activeTab === 'rank' ? 'bg-white text-indigo-700 shadow-lg shadow-indigo-500/20 scale-[1.02]' : 'text-indigo-200 hover:text-white'}`}
+                        className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === 'rank' ? 'bg-white dark:bg-gray-600 shadow-sm text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}
                     >
-                        <BarChart size={18} className={activeTab === 'rank' ? 'fill-current' : ''} /> 排行榜
+                        <BarChart size={16} /> 排行榜
                     </button>
                 </div>
 
                 {activeTab === 'play' ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center relative z-10 animate-in fade-in slide-in-from-bottom-4 pb-20">
-                        <div className="relative">
-                            <div className="absolute inset-0 bg-yellow-400 blur-3xl opacity-20 rounded-full"></div>
-                            <div className="bg-white/10 p-8 rounded-[2rem] mb-6 border-4 border-white/20 shadow-2xl shadow-indigo-500/30 relative backdrop-blur-sm transform transition-transform hover:scale-105 duration-500">
-                                <Trophy size={80} className="text-yellow-300 drop-shadow-md" />
-                                <div className="absolute -bottom-3 -right-3 bg-red-500 text-white text-sm font-bold px-3 py-1 rounded-full border-4 border-indigo-900/50 shadow-lg transform rotate-3">Lv.3-6</div>
+                    <div className="flex-1 flex flex-col items-center justify-center text-center pb-20">
+                        <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 mb-8 w-full max-w-xs">
+                            <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 dark:text-blue-400">
+                                <Trophy size={40} />
                             </div>
-                        </div>
-                        
-                        <h1 className="text-5xl font-black mb-2 tracking-tight drop-shadow-lg bg-clip-text text-transparent bg-gradient-to-b from-white to-indigo-200">單字挑戰賽</h1>
-                        <p className="text-indigo-200 mb-8 font-medium text-lg">7000 單學術/工程字彙</p>
-
-                        <div className="grid grid-cols-3 gap-4 w-full max-w-xs mb-10">
-                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl flex flex-col items-center border border-white/10 shadow-lg transform hover:-translate-y-1 transition-transform">
-                                <span className="text-2xl font-black text-white">30s</span>
-                                <span className="text-[10px] font-bold uppercase opacity-60 tracking-wider mt-1">限時</span>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl flex flex-col items-center border border-white/10 shadow-lg transform hover:-translate-y-1 transition-transform delay-75">
-                                <span className="text-2xl font-black text-green-300">+2s</span>
-                                <span className="text-[10px] font-bold uppercase opacity-60 tracking-wider mt-1">獎勵</span>
-                            </div>
-                            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl flex flex-col items-center border border-white/10 shadow-lg transform hover:-translate-y-1 transition-transform delay-150">
-                                <span className="text-2xl font-black text-yellow-300">PT</span>
-                                <span className="text-[10px] font-bold uppercase opacity-60 tracking-wider mt-1">積分</span>
+                            <h1 className="text-2xl font-black mb-2 text-gray-800 dark:text-white">英文單字挑戰</h1>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">挑戰 Level 3-6 必考單字</p>
+                            <div className="mt-4 flex justify-center gap-2">
+                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded">學術</span>
+                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded">商業</span>
+                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded">工程</span>
                             </div>
                         </div>
 
                         <button 
                             onClick={handleStartGame}
-                            disabled={user.hearts <= 0}
-                            className={`w-full max-w-xs font-black text-xl py-5 rounded-2xl shadow-xl transition-all duration-300 flex items-center justify-center gap-3 group ${
-                                user.hearts > 0 
-                                ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-white shadow-orange-500/30 hover:shadow-orange-500/50 hover:scale-105 active:scale-95'
-                                : 'bg-gray-700 text-gray-400 cursor-not-allowed border border-white/10'
+                            disabled={remainingPlays <= 0}
+                            className={`w-full max-w-xs py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
+                                remainingPlays > 0 
+                                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/30'
+                                : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
                             }`}
                         >
-                            {startButtonContent}
+                            {remainingPlays > 0 ? <><Play size={20} fill="currentColor"/> 開始挑戰</> : <><Lock size={20}/> 明日再來</>}
                         </button>
-                        {user.hearts <= 0 && <p className="text-xs text-red-300 mt-4 bg-red-900/30 px-4 py-2 rounded-full border border-red-500/30 font-bold animate-pulse">愛心將於午夜重置</p>}
+                        {remainingPlays <= 0 && <p className="text-xs text-gray-400 mt-4">每日挑戰次數將於午夜重置</p>}
                     </div>
                 ) : (
-                    <div className="flex-1 w-full max-w-sm mx-auto relative z-10 animate-in fade-in slide-in-from-right-4 pb-20 overflow-hidden flex flex-col">
-                        <div className="bg-black/20 backdrop-blur-md rounded-[2rem] p-4 flex-1 overflow-y-auto border border-white/10 shadow-inner custom-scrollbar">
-                            <h3 className="text-center font-bold mb-6 text-indigo-100 flex items-center justify-center gap-2 mt-2">
-                                <Crown size={20} className="text-yellow-400 fill-current" /> 本週風雲榜
+                    <div className="flex-1 w-full max-w-md mx-auto overflow-hidden flex flex-col">
+                        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex-1 overflow-y-auto p-4">
+                            <h3 className="text-center font-bold mb-4 text-gray-800 dark:text-white flex items-center justify-center gap-2">
+                                <Crown size={18} className="text-yellow-500 fill-current" /> 本週風雲榜
                             </h3>
-                            <div className="space-y-3 px-2">
+                            <div className="space-y-3">
                                 {leaderboard.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-40 text-indigo-300/50">
-                                        <BarChart size={48} className="mb-2" />
-                                        <p>暫無紀錄，來當第一名吧！</p>
+                                    <div className="text-center text-gray-400 py-8 text-sm">
+                                        暫無紀錄，來當第一名吧！
                                     </div>
                                 ) : (
                                     leaderboard.map((entry, idx) => (
-                                        <div key={idx} className="bg-white/5 hover:bg-white/10 transition-colors p-4 rounded-2xl flex items-center border border-white/5">
-                                            <div className={`w-8 flex items-center justify-center font-black text-xl italic ${idx === 0 ? 'text-yellow-400 drop-shadow-sm' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-orange-400' : 'text-indigo-400'}`}>
-                                                #{entry.rank}
+                                        <div key={idx} className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl flex items-center">
+                                            <div className={`w-8 text-center font-black text-lg italic ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-500' : 'text-blue-300'}`}>
+                                                {entry.rank}
                                             </div>
-                                            <div className={`w-12 h-12 rounded-full mx-4 ${entry.avatarColor} flex items-center justify-center font-bold border-2 border-white/20 ${getFrameStyle(entry.avatarFrame)} shadow-sm`}>
+                                            {/* Avatar with Frame */}
+                                            <div className={`w-10 h-10 rounded-full mx-3 ${entry.avatarColor} flex items-center justify-center font-bold text-white text-xs ${getFrameStyle(entry.avatarFrame)} overflow-hidden`}>
                                                 {entry.name[0]}
                                             </div>
-                                            <div className="flex-1 flex flex-col justify-center">
-                                                <span className="font-bold text-base text-white">{entry.name}</span>
+                                            <div className="flex-1">
+                                                <span className="font-bold text-sm text-gray-800 dark:text-white block">{entry.name}</span>
+                                                <span className="text-[10px] text-gray-400">Score</span>
                                             </div>
-                                            <div className="flex items-center font-mono font-bold text-yellow-300 text-lg">
+                                            <div className="font-mono font-bold text-blue-600 dark:text-blue-400">
                                                 {entry.score}
                                             </div>
                                         </div>
@@ -308,31 +304,19 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
               {/* HELP MODAL */}
               {showHelp && (
-                  <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-200">
-                      <div className="bg-white text-gray-900 rounded-[2rem] p-8 max-w-xs w-full shadow-2xl transform animate-in zoom-in-95 duration-200">
-                          <div className="flex justify-between items-center mb-6">
-                              <h3 className="font-black text-2xl flex items-center gap-2 text-indigo-600"><HelpCircle className="fill-current text-white"/> 遊戲說明</h3>
-                              <button onClick={() => setShowHelp(false)} className="bg-gray-100 p-2 rounded-full hover:bg-gray-200 transition-colors"><X size={20}/></button>
+                  <div className="absolute inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                      <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl">
+                          <div className="flex justify-between items-center mb-4">
+                              <h3 className="font-bold text-lg text-gray-800 dark:text-white">遊戲說明</h3>
+                              <button onClick={() => setShowHelp(false)} className="bg-gray-100 dark:bg-gray-700 p-1 rounded-full"><X size={18}/></button>
                           </div>
-                          <div className="space-y-4 text-sm text-gray-600">
-                              <div className="flex gap-3">
-                                <div className="bg-indigo-100 p-2 rounded-lg h-fit"><Zap size={16} className="text-indigo-600" /></div>
-                                <div><span className="font-bold text-gray-800 block text-base mb-1">目標</span>在限時內答對越多單字越好。</div>
-                              </div>
-                              <div className="flex gap-3">
-                                <div className="bg-yellow-100 p-2 rounded-lg h-fit"><Zap size={16} className="text-yellow-600" /></div>
-                                <div><span className="font-bold text-gray-800 block text-base mb-1">連擊 (Combo)</span>連續答對會增加得分倍率。答錯會重置連擊並扣除時間。</div>
-                              </div>
-                              <div className="flex gap-3">
-                                <div className="bg-red-100 p-2 rounded-lg h-fit"><BarChart size={16} className="text-red-600" /></div>
-                                <div><span className="font-bold text-gray-800 block text-base mb-1">難度</span>每答對 5 題，單字難度會提升 (Level 3 -> 6)。</div>
-                              </div>
-                              <div className="flex gap-3">
-                                <div className="bg-green-100 p-2 rounded-lg h-fit"><Trophy size={16} className="text-green-600" /></div>
-                                <div><span className="font-bold text-gray-800 block text-base mb-1">獎勵</span>遊戲結束後，獲得積分 = 分數 / 50。</div>
-                              </div>
-                          </div>
-                          <button onClick={() => setShowHelp(false)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-xl mt-8 transition-colors shadow-lg shadow-indigo-200">我知道了</button>
+                          <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                              <li>🎯 <b>目標：</b> 限時內答對越多單字越好。</li>
+                              <li>🔥 <b>連擊：</b> 連續答對可獲得分數加成。</li>
+                              <li>📈 <b>難度：</b> 單字等級隨答題數提升 (Lv 3-6)。</li>
+                              <li>💰 <b>獎勵：</b> 結束後可獲得 PT 積分。</li>
+                          </ul>
+                          <button onClick={() => setShowHelp(false)} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mt-6">我知道了</button>
                       </div>
                   </div>
               )}
@@ -343,44 +327,38 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // --- PLAYING ---
   if (gameState === 'playing') {
       return (
-          <div className={`${containerClass} ${feedback === 'correct' ? 'bg-green-600' : feedback === 'wrong' ? 'bg-red-600' : ''} transition-colors duration-200`}>
-              {/* HUD */}
-              <div className="flex justify-between items-center p-6 pt-8">
-                  <div className="flex flex-col">
-                      <span className="text-xs text-white/60 font-bold uppercase tracking-widest">Score</span>
-                      <span className="text-4xl font-mono font-black tracking-tighter">{score}</span>
+          <div className={`${containerClass} ${feedback === 'correct' ? 'bg-green-50 dark:bg-green-900/20' : feedback === 'wrong' ? 'bg-red-50 dark:bg-red-900/20' : ''} transition-colors duration-200`}>
+              {/* Top Bar */}
+              <div className="flex justify-between items-center p-6">
+                  <div className="text-center">
+                      <div className="text-xs text-gray-400 uppercase font-bold">Score</div>
+                      <div className="text-2xl font-black text-gray-800 dark:text-white">{score}</div>
                   </div>
-                  <div className={`flex flex-col items-center ${timeLeft <= 5 ? 'scale-110 text-red-300' : ''} transition-transform duration-300`}>
-                      <div className="bg-black/30 px-6 py-2 rounded-full flex items-center gap-3 backdrop-blur-md border border-white/10 shadow-lg">
-                        <Timer size={24} className={timeLeft <= 5 ? 'animate-ping' : ''} />
-                        <span className="text-2xl font-bold font-mono w-12 text-center">{timeLeft}</span>
+                  <div className="text-center">
+                      <div className="bg-white dark:bg-gray-800 px-4 py-1 rounded-full shadow-sm border border-gray-100 dark:border-gray-700 flex items-center gap-2">
+                        <Timer size={16} className={`${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-500'}`} />
+                        <span className="text-xl font-bold font-mono text-gray-800 dark:text-white">{timeLeft}</span>
                       </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                      <span className="text-xs text-white/60 font-bold uppercase tracking-widest">Combo</span>
-                      <span className={`text-4xl font-mono font-black ${combo > 5 ? 'text-yellow-300 scale-110' : 'text-white'} transition-all duration-300`}>x{combo}</span>
+                  <div className="text-center">
+                      <div className="text-xs text-gray-400 uppercase font-bold">Combo</div>
+                      <div className={`text-2xl font-black ${combo > 0 ? 'text-yellow-500' : 'text-gray-300'}`}>x{combo}</div>
                   </div>
               </div>
 
               {/* Question */}
-              <div className="flex-1 flex flex-col items-center justify-center px-6 pb-10">
-                  <div className="mb-6 animate-bounce">
-                      <span className="bg-white/20 text-xs font-bold px-4 py-1.5 rounded-full border border-white/20 shadow-lg backdrop-blur-sm">LEVEL {level}</span>
-                  </div>
-                  <h2 className="text-6xl font-black text-center mb-10 tracking-wide drop-shadow-2xl leading-tight">{currentWord?.en}</h2>
+              <div className="flex-1 flex flex-col items-center justify-center px-6 pb-12">
+                  <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-[10px] font-bold px-3 py-1 rounded-full mb-6">
+                      LEVEL {level}
+                  </span>
+                  <h2 className="text-4xl font-black text-center mb-10 text-gray-800 dark:text-white drop-shadow-sm">{currentWord?.en}</h2>
                   
-                  {/* Progress Bar styled decoration */}
-                  <div className="h-1.5 w-32 bg-white/10 rounded-full overflow-hidden mb-12">
-                      <div className="h-full bg-white/80 w-full animate-[pulse_2s_infinite]"></div>
-                  </div>
-
-                  {/* Options */}
-                  <div className="grid grid-cols-1 gap-4 w-full max-w-md">
+                  <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
                     {options.map((opt, idx) => (
                         <button
                             key={idx}
                             onClick={() => handleAnswer(opt)}
-                            className="bg-white/10 hover:bg-white/30 py-5 rounded-2xl text-2xl font-bold border border-white/10 shadow-lg active:scale-95 transition-all duration-150 backdrop-blur-md hover:border-white/30"
+                            className="bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 py-4 rounded-xl text-lg font-bold border border-gray-200 dark:border-gray-700 shadow-sm active:scale-98 transition-all text-gray-700 dark:text-gray-200"
                         >
                             {opt}
                         </button>
@@ -394,42 +372,56 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // --- GAME OVER ---
   return (
       <div className={containerClass}>
-           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-[-20%] left-[-20%] w-[140%] h-[140%] bg-[conic-gradient(at_center,_var(--tw-gradient-stops))] from-yellow-500 via-purple-500 to-indigo-500 opacity-20 animate-[spin_10s_linear_infinite]"></div>
-           </div>
+           <div className="flex-1 flex items-center justify-center p-6">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-200 dark:border-gray-700 w-full max-w-sm text-center shadow-xl">
+                    <h2 className="text-2xl font-black mb-1 text-gray-800 dark:text-white">挑戰結束</h2>
+                    <p className="text-gray-400 text-sm mb-6">Good Job!</p>
 
-           <div className="flex-1 flex items-center justify-center p-6 relative z-10">
-                <div className="bg-white/10 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/20 w-full max-w-sm text-center shadow-2xl transform animate-in zoom-in duration-300">
-                    <div className="w-24 h-24 bg-gradient-to-br from-yellow-300 to-orange-400 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-500/40">
-                        <Crown size={48} className="text-white" fill="currentColor" />
-                    </div>
-                    
-                    <h2 className="text-3xl font-black mb-1 text-white tracking-tight">CHALLENGE OVER</h2>
-                    <p className="text-indigo-200 text-sm mb-8 font-medium bg-black/20 inline-block px-3 py-1 rounded-full">結算成績</p>
-
-                    <div className="bg-black/20 rounded-3xl p-6 mb-6 border border-white/5 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
-                        <div className="text-6xl font-mono font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-100 mb-4 drop-shadow-sm">{score}</div>
-                        <div className="flex justify-between text-xs font-bold text-indigo-200 px-2">
-                            <div className="flex flex-col items-center bg-white/5 p-3 rounded-xl min-w-[90px] border border-white/5">
-                                <span className="opacity-60 mb-1 uppercase tracking-wider">Max Combo</span>
-                                <span className="text-xl text-white font-mono">{maxCombo}</span>
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-6 mb-6">
+                        <div className="text-5xl font-mono font-black text-blue-600 dark:text-blue-400 mb-4">{score}</div>
+                        <div className="flex justify-between text-xs font-bold text-gray-500 dark:text-gray-400 px-4">
+                            <div className="flex flex-col items-center">
+                                <span className="uppercase tracking-wider mb-1">Max Combo</span>
+                                <span className="text-lg text-gray-800 dark:text-white">{maxCombo}</span>
                             </div>
-                            <div className="flex flex-col items-center bg-white/5 p-3 rounded-xl min-w-[90px] border border-white/5">
-                                <span className="opacity-60 mb-1 uppercase tracking-wider">Correct</span>
-                                <span className="text-xl text-white font-mono">{correctCount}</span>
+                            <div className="flex flex-col items-center">
+                                <span className="uppercase tracking-wider mb-1">Correct</span>
+                                <span className="text-lg text-gray-800 dark:text-white">{correctCount}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-green-500/20 text-green-300 border border-green-500/30 p-4 rounded-2xl mb-8 text-lg font-bold flex items-center justify-center gap-2 shadow-inner">
-                        <Zap size={24} fill="currentColor" />
-                        獲得: +{Math.floor(score / 50)} PT
+                    {/* Mistake Review Section */}
+                    {wrongWords.length > 0 && (
+                        <div className="mb-6 text-left">
+                            <h3 className="text-sm font-bold text-red-500 mb-2 flex items-center gap-1">
+                                <AlertCircle size={14} /> 本次易錯單字
+                            </h3>
+                            <div className="bg-red-50 dark:bg-red-900/10 rounded-xl p-3 max-h-32 overflow-y-auto border border-red-100 dark:border-red-900/30 space-y-2">
+                                {wrongWords.map((w, i) => (
+                                    <div key={i} className="flex justify-between text-sm border-b border-red-100 dark:border-red-900/30 last:border-0 pb-1 last:pb-0">
+                                        <span className="font-bold text-gray-800 dark:text-gray-200">{w.en}</span>
+                                        <span className="text-gray-500 dark:text-gray-400">{w.zh}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            <button 
+                                onClick={handleReviewDone}
+                                disabled={hasReviewed}
+                                className={`w-full mt-2 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors ${hasReviewed ? 'bg-gray-100 text-gray-400 cursor-default' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
+                            >
+                                {hasReviewed ? <><Check size={12}/> 已領取獎勵</> : <><BookOpen size={12}/> 複習完成 (+10 PT)</>}
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 flex justify-center items-center gap-1">
+                        獲得積分: <span className="font-bold text-blue-600 dark:text-blue-400">+{Math.floor(score / 50)} PT</span>
                     </div>
 
                     <button 
                         onClick={handleClaim}
-                        className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-indigo-500/40 hover:scale-105 transition-all active:scale-95 text-lg"
+                        className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold py-4 rounded-2xl shadow-lg hover:scale-[1.02] transition-transform active:scale-95"
                     >
                         領取獎勵並返回
                     </button>
