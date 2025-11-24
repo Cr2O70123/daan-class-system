@@ -128,6 +128,8 @@ export interface Product {
   color: string;
   description: string;
   category: 'tool' | 'cosmetic' | 'frame';
+  isRare?: boolean; // New: For shiny effect
+  tag?: string; // New: For labels like "Sale"
 }
 
 export interface Report {

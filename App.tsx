@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BottomNav } from './components/BottomNav';
+import { InstallModal } from './components/InstallModal';
 import { LoginScreen } from './screens/LoginScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { AskScreen } from './screens/AskScreen';
@@ -33,6 +34,7 @@ const getFrameStyle = (frameId?: string) => {
       case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
       case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
       case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
+      case 'frame_beta': return 'ring-2 ring-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)] border border-white/50';
       default: return 'ring-2 ring-white dark:ring-gray-700';
     }
 };
@@ -58,687 +60,591 @@ const Header = ({ user }: { user: User }) => (
       <span className="bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-800 text-xs font-bold px-2.5 py-1 rounded-full">
         {user.points} PT
       </span>
-      <div className={`${user.avatarColor} w-8 h-8 text-white rounded-full flex items-center justify-center text-sm font-bold ${getFrameStyle(user.avatarFrame)} overflow-hidden bg-cover bg-center`}>
-        {user.avatarImage ? (
-          <img src={user.avatarImage} alt="avatar" className="w-full h-full object-cover" />
-        ) : (
-          user.name.charAt(0)
-        )}
+      <div className={`w-9 h-9 rounded-full ${user.avatarColor} flex items-center justify-center text-white font-bold shadow-sm overflow-hidden ${getFrameStyle(user.avatarFrame)}`}>
+         {user.avatarImage ? (
+             <img src={user.avatarImage} alt="avatar" className="w-full h-full object-cover" />
+         ) : (
+             user.name.charAt(0) || 'U'
+         )}
       </div>
     </div>
   </div>
 );
 
-export default function App() {
+const App = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [currentTab, setTab] = useState<Tab>(Tab.HOME);
-  const [darkMode, setDarkMode] = useState(false);
-  const [connectionError, setConnectionError] = useState(false);
+  const [currentTab, setCurrentTab] = useState<Tab>(Tab.HOME);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Data State
+  // Data States
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
-  const [reports, setReports] = useState<Report[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
-  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [exams, setExams] = useState<Exam[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [reports, setReports] = useState<Report[]>([]);
 
-  // Navigation Stack
-  const [showModeration, setShowModeration] = useState(false);
+  // UI States
+  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
+  const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
+  const [showModeration, setShowModeration] = useState(false);
   const [showWordChallenge, setShowWordChallenge] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
 
-  // --- Effects ---
-
-  // Auto Login Check
+  // Init
   useEffect(() => {
-    const tryAutoLogin = async () => {
-        setIsLoading(true);
+    const initSession = async () => {
         try {
             const sessionUser = await checkSession();
             if (sessionUser) {
                 setUser(sessionUser);
-                await loadAllData();
+                // Check for daily reset when session loads
+                checkDailyReset(sessionUser);
             }
-        } catch (e: any) {
-             if (e.message && e.message.includes("SESSION_ERROR")) {
-                 console.error("Auto login error:", e);
-                 setConnectionError(true);
-             }
+        } catch (e) {
+            console.error("Session check failed", e);
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
-    tryAutoLogin();
+    initSession();
+    loadData();
+    
+    // Simulating install prompt check
+    if (Math.random() > 0.7) {
+        setShowInstallModal(true);
+    }
   }, []);
 
-  const loadAllData = async () => {
-      try {
-          const [qs, rs, es] = await Promise.all([
-              fetchQuestions(),
-              fetchResources(),
-              fetchExams()
-          ]);
-          setQuestions(qs);
-          setResources(rs);
-          setExams(es);
-          setConnectionError(false);
-      } catch (e) {
-          console.error("Data Fetch Failed:", e);
-          setConnectionError(true);
-          throw e; // Rethrow for refresh handler
+  // Dark Mode Effect
+  useEffect(() => {
+      if (user?.settings?.darkMode) {
+          document.documentElement.classList.add('dark');
+      } else {
+          document.documentElement.classList.remove('dark');
       }
-  };
+  }, [user?.settings?.darkMode]);
 
-  // Dark Mode
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
-
-  // Level Recalculation Effect
-  useEffect(() => {
-    if (user) {
-        const newLevel = calculateLevel(user.points);
-        if (newLevel !== user.level) {
-            setUser(prev => prev ? ({ ...prev, level: newLevel }) : null);
+  // Daily Reset Logic (Hearts)
+  const checkDailyReset = async (currentUser: User) => {
+    const today = new Date().toDateString();
+    if (currentUser.lastHeartReset !== today) {
+        const updatedUser = {
+            ...currentUser,
+            hearts: 3,
+            lastHeartReset: today
+        };
+        // Persist reset
+        try {
+            await updateUserInDb(updatedUser);
+            setUser(updatedUser);
+            // alert("新的一天！愛心已補滿 ❤️");
+        } catch(e) {
+            console.error("Failed to reset hearts", e);
         }
     }
-  }, [user?.points]);
-
-  // Heart Daily Reset Check
-  useEffect(() => {
-    const checkReset = async () => {
-        if (!user) return;
-        
-        // Use string comparison for dates (e.g. "Mon Nov 30 2023")
-        const today = new Date().toDateString();
-        const lastReset = user.lastHeartReset;
-
-        // Reset if stored date is different from today (String comparison)
-        if (lastReset !== today) {
-            console.log(`[Reset Check] Last: ${lastReset}, Today: ${today}. Resetting...`);
-            
-            // Optimistic update
-            const updatedUser = { ...user, hearts: 3, lastHeartReset: today };
-            setUser(updatedUser); 
-            
-            try {
-                // Persist to DB
-                await updateUserInDb(updatedUser);
-                alert("✨ 新的一天！遊戲愛心已補滿 (3/3)！");
-            } catch (e: any) {
-                console.error("Reset hearts DB sync failed:", e);
-                // If DB fails, we might want to revert, but for hearts it's better to fail open usually, 
-                // or just alert the user to check connection.
-                alert(`愛心重置同步失敗: ${e.message}`);
-            }
-        }
-    };
-    
-    // 1. Check immediately on load/user change
-    checkReset();
-    
-    // 2. Check every minute (if user keeps tab open across midnight)
-    const interval = setInterval(checkReset, 60000); 
-
-    // 3. Check when window regains focus (e.g. user switches tabs and comes back next day)
-    window.addEventListener('focus', checkReset);
-
-    return () => {
-        clearInterval(interval);
-        window.removeEventListener('focus', checkReset);
-    };
-  }, [user?.studentId, user?.lastHeartReset]); 
-
-  // --- Handlers ---
-
-  const handleRefresh = async () => {
-      await loadAllData();
-  };
-
-  const handleLogin = async (name: string, studentId: string) => {
-    try {
-        const loggedInUser = await login(name, studentId);
-        setUser(loggedInUser);
-        await loadAllData();
-    } catch (e: any) {
-        if (e.message === "ACCOUNT_BANNED") {
-            alert("此帳號已被停權，請聯絡管理員。");
-        } else if (e.message && e.message.includes("DB_ERROR")) {
-            alert(`連線錯誤: ${e.message}`);
-        } else {
-            alert(`登入失敗: ${e.message || "未知錯誤"}`);
-        }
-    }
-  };
-
-  const handleLogout = () => {
-    logout();
-    setUser(null);
-    setTab(Tab.HOME);
-    setShowModeration(false);
-    setSelectedQuestion(null);
-    setSelectedResource(null);
-    setShowWordChallenge(false);
-    setDarkMode(false);
-  };
-
-  const handleUpdateUser = async (updatedUser: User) => {
-    try {
-        await updateUserInDb(updatedUser);
-        setUser(updatedUser);
-    } catch (e) {
-        alert("資料更新失敗，請檢查網路連線");
-    }
-  };
-
-  const handleHeartUpdate = async (newHearts: number) => {
-      if(!user) return;
-      const updatedUser = { ...user, hearts: newHearts };
-      try {
-          await updateUserInDb(updatedUser);
-          // Only update UI state if DB write succeeded
-          setUser(updatedUser);
-      } catch (e: any) {
-          console.error("Update hearts failed", e);
-          alert(`更新愛心失敗: ${e.message}\n請確認 SQL 資料庫已執行更新指令。`);
-      }
   };
 
   // Check-in Logic
   const handleCheckIn = async () => {
-      if (!user) return;
-
-      const today = new Date().toDateString();
-      const lastCheckIn = user.lastCheckInDate;
-
-      if (lastCheckIn === today) {
-          alert("今天已經簽到過了喔！");
-          return;
-      }
-
-      // Calculate Streak
-      let newStreak = (user.checkInStreak || 0);
-      
-      if (lastCheckIn) {
-          const lastDate = new Date(lastCheckIn);
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          
-          if (lastDate.toDateString() === yesterday.toDateString()) {
-              // Consecutive
-              newStreak += 1;
-          } else {
-              // Missed a day or more
-              newStreak = 1;
-          }
-      } else {
-          // First time
-          newStreak = 1;
-      }
-
-      // Rewards
-      // 7-day cycle logic: Day 7 gets 100, others get 20
-      const cycleDay = ((newStreak - 1) % 7) + 1;
-      const rewardPoints = cycleDay === 7 ? 100 : 20;
-
-      const updatedUser = {
-          ...user,
-          points: user.points + rewardPoints,
-          checkInStreak: newStreak,
-          lastCheckInDate: today
-      };
-
-      try {
-          await updateUserInDb(updatedUser);
-          setUser(updatedUser);
-          setShowCheckInModal(false); // Or keep open and show animation?
-          alert(`簽到成功！獲得 ${rewardPoints} PT\n目前連續簽到：${newStreak} 天`);
-      } catch (e: any) {
-          alert("簽到失敗，請稍後再試。");
-      }
-  };
-
-  const handlePostQuestion = async (newQ: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => {
     if (!user) return;
-    try {
-        await createQuestion(user, newQ.title, newQ.content, newQ.tags, newQ.image);
-        await loadAllData();
-        setTab(Tab.HOME);
-        
-        if(!user.isAdmin) {
-             const updatedUser = {...user, points: user.points + 5};
-             await updateUserInDb(updatedUser); // Await DB logic
-             setUser(updatedUser);
+
+    const today = new Date().toDateString();
+    const lastDate = user.lastCheckInDate;
+    let newStreak = user.checkInStreak || 0;
+    let reward = 20; // Base reward
+
+    // Check if already checked in
+    if (lastDate === today) {
+        return;
+    }
+
+    // Determine streak
+    if (lastDate) {
+        const lastCheckInTime = new Date(lastDate).getTime();
+        const todayTime = new Date(today).getTime();
+        const diffDays = (todayTime - lastCheckInTime) / (1000 * 3600 * 24);
+
+        if (diffDays === 1) {
+            newStreak += 1;
+        } else {
+            newStreak = 1; // Reset if missed a day
         }
-    } catch (e: any) {
-        alert(`發佈失敗: ${e.message || JSON.stringify(e)}`);
+    } else {
+        newStreak = 1;
+    }
+
+    // Big Reward for 7 days
+    if (newStreak % 7 === 0) {
+        reward = 100;
+    }
+
+    const updatedUser = {
+        ...user,
+        points: user.points + reward,
+        lastCheckInDate: today,
+        checkInStreak: newStreak
+    };
+
+    try {
+        await updateUserInDb(updatedUser);
+        setUser(updatedUser);
+        // alert(`簽到成功！獲得 ${reward} PT (連續 ${newStreak} 天)`);
+    } catch (e) {
+        alert("簽到失敗，請檢查網路");
     }
   };
 
+  // Visibility change handler for auto-refresh when returning to app
+  useEffect(() => {
+      const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible' && user) {
+              checkDailyReset(user);
+          }
+      };
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      return () => {
+          document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+  }, [user]);
+
+  const loadData = async () => {
+    try {
+        const qData = await fetchQuestions();
+        setQuestions(qData);
+        const rData = await fetchResources();
+        setResources(rData);
+        const eData = await fetchExams();
+        setExams(eData);
+    } catch (e) {
+        console.error("Failed to load data", e);
+    }
+  };
+
+  const handleLogin = async (name: string, studentId: string) => {
+    try {
+        const loggedUser = await login(name, studentId);
+        setUser(loggedUser);
+        checkDailyReset(loggedUser);
+    } catch (error: any) {
+        alert("登入失敗: " + error.message);
+    }
+  };
+
+  const handlePostQuestion = async (q: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => {
+      if (!user) return;
+      try {
+        await createQuestion(user, q.title, q.content, q.tags, q.image);
+        await loadData();
+        setCurrentTab(Tab.HOME);
+      } catch (e) {
+          alert("發布失敗，請稍後再試");
+      }
+  };
+
+  const handleAddReply = async (qid: number, content: string, image?: string) => {
+      if (!user) return;
+      try {
+          await createReply(user, qid, content, image);
+          // Update local state optimistically or reload
+          await loadData(); 
+          
+          // Give User Points (5pt for reply)
+          const newPoints = user.points + 5;
+          const updatedUser = { ...user, points: newPoints };
+          await updateUserInDb(updatedUser);
+          setUser(updatedUser);
+          
+          // Update currently selected question
+          const updatedQuestions = await fetchQuestions();
+          const targetQ = updatedQuestions.find(q => q.id === qid);
+          if (targetQ) setSelectedQuestion(targetQ);
+
+      } catch(e) {
+          alert("回覆失敗");
+      }
+  };
+
+  const handleBuyProduct = async (product: Product) => {
+      if (!user) return;
+      if (user.points < product.price) {
+          alert("積分不足！");
+          return;
+      }
+
+      // Optimistic checks
+      if (user.inventory.includes(product.id) && product.category !== 'frame') {
+          alert("您已擁有此商品");
+          return;
+      }
+
+      const newPoints = user.points - product.price;
+      const newInventory = [...user.inventory];
+      if (!newInventory.includes(product.id)) {
+          newInventory.push(product.id);
+      }
+      
+      // Auto-equip frames
+      let newAvatarFrame = user.avatarFrame;
+      if (product.category === 'frame') {
+          newAvatarFrame = product.id;
+      }
+
+      const updatedUser = { 
+          ...user, 
+          points: newPoints, 
+          inventory: newInventory,
+          avatarFrame: newAvatarFrame
+      };
+      
+      try {
+          await updateUserInDb(updatedUser);
+          setUser(updatedUser);
+          if (product.category === 'frame') {
+              alert(`購買成功！已為您換上 ${product.name}`);
+          } else {
+              alert(`購買成功！獲得 ${product.name}`);
+          }
+      } catch (e) {
+          console.error("Purchase error", e);
+          alert("購買失敗，請檢查網路連線");
+      }
+  };
+
+  const handleMarkBest = async (qid: number, rid: number) => {
+      try {
+          await markBestAnswer(qid, rid);
+          await loadData();
+          // Award Points logic would go here (handled by DB triggers or separate update)
+          if (selectedQuestion) setSelectedQuestion(null); // Close detail to refresh
+      } catch(e) {
+          alert("操作失敗");
+      }
+  };
+
+  const handleFinishChallenge = async (result: GameResult) => {
+      if (!user) return;
+      // Calculate points: score / 50
+      const earnedPt = Math.floor(result.score / 50);
+      const newPoints = user.points + earnedPt;
+      const updatedUser = { ...user, points: newPoints };
+      
+      try {
+          await updateUserInDb(updatedUser);
+          setUser(updatedUser);
+      } catch(e) {
+          console.error("Failed to update points", e);
+      }
+      setShowWordChallenge(false);
+  };
+
+  // --- Missing Handlers ---
+
+  const handleReport = (type: 'question' | 'reply', id: number, content: string, reason: string) => {
+      const newReport: Report = {
+          id: Date.now(),
+          targetType: type,
+          targetId: id,
+          reason,
+          contentSnippet: content,
+          reporter: user?.name || 'Anonymous'
+      };
+      setReports(prev => [...prev, newReport]);
+      // In a real app, send to server here
+  };
+  
+  const handleAddResource = async (title: string, description: string, tags: string[], images: string[]) => {
+      if (!user) return;
+      try {
+          await createResource(user, title, description, tags, images);
+          await loadData();
+          setCurrentTab(Tab.RESOURCE);
+      } catch (e) {
+          alert("發布資源失敗");
+      }
+  };
+
+  const handleLikeResource = async (id: number) => {
+      if (!user) return;
+      const resource = resources.find(r => r.id === id);
+      if (!resource) return;
+
+      const isLiked = resource.likedBy.includes(user.name);
+      let newLikes = resource.likes;
+      let newLikedBy = [...resource.likedBy];
+
+      if (isLiked) {
+          newLikes--;
+          newLikedBy = newLikedBy.filter(n => n !== user.name);
+      } else {
+          newLikes++;
+          newLikedBy.push(user.name);
+      }
+
+      // Optimistic update
+      setResources(resources.map(r => r.id === id ? { ...r, likes: newLikes, likedBy: newLikedBy } : r));
+      
+      try {
+          await updateResourceLikes(id, newLikes, newLikedBy);
+      } catch (e) {
+          console.error("Like failed", e);
+      }
+  };
+
+  const handleAddExam = async (subject: string, title: string, date: string, time: string) => {
+      if (!user) return;
+      try {
+          await createExam(user, subject, title, date, time);
+          await loadData();
+      } catch (e) {
+          alert("新增考試失敗");
+      }
+  };
+
   const handleDeleteQuestion = async (id: number) => {
-      if (!confirm("確定要刪除這個問題嗎？")) return;
+      if (!confirm("確定要刪除此問題？")) return;
       try {
           await deleteQuestion(id);
-          await loadAllData();
-          setSelectedQuestion(null);
+          await loadData();
+          if (selectedQuestion?.id === id) setSelectedQuestion(null);
       } catch (e) {
           alert("刪除失敗");
       }
   };
 
   const handleDeleteReply = async (id: number) => {
-      if (!confirm("確定要刪除這個回覆嗎？")) return;
+      if (!confirm("確定要刪除此回覆？")) return;
       try {
           await deleteReply(id);
-          await loadAllData();
+          await loadData();
           if (selectedQuestion) {
-              const updatedQs = await fetchQuestions();
-              const q = updatedQs.find(q => q.id === selectedQuestion.id);
-              if (q) setSelectedQuestion(q);
+               const updatedQuestions = await fetchQuestions();
+               const q = updatedQuestions.find(q => q.id === selectedQuestion.id);
+               if(q) setSelectedQuestion(q);
           }
       } catch (e) {
           alert("刪除失敗");
       }
   };
-
+  
   const handleDeleteResource = async (id: number) => {
-      if (!confirm("確定要刪除這個資源嗎？")) return;
+      if (!confirm("確定要刪除此資源？")) return;
       try {
           await deleteResource(id);
-          await loadAllData();
-          setSelectedResource(null);
+          await loadData();
+          if (selectedResource?.id === id) setSelectedResource(null);
       } catch (e) {
           alert("刪除失敗");
       }
   };
 
   const handleDeleteExam = async (id: number) => {
-      if (!confirm("確定要刪除這個考試嗎？")) return;
+      if (!confirm("確定要刪除此考試？")) return;
       try {
           await deleteExam(id);
-          await loadAllData();
+          await loadData();
       } catch (e) {
           alert("刪除失敗");
       }
   };
 
-  const handleAddReply = async (questionId: number, content: string, image?: string) => {
-    if (!user) return;
-    try {
-        await createReply(user, questionId, content, image);
-        const updatedQuestions = await fetchQuestions();
-        setQuestions(updatedQuestions);
-        
-        const updatedQ = updatedQuestions.find(q => q.id === questionId);
-        if (updatedQ) setSelectedQuestion(updatedQ);
-
-        if (!user.isAdmin) {
-            const updatedUser = {...user, points: user.points + 10};
-            await updateUserInDb(updatedUser); // Await DB logic
-            setUser(updatedUser);
-        }
-        alert(`回答成功！獲得 10 PT`);
-    } catch (e) {
-        alert("回覆失敗");
-    }
-  };
-
-  const handleMarkBest = async (questionId: number, replyId: number) => {
-    if (!user) return;
-    try {
-        await markBestAnswer(questionId, replyId);
-        await loadAllData();
-        
-        const updatedQs = await fetchQuestions();
-        const updatedQ = updatedQs.find(q => q.id === questionId);
-        if (updatedQ) setSelectedQuestion(updatedQ);
-
-        if (!user.isAdmin) {
-            const updatedUser = {...user, points: user.points + 10};
-            await updateUserInDb(updatedUser); // Await DB logic
-            setUser(updatedUser);
-        }
-        alert(`已選為最佳解答！`);
-    } catch (e) {
-        alert("操作失敗");
-    }
-  };
-
-  const handleReport = (type: 'question' | 'reply', id: number, contentSnippet: string, reason: string) => {
-    if(!user) return;
-    const newReport: Report = {
-        id: Date.now(),
-        targetType: type,
-        targetId: id,
-        contentSnippet: contentSnippet.substring(0, 50) + '...',
-        reason: reason,
-        reporter: user.name
-    };
-    setReports([...reports, newReport]);
-  };
-
+  // Moderation Handlers
   const handleBanUser = async (studentId: string) => {
       try {
           await banUser(studentId);
-          alert(`使用者 ${studentId} 已停權`);
-      } catch(e) {
-          alert("停權失敗");
+          alert(`用戶 ${studentId} 已停權`);
+      } catch (e) {
+          alert("操作失敗");
       }
   };
 
   const handleUnbanUser = async (studentId: string) => {
       try {
           await unbanUser(studentId);
-          alert(`使用者 ${studentId} 已解除停權`);
-      } catch(e) {
-          alert("解除失敗");
-      }
-  };
-
-  const handleBuyProduct = async (product: Product) => {
-    if(!user) return;
-    const isOwned = user.inventory.includes(product.id) || user.avatarFrame === product.id || user.nameColor === product.color;
-    if (isOwned) {
-        // Just switching equipment (cosmetic/frame), no point deduction
-        if (product.category === 'frame') {
-            const u = { ...user, avatarFrame: product.id };
-            try {
-                await updateUserInDb(u);
-                setUser(u);
-                alert(`已裝備：${product.name}`);
-            } catch (e: any) { alert(`裝備失敗: ${e.message}`); }
-        } else if (product.category === 'cosmetic') {
-            const textClass = product.color.split(' ').find(c => c.startsWith('text-'));
-            const u = { ...user, nameColor: textClass };
-            try {
-                await updateUserInDb(u);
-                setUser(u);
-                alert(`已啟用：${product.name}`);
-            } catch (e: any) { alert(`啟用失敗: ${e.message}`); }
-        }
-        return;
-    }
-    
-    if(user.points >= product.price) {
-        // Buying new item
-        let updatedUser = {
-            ...user,
-            points: user.isAdmin ? user.points : user.points - product.price,
-            inventory: [...user.inventory, product.id]
-        };
-        if (product.category === 'frame') updatedUser.avatarFrame = product.id;
-        else if (product.category === 'cosmetic') {
-             const textClass = product.color.split(' ').find(c => c.startsWith('text-'));
-             updatedUser.nameColor = textClass;
-        }
-        
-        try {
-            await updateUserInDb(updatedUser); // Critical: Await this
-            setUser(updatedUser);
-            alert(`購買成功：${product.name}`);
-        } catch (e: any) {
-            alert(`購買失敗: ${e.message}`);
-        }
-    } else {
-        alert("積分不足！");
-    }
-  };
-
-  const handleAddResource = async (title: string, description: string, tags: string[], images: string[]) => {
-      if(!user) return;
-      try {
-          await createResource(user, title, description, tags, images);
-          await loadAllData();
-
-          if(!user.isAdmin) {
-              const u = {...user, points: user.points + 20};
-              await updateUserInDb(u); // Await DB
-              setUser(u);
-          }
-          alert('發佈成功！獲得 20 PT');
+          alert(`用戶 ${studentId} 已解除停權`);
       } catch (e) {
-          alert("發佈失敗");
+          alert("操作失敗");
       }
   };
 
-  const handleLikeResource = async (resourceId: number) => {
-      if(!user) return;
-      const res = resources.find(r => r.id === resourceId);
-      if (!res) return;
-
-      const hasLiked = res.likedBy.includes(user.name);
-      const newLikedBy = hasLiked 
-        ? res.likedBy.filter(name => name !== user.name) 
-        : [...res.likedBy, user.name];
-      
-      setResources(resources.map(r => r.id === resourceId ? { ...r, likes: newLikedBy.length, likedBy: newLikedBy } : r));
-      if (selectedResource?.id === resourceId) {
-          setSelectedResource({ ...selectedResource, likes: newLikedBy.length, likedBy: newLikedBy });
-      }
-
-      await updateResourceLikes(resourceId, newLikedBy.length, newLikedBy);
-  };
-
-  const handleAddExam = async (subject: string, title: string, date: string, time: string) => {
-      if(!user) return;
+  const handleDeleteContent = async (type: 'question' | 'reply' | 'resource' | 'exam', id: number) => {
       try {
-          await createExam(user, subject, title, date, time);
-          await loadAllData();
-      } catch (e) {
-          alert("新增失敗");
-      }
-  };
-
-  const handleFinishChallenge = async (result: GameResult) => {
-      if (!user) return;
-      const pointsWon = Math.floor(result.score / 50); 
-      if (!user.isAdmin && pointsWon > 0) {
-          const u = { ...user, points: user.points + pointsWon };
-          try {
-            await updateUserInDb(u); // Sync to Cloud
-            setUser(u); // Then Sync to UI
-          } catch (e: any) {
-            console.error("Failed to sync points", e);
-            alert(`積分同步失敗: ${e.message}\n(可能原因：資料庫缺少欄位，請執行 SQL 更新)`);
+          switch(type) {
+              case 'question': await deleteQuestion(id); break;
+              case 'reply': await deleteReply(id); break;
+              case 'resource': await deleteResource(id); break;
+              case 'exam': await deleteExam(id); break;
           }
+          await loadData();
+          setReports(prev => prev.filter(r => !(r.targetType === type && r.targetId === id)));
+      } catch (e) {
+          alert("刪除失敗");
       }
   };
 
   // --- Render ---
 
-  if (connectionError) {
-      return (
-          <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 text-center pt-safe">
-              <div className="bg-red-100 p-6 rounded-full text-red-500 mb-6">
-                  <WifiOff size={48} />
-              </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">無法連接伺服器</h2>
-              <p className="text-gray-500 mb-6">請檢查您的網路連線，或稍後再試。</p>
-              <button onClick={() => window.location.reload()} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2">
-                  <RefreshCcw size={18} /> 重新整理
-              </button>
-          </div>
-      );
-  }
-
-  if (isLoading && !user) {
-      return (
-          <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center pt-safe">
-              <div className="text-gray-500 font-bold animate-pulse">系統載入中...</div>
-          </div>
-      );
+  if (isLoading) {
+    return (
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center space-y-4">
+            <RefreshCcw className="animate-spin text-blue-600" size={40} />
+            <p className="text-gray-500 text-sm">正在連接至電子三乙資料庫...</p>
+        </div>
+    );
   }
 
   if (!user) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  const commonLayoutClasses = `${darkMode ? 'dark' : ''} bg-gray-100 dark:bg-gray-900 min-h-screen`;
+  return (
+    <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+      
+      {/* Modals & Overlays */}
+      <InstallModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
+      
+      <CheckInModal 
+        isOpen={showCheckInModal} 
+        onClose={() => setShowCheckInModal(false)} 
+        onCheckIn={handleCheckIn}
+        streak={user.checkInStreak || 0}
+        isCheckedInToday={user.lastCheckInDate === new Date().toDateString()}
+      />
 
-  if (showModeration) {
-    return (
-        <div className={commonLayoutClasses}>
-            <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <ModerationScreen 
-                    user={user} 
-                    reports={reports}
-                    allQuestions={questions}
-                    allResources={resources}
-                    allExams={exams}
-                    onBack={() => setShowModeration(false)}
-                    onBanUser={handleBanUser}
-                    onUnbanUser={handleUnbanUser}
-                    onDeleteContent={(type, id) => {
-                        if (type === 'question') handleDeleteQuestion(id);
-                        else if (type === 'reply') handleDeleteReply(id);
-                        else if (type === 'resource') handleDeleteResource(id);
-                        else if (type === 'exam') handleDeleteExam(id);
-                    }}
-                />
-            </main>
-        </div>
-    );
-  }
-  
-  if (showWordChallenge) {
-    return (
-        <div className={commonLayoutClasses}>
-             <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <WordChallengeScreen 
-                    user={user}
-                    words={WORD_DATABASE}
-                    onBack={() => setShowWordChallenge(false)}
-                    onFinish={handleFinishChallenge}
-                    onUpdateHearts={handleHeartUpdate}
-                />
-             </main>
-        </div>
-    );
-  }
-  
-  if (showLeaderboardOverlay) {
-      return (
-        <div className={commonLayoutClasses}>
-             <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <div className="bg-white dark:bg-gray-800 p-4 pt-safe flex items-center shadow-sm sticky top-0 z-30 border-b border-gray-100 dark:border-gray-700">
-                    <button onClick={() => setShowLeaderboardOverlay(false)} className="text-blue-600 font-bold">返回</button>
-                    <h1 className="flex-1 text-center font-bold text-gray-800 dark:text-white text-lg">全班等級排名</h1>
-                    <div className="w-8"></div>
-                </div>
-                <LeaderboardScreen currentUser={user} />
-             </main>
-        </div>
-      );
-  }
-
-  if (selectedQuestion) {
-    return (
-      <div className={commonLayoutClasses}>
-            <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <QuestionDetailScreen 
-                question={selectedQuestion}
-                currentUser={user}
+      {showWordChallenge && (
+        <WordChallengeScreen 
+            user={user}
+            words={WORD_DATABASE}
+            onBack={() => setShowWordChallenge(false)}
+            onFinish={handleFinishChallenge}
+            onUpdateHearts={async (hearts) => {
+                const updated = { ...user, hearts };
+                setUser(updated);
+                await updateUserInDb(updated);
+            }}
+        />
+      )}
+      
+      {selectedQuestion && (
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-y-auto">
+             <QuestionDetailScreen 
+                question={selectedQuestion} 
+                currentUser={user} 
                 onBack={() => setSelectedQuestion(null)}
                 onAddReply={handleAddReply}
                 onReport={handleReport}
                 onMarkBest={handleMarkBest}
-                />
-            </main>
-      </div>
-    );
-  }
+             />
+        </div>
+      )}
 
-  if (selectedResource) {
-    return (
-      <div className={commonLayoutClasses}>
-            <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <ResourceDetailScreen 
-                    resource={selectedResource}
-                    currentUser={user}
-                    onBack={() => setSelectedResource(null)}
-                    onLike={handleLikeResource}
-                />
-            </main>
-      </div>
-    );
-  }
+      {selectedResource && (
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-y-auto">
+             <ResourceDetailScreen 
+                resource={selectedResource} 
+                currentUser={user} 
+                onBack={() => setSelectedResource(null)}
+                onLike={handleLikeResource}
+             />
+        </div>
+      )}
 
-  const renderScreen = () => {
-    switch (currentTab) {
-      case Tab.HOME: 
-      case Tab.ASK:
-        if (currentTab === Tab.ASK) return <AskScreen onPostQuestion={handlePostQuestion} />;
-        return <HomeScreen 
-                    questions={questions} 
-                    onQuestionClick={setSelectedQuestion} 
-                    onAskClick={() => setTab(Tab.ASK)}
-                    onStartChallenge={() => setShowWordChallenge(true)}
-                    onOpenLeaderboard={() => setShowLeaderboardOverlay(true)}
-                    onRefresh={handleRefresh}
-                    onOpenCheckIn={() => setShowCheckInModal(true)}
-               />;
-      case Tab.RESOURCE:
-        return <ResourceScreen 
-                  resources={resources} 
-                  onAddResource={handleAddResource} 
-                  onLikeResource={handleLikeResource}
-                  onResourceClick={setSelectedResource}
-                  currentUser={user}
-                  onRefresh={handleRefresh}
-                />;
-      case Tab.EXAM:
-        return <ExamScreen exams={exams} onAddExam={handleAddExam} onDeleteExam={handleDeleteExam} />;
-      case Tab.STORE: 
-        return <ShopScreen user={user} onBuy={handleBuyProduct} />;
-      case Tab.PROFILE: 
-        return <ProfileScreen 
-                    user={user} 
-                    setUser={handleUpdateUser}
-                    onNavigateToModeration={() => setShowModeration(true)}
-                    onNavigateToLeaderboard={() => setShowLeaderboardOverlay(true)}
-                    onOpenCheckIn={() => setShowCheckInModal(true)}
-                    onLogout={handleLogout}
-                    isDarkMode={darkMode}
-                    toggleDarkMode={() => setDarkMode(!darkMode)}
-                    userQuestions={questions.filter(q => q.author === user.name)}
-                    userReplies={questions.filter(q => q.replies.some(r => r.author === user.name))}
-                    userResources={resources.filter(r => r.author === user.name)}
-                    onDeleteQuestion={handleDeleteQuestion}
-                    onDeleteReply={handleDeleteReply}
-                    onDeleteResource={handleDeleteResource}
-               />;
-      default: 
-        return <HomeScreen questions={questions} onQuestionClick={setSelectedQuestion} onAskClick={() => setTab(Tab.ASK)} onRefresh={handleRefresh} />;
-    }
-  };
-
-  return (
-    <div className={commonLayoutClasses}>
-        <main className="max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col transition-colors duration-300">
+      {/* Conditional Full Screen Views */}
+      {showLeaderboardOverlay ? (
+          <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe">
+               <div className="flex items-center p-4 border-b border-gray-100 dark:border-gray-800">
+                   <button onClick={() => setShowLeaderboardOverlay(false)} className="mr-4">
+                       <WifiOff className="rotate-45" size={24} /> {/* Using WifiOff as close icon placeholder, or use another back icon */}
+                   </button>
+                   <h2 className="font-bold text-lg">班級排行榜</h2>
+               </div>
+               <div className="h-[calc(100vh-60px)]">
+                  <LeaderboardScreen currentUser={user} />
+               </div>
+          </div>
+      ) : showModeration ? (
+          <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 overflow-y-auto">
+              <ModerationScreen 
+                user={user}
+                reports={reports}
+                allQuestions={questions}
+                allResources={resources}
+                allExams={exams}
+                onBack={() => setShowModeration(false)}
+                onBanUser={handleBanUser}
+                onUnbanUser={handleUnbanUser}
+                onDeleteContent={handleDeleteContent}
+              />
+          </div>
+      ) : (
+          <>
             <Header user={user} />
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-                {renderScreen()}
+
+            <div className="pb-20">
+                {currentTab === Tab.HOME && (
+                    <HomeScreen 
+                        questions={questions} 
+                        onQuestionClick={setSelectedQuestion}
+                        onAskClick={() => setCurrentTab(Tab.ASK)}
+                        onStartChallenge={() => setShowWordChallenge(true)}
+                        onOpenLeaderboard={() => setShowLeaderboardOverlay(true)}
+                        onOpenCheckIn={() => setShowCheckInModal(true)}
+                        onRefresh={loadData}
+                    />
+                )}
+                {currentTab === Tab.RESOURCE && (
+                    <ResourceScreen 
+                        resources={resources}
+                        currentUser={user}
+                        onAddResource={handleAddResource}
+                        onLikeResource={handleLikeResource}
+                        onResourceClick={setSelectedResource}
+                        onRefresh={loadData}
+                    />
+                )}
+                {currentTab === Tab.EXAM && (
+                    <ExamScreen 
+                        exams={exams} 
+                        onAddExam={handleAddExam}
+                        onDeleteExam={handleDeleteExam}
+                    />
+                )}
+                {currentTab === Tab.STORE && (
+                    <ShopScreen user={user} onBuy={handleBuyProduct} />
+                )}
+                {currentTab === Tab.PROFILE && (
+                    <ProfileScreen 
+                        user={user} 
+                        setUser={setUser}
+                        onNavigateToModeration={() => setShowModeration(true)}
+                        onNavigateToLeaderboard={() => setShowLeaderboardOverlay(true)}
+                        onOpenCheckIn={() => setShowCheckInModal(true)}
+                        onLogout={() => { logout(); setUser(null); }}
+                        isDarkMode={user.settings?.darkMode || false}
+                        toggleDarkMode={async () => {
+                            const newSettings = { ...user.settings!, darkMode: !user.settings?.darkMode };
+                            const updated = { ...user, settings: newSettings };
+                            setUser(updated);
+                            await updateUserInDb(updated);
+                        }}
+                        userQuestions={questions.filter(q => q.author === user.name)}
+                        userReplies={questions.filter(q => q.replies.some(r => r.author === user.name))}
+                        userResources={resources.filter(r => r.author === user.name)}
+                        onDeleteQuestion={handleDeleteQuestion}
+                        onDeleteReply={handleDeleteReply}
+                        onDeleteResource={handleDeleteResource}
+                    />
+                )}
+                {currentTab === Tab.ASK && (
+                    <AskScreen onPostQuestion={handlePostQuestion} />
+                )}
             </div>
-            <BottomNav 
-                currentTab={currentTab === Tab.ASK ? Tab.HOME : currentTab} 
-                setTab={setTab} 
-            />
-            
-            {/* Global Modal */}
-            <CheckInModal 
-                isOpen={showCheckInModal} 
-                onClose={() => setShowCheckInModal(false)}
-                onCheckIn={handleCheckIn}
-                streak={user.checkInStreak || 0}
-                isCheckedInToday={user.lastCheckInDate === new Date().toDateString()}
-            />
-        </main>
+
+            <BottomNav currentTab={currentTab} setTab={setCurrentTab} />
+          </>
+      )}
     </div>
   );
-}
+};
+
+export default App;

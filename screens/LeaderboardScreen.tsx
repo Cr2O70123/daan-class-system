@@ -14,6 +14,7 @@ const getFrameStyle = (frameId?: string) => {
       case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
       case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
       case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
+      case 'frame_beta': return 'ring-2 ring-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)] border border-white/50';
       default: return 'ring-2 ring-white dark:ring-gray-700';
     }
 };

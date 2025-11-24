@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { ShoppingBag, Star, Zap, Crown, Palette, Ghost, MessageCircle, LayoutGrid, Brush, ArrowDownNarrowWide, ArrowUpNarrowWide, Pin } from 'lucide-react';
+import { ShoppingBag, Star, Zap, Crown, Palette, Ghost, MessageCircle, LayoutGrid, Brush, ArrowDownNarrowWide, ArrowUpNarrowWide, Pin, Sparkles, Tag } from 'lucide-react';
 import { User, Product } from '../types';
 
 interface ShopScreenProps {
@@ -9,6 +9,19 @@ interface ShopScreenProps {
 
 // Extended Product List - App Internal Items Only
 const PRODUCTS: Product[] = [
+  // --- Rare / Special Items ---
+  { 
+      id: 'frame_beta', 
+      name: '內測紀念框', 
+      price: 1, 
+      color: 'bg-indigo-100 text-indigo-600', 
+      icon: <Crown size={20} />, 
+      description: '限定內部測試人員專屬紀念用，擁有獨特流光特效', 
+      category: 'frame', 
+      isRare: true, 
+      tag: '非賣品' 
+  },
+
   // --- Avatar Frames (New) ---
   { id: 'frame_gold', name: '黃金光環', price: 2000, color: 'bg-yellow-100 text-yellow-600', icon: <Crown size={20} />, description: '尊爵不凡的金色光環 (頭像框)', category: 'frame' },
   { id: 'frame_neon', name: '霓虹科技', price: 1500, color: 'bg-cyan-100 text-cyan-600', icon: <Zap size={20} />, description: '充滿未來感的藍色霓虹 (頭像框)', category: 'frame' },
@@ -22,7 +35,16 @@ const PRODUCTS: Product[] = [
 
   // --- Tools (功能) ---
   { id: 'card_pin', name: '問題置頂卡', price: 250, color: 'bg-orange-100 text-orange-600', icon: <Pin size={20} />, description: '讓你的問題在首頁置頂 24 小時', category: 'tool' },
-  { id: 'card_anon', name: '匿名發問卡', price: 100, color: 'bg-gray-100 text-gray-600', icon: <Ghost size={20} />, description: '這一次發問不會顯示你的名字', category: 'tool' },
+  { 
+      id: 'card_anon', 
+      name: '匿名發問卡', 
+      price: 10, 
+      color: 'bg-gray-100 text-gray-600', 
+      icon: <Ghost size={20} />, 
+      description: '這一次發問不會顯示你的名字', 
+      category: 'tool',
+      tag: '特價'
+  },
   { id: 'badge_star', name: '學霸徽章', price: 500, color: 'bg-amber-100 text-amber-600', icon: <Star size={20} />, description: '個人頁面顯示榮譽徽章', category: 'tool' },
 ];
 
@@ -119,9 +141,37 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
           const isOwned = user.inventory.includes(product.id) || user.avatarFrame === product.id;
           const isEquipped = user.avatarFrame === product.id;
           const canAfford = user.points >= product.price;
+          const isRare = product.isRare;
 
           return (
-            <div key={product.id} className={`bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border ${isEquipped ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-100 dark:border-gray-700'} flex flex-col items-center text-center relative overflow-hidden group transition-all hover:shadow-md hover:-translate-y-1`}>
+            <div 
+                key={product.id} 
+                className={`
+                    rounded-2xl p-4 shadow-sm border flex flex-col items-center text-center relative overflow-hidden group transition-all hover:shadow-md hover:-translate-y-1
+                    ${isRare 
+                        ? 'bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-indigo-900/30 border-indigo-200 dark:border-indigo-500/30' 
+                        : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
+                    }
+                    ${isEquipped ? 'ring-2 ring-blue-500 border-blue-500' : ''}
+                `}
+            >
+              {/* Rare Sparkle Effect */}
+              {isRare && (
+                  <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+                      <div className="absolute -top-10 -left-10 w-20 h-20 bg-white/40 blur-2xl rounded-full animate-pulse"></div>
+                      <Sparkles className="absolute top-2 right-2 text-yellow-400 animate-pulse" size={16} />
+                  </div>
+              )}
+
+              {/* Tags */}
+              {product.tag && (
+                  <div className={`absolute top-0 left-0 text-[10px] font-bold px-2 py-1 rounded-br-lg z-10 shadow-sm
+                      ${product.tag === '特價' ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white'}
+                  `}>
+                      {product.tag}
+                  </div>
+              )}
+
               {/* Equipped Badge */}
               {isEquipped && (
                   <div className="absolute top-0 right-0 bg-blue-500 text-white text-[9px] font-bold px-2 py-1 rounded-bl-lg z-10">
@@ -129,16 +179,18 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                   </div>
               )}
               
-              <div className={`w-14 h-14 rounded-2xl ${product.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300 shadow-sm`}>
+              <div className={`w-14 h-14 rounded-2xl ${product.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300 shadow-sm relative z-10`}>
                 {product.icon}
               </div>
               
-              <h3 className="font-bold text-gray-800 dark:text-gray-100 mb-1">{product.name}</h3>
+              <h3 className={`font-bold mb-1 ${isRare ? 'text-indigo-900 dark:text-indigo-100' : 'text-gray-800 dark:text-gray-100'}`}>
+                  {product.name}
+              </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 h-8 leading-tight line-clamp-2 px-1">{product.description}</p>
               
-              <div className="mt-auto w-full">
+              <div className="mt-auto w-full relative z-10">
                   <button
-                    disabled={isOwned && product.category !== 'frame'} // Allow frames to be clicked to equip? For simplicity, handle in logic
+                    disabled={isOwned && product.category !== 'frame'} 
                     onClick={() => onBuy(product)}
                     className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       isEquipped 
@@ -146,7 +198,9 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                         : isOwned
                             ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200' 
                             : canAfford 
-                              ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20 active:scale-95' 
+                              ? isRare 
+                                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/30'
+                                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20'
                               : 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
                     }`}
                   >
