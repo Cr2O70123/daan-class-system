@@ -325,7 +325,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                               </div>
                               <div className="flex gap-3">
                                 <div className="bg-red-100 p-2 rounded-lg h-fit"><BarChart size={16} className="text-red-600" /></div>
-                                <div><span className="font-bold text-gray-800 block text-base mb-1">難度</span>每答對 5 題，單字難度會提升 (Level 3 ~ 6)。</div>
+                                <div><span className="font-bold text-gray-800 block text-base mb-1">難度</span>每答對 5 題，單字難度會提升 (Level 3 -> 6)。</div>
                               </div>
                               <div className="flex gap-3">
                                 <div className="bg-green-100 p-2 rounded-lg h-fit"><Trophy size={16} className="text-green-600" /></div>
