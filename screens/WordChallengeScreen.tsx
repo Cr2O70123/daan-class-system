@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, CheckCircle, BookOpen, Coins, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, CheckCircle, BookOpen, Coins, ChevronRight, Clock } from 'lucide-react';
 import { User, Word, GameResult, GameLeaderboardEntry } from '../types';
 import { fetchGameLeaderboard, submitGameScore } from '../services/dataService';
 
@@ -142,8 +143,10 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
           const data = await fetchGameLeaderboard();
           setLeaderboard(data);
       };
-      loadLeaderboard();
-  }, []);
+      if (gameState === 'menu') {
+        loadLeaderboard();
+      }
+  }, [gameState]);
 
   // Filter words by strict level logic to ensure all levels are played
   const getPool = (currentLvl: number) => {
@@ -442,9 +445,12 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                 ) : (
                     <div className="flex-1 w-full max-w-md mx-auto overflow-hidden flex flex-col">
                         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 flex-1 overflow-y-auto p-4">
-                            <h3 className="text-center font-bold mb-4 text-gray-800 dark:text-white flex items-center justify-center gap-2">
+                            <h3 className="text-center font-bold mb-1 text-gray-800 dark:text-white flex items-center justify-center gap-2">
                                 <Crown size={18} className="text-yellow-500 fill-current" /> 本週風雲榜
                             </h3>
+                            <p className="text-center text-[10px] text-gray-400 mb-4 flex items-center justify-center gap-1">
+                                <Clock size={10} /> 每週一 00:00 重置
+                            </p>
                             <div className="space-y-3">
                                 {leaderboard.length === 0 ? (
                                     <div className="text-center text-gray-400 py-8 text-sm">

@@ -1,5 +1,7 @@
+
 import { supabase } from './supabaseClient';
-import { Question, Resource, Exam, User, GameLeaderboardEntry } from '../types';
+import { Question, Resource, Exam, User, GameLeaderboardEntry, LeaderboardEntry } from '../types';
+import { calculateLevel } from './levelService';
 
 // --- Questions ---
 
@@ -240,6 +242,33 @@ export const unbanUser = async (studentId: string) => {
     if (error) throw error;
 };
 
+// --- Class Leaderboard (Real Data - Real-time from Users table) ---
+
+export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('name, student_id, points, avatar_color, avatar_image, avatar_frame')
+        .eq('is_banned', false) // Exclude banned users
+        .order('points', { ascending: false })
+        .limit(100); // Top 100 students
+
+    if (error) {
+        console.error("Error fetching leaderboard:", error);
+        return [];
+    }
+
+    return data.map((u: any, index: number) => ({
+        rank: index + 1,
+        name: u.name,
+        studentId: u.student_id,
+        points: u.points,
+        level: calculateLevel(u.points),
+        avatarColor: u.avatar_color || 'bg-gray-400',
+        avatarImage: u.avatar_image,
+        avatarFrame: u.avatar_frame
+    }));
+};
+
 // --- Game System ---
 
 export const submitGameScore = async (user: User, score: number) => {
@@ -262,20 +291,29 @@ export const submitGameScore = async (user: User, score: number) => {
 };
 
 export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> => {
+    // 1. Calculate Start of Week (Monday 00:00:00)
+    const now = new Date();
+    const day = now.getDay();
+    // JavaScript getDay(): Sunday=0, Monday=1...
+    // We want Monday to be the start. 
+    // If today is Sunday (0), we go back 6 days. If Monday (1), go back 0 days.
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    const startOfWeek = new Date(now.setDate(diff));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    // 2. Fetch scores created AFTER the start of the week
     const { data, error } = await supabase
         .from('game_scores')
         .select('*')
-        .order('score', { ascending: false })
-        .limit(10); // Top 10
+        .gte('created_at', startOfWeek.toISOString()) // Weekly Filter
+        .order('score', { ascending: false });
 
     if (error) {
-        // If table doesn't exist yet, return empty to prevent crash
+        console.error("Error fetching game leaderboard:", error);
         return [];
     }
 
-    // Basic deduplication logic: keep highest score per student
-    // In a real complex SQL, we would use DISTINCT ON or GROUP BY
-    // Here we filter in JS for simplicity
+    // 3. Deduplication: Keep only highest score per student for this week
     const uniqueEntries: Record<string, GameLeaderboardEntry> = {};
     
     data.forEach((entry: any) => {
@@ -290,7 +328,8 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
         }
     });
 
-    const sorted = Object.values(uniqueEntries).sort((a, b) => b.score - a.score);
+    // 4. Sort and take top 10
+    const sorted = Object.values(uniqueEntries).sort((a, b) => b.score - a.score).slice(0, 10);
     
     return sorted.map((entry, index) => ({
         ...entry,

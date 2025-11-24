@@ -152,26 +152,44 @@ export default function App() {
     const checkReset = async () => {
         if (!user) return;
         
+        // Use string comparison for dates (e.g. "Mon Nov 30 2023")
         const today = new Date().toDateString();
-        // Reset if stored date is different from today
-        if (user.lastHeartReset !== today) {
-            console.log("Resetting hearts for new day...");
+        const lastReset = user.lastHeartReset;
+
+        // Reset if stored date is different from today (String comparison)
+        if (lastReset !== today) {
+            console.log(`[Reset Check] Last: ${lastReset}, Today: ${today}. Resetting...`);
+            
+            // Optimistic update
             const updatedUser = { ...user, hearts: 3, lastHeartReset: today };
+            setUser(updatedUser); 
+            
             try {
+                // Persist to DB
                 await updateUserInDb(updatedUser);
-                setUser(updatedUser);
-            } catch (e) {
-                console.error("Reset hearts failed - likely missing DB columns", e);
+                alert("✨ 新的一天！遊戲愛心已補滿 (3/3)！");
+            } catch (e: any) {
+                console.error("Reset hearts DB sync failed:", e);
+                // If DB fails, we might want to revert, but for hearts it's better to fail open usually, 
+                // or just alert the user to check connection.
+                alert(`愛心重置同步失敗: ${e.message}`);
             }
         }
     };
     
-    // Check immediately on load/user change
+    // 1. Check immediately on load/user change
     checkReset();
     
-    // Check every minute (e.g., if user stays on page past midnight)
+    // 2. Check every minute (if user keeps tab open across midnight)
     const interval = setInterval(checkReset, 60000); 
-    return () => clearInterval(interval);
+
+    // 3. Check when window regains focus (e.g. user switches tabs and comes back next day)
+    window.addEventListener('focus', checkReset);
+
+    return () => {
+        clearInterval(interval);
+        window.removeEventListener('focus', checkReset);
+    };
   }, [user?.studentId, user?.lastHeartReset]); 
 
   // --- Handlers ---
