@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, BookOpen, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, CheckCircle } from 'lucide-react';
 import { User, Word, GameResult, GameLeaderboardEntry } from '../types';
 import { fetchGameLeaderboard, submitGameScore } from '../services/dataService';
 
@@ -14,7 +14,7 @@ interface WordChallengeScreenProps {
 const INITIAL_TIME = 30; // Seconds
 
 // Sound Effect Helper using Web Audio API
-const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start') => {
+const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | 'levelup' | 'timeout') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -73,10 +73,37 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start') =>
           osc.start(now);
           osc.stop(now + 0.3);
           break;
+      case 'levelup':
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(440, now); // A4
+          osc.frequency.setValueAtTime(554.37, now + 0.1); // C#5
+          osc.frequency.setValueAtTime(659.25, now + 0.2); // E5
+          osc.frequency.setValueAtTime(880, now + 0.3); // A5
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.6);
+          osc.start(now);
+          osc.stop(now + 0.6);
+          break;
+      case 'timeout':
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(400, now);
+          osc.frequency.linearRampToValueAtTime(100, now + 0.5);
+          gain.gain.setValueAtTime(0.2, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.5);
+          osc.start(now);
+          osc.stop(now + 0.5);
+          break;
     }
   } catch (e) {
     // Ignore audio errors
   }
+};
+
+const getLevel = (count: number) => {
+    if (count >= 15) return 6;
+    if (count >= 10) return 5;
+    if (count >= 5) return 4;
+    return 3;
 };
 
 export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({ 
@@ -121,16 +148,12 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // Filter words by strict level logic to ensure all levels are played
   const getPool = (currentLvl: number) => {
       // Strictly return words for the current level to force progression
-      return words.filter(w => w.level === currentLvl);
+      const pool = words.filter(w => w.level === currentLvl);
+      return pool.length > 0 ? pool : words;
   };
 
-  const generateQuestion = () => {
-    // Difficulty Progression Logic
-    let nextLevel = 3;
-    if (correctCount >= 15) nextLevel = 6;
-    else if (correctCount >= 10) nextLevel = 5;
-    else if (correctCount >= 5) nextLevel = 4;
-    
+  const generateQuestion = (currentCorrectCount = correctCount) => {
+    const nextLevel = getLevel(currentCorrectCount);
     setLevel(nextLevel);
 
     const pool = getPool(nextLevel);
@@ -178,7 +201,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       setShowCorrectAnswer(false);
       setSelectedOption(null);
       setIsProcessing(false);
-      generateQuestion();
+      generateQuestion(0);
 
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = window.setInterval(() => {
@@ -188,7 +211,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                   playSound('tick');
               }
               if (prev <= 1) {
-                  endGame();
+                  endGame(true);
                   return 0;
               }
               return prev - 1;
@@ -196,9 +219,9 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       }, 1000);
   };
 
-  const endGame = () => {
+  const endGame = (isTimeout = false) => {
       if (timerRef.current) clearInterval(timerRef.current);
-      playSound('gameover');
+      playSound(isTimeout ? 'timeout' : 'gameover');
       setGameState('gameover');
   };
 
@@ -221,7 +244,15 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
           setCombo(prev => prev + 1);
           if (combo + 1 > maxCombo) setMaxCombo(combo + 1);
           setTimeLeft(prev => Math.min(prev + timeBonus, 60)); 
-          setCorrectCount(prev => prev + 1);
+          
+          const newCorrectCount = correctCount + 1;
+          setCorrectCount(newCorrectCount);
+
+          // Check for Level Up
+          if (getLevel(newCorrectCount) > getLevel(correctCount)) {
+              setTimeout(() => playSound('levelup'), 400);
+          }
+          
           setFeedback('correct');
           setShowCorrectAnswer(true);
 
@@ -230,7 +261,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
               setShowCorrectAnswer(false);
               setSelectedOption(null);
               setIsProcessing(false);
-              if (timeLeft > 0) generateQuestion();
+              if (timeLeft > 0) generateQuestion(newCorrectCount);
           }, 800);
 
       } else {
@@ -260,7 +291,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
               setShowCorrectAnswer(false);
               setSelectedOption(null);
               setIsProcessing(false);
-              if (timeLeft > 0) generateQuestion();
+              if (timeLeft > 0) generateQuestion(correctCount);
           }, 1500);
       }
   };
@@ -508,8 +539,6 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                         const isThisCorrect = opt === currentWord?.zh;
                         const isThisSelected = opt === selectedOption;
                         
-                        // Logic for button appearance
-                        // Ensure FIXED HEIGHT (h-16 or similar) to prevent layout shift during scale/border changes
                         let buttonClass = "w-full h-16 rounded-xl text-lg font-bold border-2 shadow-sm transition-all duration-200 flex items-center justify-center ";
                         
                         if (feedback) {
