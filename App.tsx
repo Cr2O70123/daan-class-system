@@ -565,9 +565,9 @@ export default function App() {
       return (
         <div className={commonLayoutClasses}>
              <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <div className="bg-white dark:bg-gray-800 p-4 flex items-center shadow-sm sticky top-0 z-30">
+                <div className="bg-white dark:bg-gray-800 p-4 flex items-center shadow-sm sticky top-0 z-30 border-b border-gray-100 dark:border-gray-700">
                     <button onClick={() => setShowLeaderboardOverlay(false)} className="text-blue-600 font-bold">返回</button>
-                    <h1 className="flex-1 text-center font-bold text-gray-800 dark:text-white">班級風雲榜</h1>
+                    <h1 className="flex-1 text-center font-bold text-gray-800 dark:text-white text-lg">全班等級排名</h1>
                     <div className="w-8"></div>
                 </div>
                 <LeaderboardScreen currentUser={user} />
