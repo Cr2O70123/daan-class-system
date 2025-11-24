@@ -255,7 +255,10 @@ export const submitGameScore = async (user: User, score: number) => {
         avatar_data: avatarData
     }]);
 
-    if (error) console.error("Score submit failed", error);
+    if (error) {
+        console.error("Score submit failed", error);
+        throw error;
+    }
 };
 
 export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> => {

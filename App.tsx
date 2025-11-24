@@ -211,8 +211,9 @@ export default function App() {
       try {
           await updateUserInDb(updatedUser);
           setUser(updatedUser);
-      } catch (e) {
+      } catch (e: any) {
           console.error("Update hearts failed", e);
+          alert(`更新愛心失敗: ${e.message}`);
       }
   };
 
@@ -364,7 +365,7 @@ export default function App() {
                 await updateUserInDb(u);
                 setUser(u);
                 alert(`已裝備：${product.name}`);
-            } catch (e) { alert("裝備失敗"); }
+            } catch (e: any) { alert(`裝備失敗: ${e.message}`); }
         } else if (product.category === 'cosmetic') {
             const textClass = product.color.split(' ').find(c => c.startsWith('text-'));
             const u = { ...user, nameColor: textClass };
@@ -372,7 +373,7 @@ export default function App() {
                 await updateUserInDb(u);
                 setUser(u);
                 alert(`已啟用：${product.name}`);
-            } catch (e) { alert("啟用失敗"); }
+            } catch (e: any) { alert(`啟用失敗: ${e.message}`); }
         }
         return;
     }
@@ -455,9 +456,9 @@ export default function App() {
           try {
             await updateUserInDb(u); // Sync to Cloud
             setUser(u); // Then Sync to UI
-          } catch (e) {
+          } catch (e: any) {
             console.error("Failed to sync points", e);
-            alert("積分同步失敗，請檢查連線");
+            alert(`積分同步失敗: ${e.message}\n(可能原因：資料庫缺少欄位，請執行 SQL 更新)`);
           }
       }
   };

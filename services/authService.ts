@@ -142,6 +142,10 @@ export const logout = () => {
 };
 
 export const updateUserInDb = async (user: User) => {
+    if (!user.studentId) {
+        throw new Error("Missing student ID");
+    }
+
     const updatePayload = {
         points: user.points,
         hearts: user.hearts,
@@ -161,8 +165,7 @@ export const updateUserInDb = async (user: User) => {
         
     if (error) {
         console.error('Error updating user:', error);
-        throw new Error(error.message || "Unknown DB Error");
+        throw new Error(error.message);
     }
-    // Return true to indicate success for await calls
     return true;
 };
