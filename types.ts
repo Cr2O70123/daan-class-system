@@ -3,10 +3,11 @@ import React from 'react';
 export enum Tab {
   HOME = 'HOME',
   ASK = 'ASK', // Hidden from nav, triggered by FAB
-  RESOURCE = 'RESOURCE', // New Tab
-  EXAM = 'EXAM', // New Tab
+  RESOURCE = 'RESOURCE', 
+  PLAYGROUND = 'PLAYGROUND', // New: Replaces Exam in Nav
+  EXAM = 'EXAM', // Kept for data structure but moved out of main nav
   STORE = 'STORE',
-  LEADERBOARD = 'LEADERBOARD', // Accessed from Profile
+  LEADERBOARD = 'LEADERBOARD', 
   PROFILE = 'PROFILE', 
 }
 
@@ -163,4 +164,22 @@ export interface GameLeaderboardEntry {
   score: number;
   avatarColor: string;
   avatarFrame?: string;
+}
+
+// --- Resistor Game Types ---
+export interface ResistorColor {
+  name: string;
+  value: number; // Digit value (0-9) or -1 for none
+  multiplier: number; // 10^x
+  tolerance: number | null; // %
+  hex: string;
+  textColor: string;
+}
+
+export interface ResistorTask {
+  resistance: number; // e.g. 4700 (4.7k)
+  toleranceValue: number; // e.g. 5 (%)
+  displayValue: string; // "4.7 kΩ"
+  bands: number; // 4 or 5
+  correctColors: string[]; // ['Yellow', 'Violet', 'Red', 'Gold']
 }

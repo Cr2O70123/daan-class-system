@@ -13,9 +13,11 @@ import { ResourceScreen } from './screens/ResourceScreen';
 import { ResourceDetailScreen } from './screens/ResourceDetailScreen';
 import { ExamScreen } from './screens/ExamScreen';
 import { WordChallengeScreen } from './screens/WordChallengeScreen';
+import { ResistorGameScreen } from './screens/ResistorGameScreen';
+import { PlaygroundScreen } from './screens/PlaygroundScreen';
 import { CheckInModal } from './components/CheckInModal';
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
-import { RefreshCcw, X, ZoomIn } from 'lucide-react';
+import { RefreshCw, X, ZoomIn } from 'lucide-react';
 
 // Services
 import { WORD_DATABASE } from './services/mockData'; 
@@ -89,6 +91,7 @@ const App = () => {
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
   const [showModeration, setShowModeration] = useState(false);
   const [showWordChallenge, setShowWordChallenge] = useState(false);
+  const [showResistorGame, setShowResistorGame] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
   
@@ -343,6 +346,7 @@ const App = () => {
           console.error("Failed to update points", e);
       }
       setShowWordChallenge(false);
+      setShowResistorGame(false);
   };
 
   // --- Missing Handlers ---
@@ -494,7 +498,7 @@ const App = () => {
   if (isLoading) {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center space-y-4">
-            <RefreshCcw className="animate-spin text-blue-600" size={40} />
+            <RefreshCw className="animate-spin text-blue-600" size={40} />
             <p className="text-gray-500 text-sm">正在連接至電子三乙資料庫...</p>
         </div>
     );
@@ -547,6 +551,19 @@ const App = () => {
                 await updateUserInDb(updated);
             }}
         />
+      )}
+      
+      {showResistorGame && (
+          <ResistorGameScreen 
+              user={user}
+              onBack={() => setShowResistorGame(false)}
+              onFinish={handleFinishChallenge}
+              onUpdateHearts={async (hearts) => {
+                  const updated = { ...user, hearts };
+                  setUser(updated);
+                  await updateUserInDb(updated);
+              }}
+          />
       )}
       
       {selectedQuestion && (
@@ -633,7 +650,17 @@ const App = () => {
                         onImageClick={setLightboxImage}
                     />
                 )}
+                {currentTab === Tab.PLAYGROUND && (
+                    <PlaygroundScreen 
+                        user={user}
+                        onOpenWordChallenge={() => setShowWordChallenge(true)}
+                        onOpenResistorGame={() => setShowResistorGame(true)}
+                    />
+                )}
                 {currentTab === Tab.EXAM && (
+                    // We keep this route accessible even if not in bottom nav directly
+                    // Or we could fully remove it. Let's keep it but it might only be reachable if we added a link elsewhere.
+                    // For now, Playgound replaces it in Nav.
                     <ExamScreen 
                         exams={exams} 
                         onAddExam={handleAddExam}
