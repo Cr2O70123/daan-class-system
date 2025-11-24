@@ -15,7 +15,7 @@ import { ExamScreen } from './screens/ExamScreen';
 import { WordChallengeScreen } from './screens/WordChallengeScreen';
 import { CheckInModal } from './components/CheckInModal';
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
-import { WifiOff, RefreshCcw } from 'lucide-react';
+import { RefreshCcw } from 'lucide-react';
 
 // Services
 import { WORD_DATABASE } from './services/mockData'; 
@@ -551,14 +551,17 @@ const App = () => {
 
       {/* Conditional Full Screen Views */}
       {showLeaderboardOverlay ? (
-          <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe">
-               <div className="flex items-center p-4 border-b border-gray-100 dark:border-gray-800">
-                   <button onClick={() => setShowLeaderboardOverlay(false)} className="mr-4">
-                       <WifiOff className="rotate-45" size={24} /> {/* Using WifiOff as close icon placeholder, or use another back icon */}
+          <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe flex flex-col">
+               <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-2">
+                   <h2 className="font-bold text-lg text-gray-800 dark:text-white">全班等級排名</h2>
+                   <button 
+                        onClick={() => setShowLeaderboardOverlay(false)} 
+                        className="text-blue-600 dark:text-blue-400 font-bold px-2 py-1 hover:bg-blue-50 dark:hover:bg-gray-800 rounded transition-colors"
+                   >
+                       返回
                    </button>
-                   <h2 className="font-bold text-lg">班級排行榜</h2>
                </div>
-               <div className="h-[calc(100vh-60px)]">
+               <div className="flex-1 overflow-hidden">
                   <LeaderboardScreen currentUser={user} />
                </div>
           </div>
@@ -622,9 +625,14 @@ const App = () => {
                         onLogout={() => { logout(); setUser(null); }}
                         isDarkMode={user.settings?.darkMode || false}
                         toggleDarkMode={async () => {
-                            const newSettings = { ...user.settings!, darkMode: !user.settings?.darkMode };
+                            // Ensure persistence
+                            const newSettings = { 
+                                ...user.settings!, 
+                                darkMode: !user.settings?.darkMode 
+                            };
                             const updated = { ...user, settings: newSettings };
                             setUser(updated);
+                            // Strictly await the DB update to prevent loss on reload
                             await updateUserInDb(updated);
                         }}
                         userQuestions={questions.filter(q => q.author === user.name)}

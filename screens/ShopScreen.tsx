@@ -13,13 +13,13 @@ const PRODUCTS: Product[] = [
   { 
       id: 'frame_beta', 
       name: '內測紀念框', 
-      price: 1, 
-      color: 'bg-indigo-100 text-indigo-600', 
+      price: 99999, // Unattainable price just in case
+      color: 'bg-amber-100 text-amber-600', 
       icon: <Crown size={20} />, 
-      description: '限定內部測試人員專屬紀念用，擁有獨特流光特效', 
+      description: '內測專屬紀念，擁有獨特流光特效', 
       category: 'frame', 
       isRare: true, 
-      tag: '非賣品' 
+      tag: '限定' 
   },
 
   // --- Avatar Frames (New) ---
@@ -75,6 +75,16 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
 
   return (
     <div className="pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+      <style>{`
+          @keyframes shimmer {
+              0% { transform: translateX(-100%) skewX(-15deg); }
+              100% { transform: translateX(200%) skewX(-15deg); }
+          }
+          .animate-shimmer {
+              animation: shimmer 2.5s infinite linear;
+          }
+      `}</style>
+      
       {/* Header Banner - Added pt-safe */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 pt-safe text-white mb-4 shadow-lg rounded-b-[2rem]">
         <div className="flex items-center justify-between mt-2">
@@ -142,22 +152,32 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
           const isEquipped = user.avatarFrame === product.id;
           const canAfford = user.points >= product.price;
           const isRare = product.isRare;
+          const isBetaFrame = product.id === 'frame_beta';
 
           return (
             <div 
                 key={product.id} 
                 className={`
                     rounded-2xl p-4 shadow-sm border flex flex-col items-center text-center relative overflow-hidden group transition-all hover:shadow-md hover:-translate-y-1
-                    ${isRare 
-                        ? 'bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-indigo-900/30 border-indigo-200 dark:border-indigo-500/30' 
-                        : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
+                    ${isBetaFrame
+                        ? 'bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-yellow-900/20 dark:to-amber-900/20 border-yellow-200 dark:border-yellow-700'
+                        : isRare 
+                            ? 'bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-gray-800 dark:to-indigo-900/30 border-indigo-200 dark:border-indigo-500/30' 
+                            : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
                     }
                     ${isEquipped ? 'ring-2 ring-blue-500 border-blue-500' : ''}
                 `}
             >
+              {/* Shimmer Effect for Beta Frame */}
+              {isBetaFrame && (
+                  <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent w-full h-full -skew-x-12 animate-shimmer"></div>
+                  </div>
+              )}
+
               {/* Rare Sparkle Effect */}
-              {isRare && (
-                  <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+              {(isRare || isBetaFrame) && (
+                  <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
                       <div className="absolute -top-10 -left-10 w-20 h-20 bg-white/40 blur-2xl rounded-full animate-pulse"></div>
                       <Sparkles className="absolute top-2 right-2 text-yellow-400 animate-pulse" size={16} />
                   </div>
@@ -166,7 +186,8 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
               {/* Tags */}
               {product.tag && (
                   <div className={`absolute top-0 left-0 text-[10px] font-bold px-2 py-1 rounded-br-lg z-10 shadow-sm
-                      ${product.tag === '特價' ? 'bg-red-500 text-white' : 'bg-indigo-600 text-white'}
+                      ${product.tag === '特價' ? 'bg-red-500 text-white' : 
+                        isBetaFrame ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'}
                   `}>
                       {product.tag}
                   </div>
@@ -183,28 +204,32 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                 {product.icon}
               </div>
               
-              <h3 className={`font-bold mb-1 ${isRare ? 'text-indigo-900 dark:text-indigo-100' : 'text-gray-800 dark:text-gray-100'}`}>
+              <h3 className={`font-bold mb-1 ${isRare ? (isBetaFrame ? 'text-amber-700 dark:text-amber-400' : 'text-indigo-900 dark:text-indigo-100') : 'text-gray-800 dark:text-gray-100'}`}>
                   {product.name}
               </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 h-8 leading-tight line-clamp-2 px-1">{product.description}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4 h-8 leading-tight line-clamp-2 px-1 relative z-10">{product.description}</p>
               
               <div className="mt-auto w-full relative z-10">
                   <button
-                    disabled={isOwned && product.category !== 'frame'} 
+                    disabled={(isOwned && product.category !== 'frame') || isBetaFrame} 
                     onClick={() => onBuy(product)}
                     className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1 ${
-                      isEquipped 
-                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 cursor-default'
-                        : isOwned
-                            ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200' 
-                            : canAfford 
-                              ? isRare 
-                                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/30'
-                                  : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20'
-                              : 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
+                      isBetaFrame 
+                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-500 cursor-not-allowed border border-amber-200 dark:border-amber-800'
+                        : isEquipped 
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 cursor-default'
+                            : isOwned
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200' 
+                                : canAfford 
+                                  ? isRare 
+                                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/30'
+                                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20'
+                                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
                     }`}
                   >
-                    {isEquipped ? (
+                    {isBetaFrame ? (
+                        <span>限定商品</span>
+                    ) : isEquipped ? (
                         <span>使用中</span>
                     ) : isOwned ? (
                         <span>{product.category === 'frame' ? '裝備' : '已擁有'}</span>

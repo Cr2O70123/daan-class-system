@@ -73,7 +73,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900 transition-colors">
       {/* Quick Refresh Header */}
-      <div className="px-4 py-2 flex justify-end border-b border-gray-100 dark:border-gray-800">
+      <div className="px-4 py-2 flex justify-end border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
           <button 
             onClick={loadData} 
             className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
@@ -129,7 +129,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
                                     {isActive ? (
                                         <div className="flex items-center gap-0.5 text-[10px] text-orange-500 font-bold">
                                             <Flame size={10} className="fill-orange-500" />
-                                            {streak > 1 && <span>{streak}天</span>}
+                                            {streak > 0 && <span>{streak}天</span>}
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-0.5 text-[10px] text-gray-300 dark:text-gray-600">

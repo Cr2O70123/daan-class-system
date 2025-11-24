@@ -124,22 +124,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
     >
       {/* Pull to Refresh Indicator */}
       <div 
-        className="fixed left-0 right-0 z-0 flex justify-center pointer-events-none transition-all duration-200"
+        className="fixed left-0 right-0 z-[60] flex justify-center pointer-events-none transition-all duration-200"
         style={{ 
-            top: '100px', // Below header
+            top: '110px', // Below header
             transform: `translateY(${pullY > 0 ? pullY - 40 : -100}px)`,
             opacity: pullY > 0 ? 1 : 0
         }}
       >
-        <div className="bg-white dark:bg-gray-800 rounded-full p-2 shadow-md border border-gray-100 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-full px-4 py-2 shadow-lg border border-gray-100 dark:border-gray-700 flex items-center gap-2">
             {isRefreshing ? (
-                <Loader2 className="animate-spin text-blue-600" size={24} />
+                <>
+                    <Loader2 className="animate-spin text-blue-600" size={18} />
+                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">重新整理中...</span>
+                </>
             ) : (
-                <RefreshCw 
-                    size={24} 
-                    className={`text-blue-600 transition-transform ${pullY > PULL_THRESHOLD ? 'rotate-180' : ''}`} 
-                    style={{ transform: `rotate(${pullY * 2}deg)` }}
-                />
+                <>
+                    <RefreshCw 
+                        size={18} 
+                        className={`text-blue-600 transition-transform ${pullY > PULL_THRESHOLD ? 'rotate-180' : ''}`} 
+                        style={{ transform: `rotate(${pullY * 2}deg)` }}
+                    />
+                    <span className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                        {pullY > PULL_THRESHOLD ? "放開以重整" : "下拉以重整"}
+                    </span>
+                </>
             )}
         </div>
       </div>
