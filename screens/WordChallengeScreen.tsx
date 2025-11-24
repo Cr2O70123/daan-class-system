@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, CheckCircle, BookOpen, Coins, ChevronRight } from 'lucide-react';
 import { User, Word, GameResult, GameLeaderboardEntry } from '../types';
 import { fetchGameLeaderboard, submitGameScore } from '../services/dataService';
 
@@ -353,12 +353,17 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                       <ArrowLeft size={24} className="text-gray-600 dark:text-gray-300" />
                   </button>
                   <div className="flex gap-3 items-center">
-                        <button onClick={() => setShowHelp(true)} className="text-gray-400 hover:text-blue-500 transition-colors">
-                            <HelpCircle size={22} />
+                        <button 
+                            onClick={() => setShowHelp(true)} 
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-xs font-bold text-gray-600 dark:text-gray-300"
+                        >
+                            <BookOpen size={16} />
+                            遊戲說明
                         </button>
-                        <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-800">
+                        <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-full border border-blue-100 dark:border-blue-800 flex items-center gap-1">
+                            <Zap size={12} className="text-blue-500 fill-current" />
                             <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                                今日剩餘次數：{remainingPlays} / 3
+                                {remainingPlays}/3
                             </span>
                         </div>
                   </div>
@@ -393,26 +398,26 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                             
                             <div className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-100 dark:border-yellow-900/30 text-left">
                                 <h4 className="text-xs font-bold text-yellow-600 dark:text-yellow-400 mb-3 flex items-center justify-center gap-1 border-b border-yellow-200 dark:border-yellow-800 pb-2">
-                                    <Crown size={14} /> 排行榜獎勵 (每週)
+                                    <Crown size={14} /> 本週排行獎勵
                                 </h4>
                                 <div className="space-y-2 text-sm font-bold text-gray-700 dark:text-gray-200">
                                     <div className="flex justify-between items-center border-b border-dashed border-gray-200 dark:border-gray-700 pb-1">
                                         <div className="flex items-center gap-2">
-                                            <span className="w-6 text-center text-lg">🥇</span>
+                                            <div className="w-5 h-5 rounded-full bg-yellow-400 text-white flex items-center justify-center text-[10px]">1</div>
                                             <span>第一名</span>
                                         </div>
                                         <span className="text-blue-600 dark:text-blue-400 font-mono text-base">300 PT</span>
                                     </div>
                                     <div className="flex justify-between items-center border-b border-dashed border-gray-200 dark:border-gray-700 pb-1">
                                         <div className="flex items-center gap-2">
-                                            <span className="w-6 text-center text-lg">🥈</span>
+                                            <div className="w-5 h-5 rounded-full bg-gray-300 text-white flex items-center justify-center text-[10px]">2</div>
                                             <span>第二名</span>
                                         </div>
                                         <span className="text-blue-600 dark:text-blue-400 font-mono text-base">200 PT</span>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <div className="flex items-center gap-2">
-                                            <span className="w-6 text-center text-lg">🥉</span>
+                                            <div className="w-5 h-5 rounded-full bg-orange-400 text-white flex items-center justify-center text-[10px]">3</div>
                                             <span>第三名</span>
                                         </div>
                                         <span className="text-blue-600 dark:text-blue-400 font-mono text-base">100 PT</span>
@@ -471,21 +476,116 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                 )}
               </div>
 
-              {/* HELP MODAL */}
+              {/* HELP MODAL (Redesigned) */}
               {showHelp && (
-                  <div className="absolute inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
-                      <div className="bg-white dark:bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl">
-                          <div className="flex justify-between items-center mb-4">
-                              <h3 className="font-bold text-lg text-gray-800 dark:text-white">遊戲說明</h3>
-                              <button onClick={() => setShowHelp(false)} className="bg-gray-100 dark:bg-gray-700 p-1 rounded-full"><X size={18}/></button>
+                  <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+                      <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl flex flex-col max-h-[85vh]">
+                          {/* Modal Header */}
+                          <div className="flex justify-between items-center mb-6">
+                              <h3 className="font-black text-xl text-gray-800 dark:text-white flex items-center gap-2">
+                                  <BookOpen size={24} className="text-blue-600 dark:text-blue-400" />
+                                  遊戲說明
+                              </h3>
+                              <button onClick={() => setShowHelp(false)} className="bg-gray-100 dark:bg-gray-700 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                                  <X size={20} className="text-gray-500 dark:text-gray-300" />
+                              </button>
                           </div>
-                          <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
-                              <li>🎯 <b>目標：</b> 限時內答對越多單字越好。</li>
-                              <li>🔥 <b>連擊：</b> 連續答對可獲得分數加成。</li>
-                              <li>📈 <b>難度：</b> 單字等級隨答題數提升。</li>
-                              <li>💰 <b>獎勵：</b> 結束後可獲得 PT 積分。</li>
-                          </ul>
-                          <button onClick={() => setShowHelp(false)} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mt-6">我知道了</button>
+
+                          {/* Modal Content */}
+                          <div className="space-y-6 overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin' }}>
+                              
+                              {/* Section 1: Core Rules */}
+                              <div>
+                                  <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                      <Timer size={16} /> 核心規則
+                                  </h4>
+                                  <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 space-y-3">
+                                      <div className="flex gap-3">
+                                          <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg h-fit text-blue-600 dark:text-blue-400 font-bold text-xs whitespace-nowrap">30秒</div>
+                                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                              遊戲開始時擁有 30 秒。目標是在時間結束前回答盡可能多的單字。
+                                          </p>
+                                      </div>
+                                      <div className="flex gap-3">
+                                          <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-lg h-fit text-green-600 dark:text-green-400 font-bold text-xs whitespace-nowrap">+2秒</div>
+                                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                              每答對一題，時間增加 2 秒 (上限 60 秒)。
+                                          </p>
+                                      </div>
+                                      <div className="flex gap-3">
+                                          <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-lg h-fit text-red-600 dark:text-red-400 font-bold text-xs whitespace-nowrap">-5秒</div>
+                                          <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                              答錯一題，時間扣除 5 秒，並中斷連擊。
+                                          </p>
+                                      </div>
+                                  </div>
+                              </div>
+
+                              {/* Section 2: Scoring */}
+                              <div>
+                                  <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                      <Zap size={16} /> 計分與連擊
+                                  </h4>
+                                  <div className="grid grid-cols-2 gap-3">
+                                      <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">基礎分數</div>
+                                          <div className="font-bold text-gray-800 dark:text-white flex items-center gap-1">
+                                            100 <span className="text-xs font-normal">分/題</span>
+                                          </div>
+                                      </div>
+                                      <div className="bg-gray-50 dark:bg-gray-700/50 p-3 rounded-xl border border-gray-100 dark:border-gray-700">
+                                          <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">連擊加成 (Max)</div>
+                                          <div className="font-bold text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
+                                            +50 <span className="text-xs font-normal text-gray-500">分/題</span>
+                                          </div>
+                                      </div>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-2 px-1">
+                                      * 連擊數越高，加分越多 (每 Combo +10分，上限+50分)。
+                                  </p>
+                              </div>
+
+                              {/* Section 3: Rewards */}
+                              <div>
+                                  <h4 className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-3 uppercase tracking-wider flex items-center gap-2">
+                                      <Coins size={16} /> 獎勵系統
+                                  </h4>
+                                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 p-4 rounded-xl border border-blue-100 dark:border-blue-800/50">
+                                      <div className="flex items-center justify-between mb-4 border-b border-blue-100 dark:border-blue-800/50 pb-3">
+                                          <span className="text-sm font-bold text-gray-700 dark:text-gray-200">遊戲積分轉換</span>
+                                          <div className="flex items-center gap-2">
+                                              <span className="text-xs font-mono text-gray-500 dark:text-gray-400">50 Score</span>
+                                              <ChevronRight size={12} className="text-gray-400"/>
+                                              <span className="text-sm font-bold text-blue-600 dark:text-blue-400">1 PT</span>
+                                          </div>
+                                      </div>
+                                      <div className="space-y-2">
+                                          <div className="flex justify-between items-center text-sm">
+                                              <span className="text-gray-600 dark:text-gray-300">第一名獎勵</span>
+                                              <span className="font-bold text-yellow-600 dark:text-yellow-400">300 PT</span>
+                                          </div>
+                                          <div className="flex justify-between items-center text-sm">
+                                              <span className="text-gray-600 dark:text-gray-300">第二名獎勵</span>
+                                              <span className="font-bold text-gray-600 dark:text-gray-400">200 PT</span>
+                                          </div>
+                                          <div className="flex justify-between items-center text-sm">
+                                              <span className="text-gray-600 dark:text-gray-300">第三名獎勵</span>
+                                              <span className="font-bold text-orange-600 dark:text-orange-400">100 PT</span>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          {/* Footer Button */}
+                          <div className="mt-6 pt-2">
+                              <button 
+                                onClick={() => setShowHelp(false)} 
+                                className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold py-3.5 rounded-xl shadow-lg hover:opacity-90 transition-opacity active:scale-[0.98]"
+                              >
+                                  我瞭解了，開始挑戰！
+                              </button>
+                          </div>
                       </div>
                   </div>
               )}
