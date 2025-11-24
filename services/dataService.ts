@@ -242,7 +242,7 @@ export const unbanUser = async (studentId: string) => {
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     const { data, error } = await supabase
         .from('users')
-        .select('name, student_id, points, level, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
+        .select('name, student_id, points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
         .eq('is_banned', false)
         .order('points', { ascending: false })
         .limit(100);

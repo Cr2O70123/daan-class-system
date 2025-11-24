@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap, Key } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
+import { getDailyPasscode } from '../services/authService';
 
 interface ProfileScreenProps {
   user: User;
@@ -77,8 +78,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarImage(reader.result as string);
-        // Note: Actual DB update happens when parent saves or via useEffect mechanism in a real app
-        // Here we just update local UI state prop
         setUser({ ...user, avatarImage: reader.result as string });
       };
       reader.readAsDataURL(file);
@@ -103,10 +102,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const renderInventory = () => {
       const ownedFrames = user.inventory.filter(id => id.startsWith('frame_'));
-      // Also include beta frame if the user has it (it might not be in inventory array in some legacy data, but let's assume inventory tracks it)
-      // Or if user already has it equipped.
-      
-      // Merge owned items
       const allItems = Array.from(new Set([...ownedFrames]));
       if (user.avatarFrame && !allItems.includes(user.avatarFrame)) allItems.push(user.avatarFrame);
 
@@ -300,7 +295,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
                 
                 {/* Stats & Actions Grid */}
-                <div className={`grid ${user.isAdmin ? 'grid-cols-4' : 'grid-cols-3'} gap-3 w-full mt-2`}>
+                <div className={`grid ${user.isAdmin || user.studentId === '1204233' ? 'grid-cols-4' : 'grid-cols-3'} gap-3 w-full mt-2`}>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center">
                         <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{user.points}</div>
                         <div className="text-[10px] text-blue-400 dark:text-blue-300 font-bold">積分</div>
@@ -330,6 +325,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         </button>
                     )}
                 </div>
+                
+                {/* Exclusive Daily Passcode for specific student ID */}
+                {user.studentId === '1204233' && (
+                     <div className="w-full mt-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-3 flex items-center justify-between border border-indigo-100 dark:border-indigo-800 relative overflow-hidden">
+                        <div className="absolute right-0 top-0 h-full w-20 bg-gradient-to-l from-indigo-500/10 to-transparent"></div>
+                        <div className="flex items-center gap-3 relative z-10">
+                            <div className="bg-indigo-100 dark:bg-indigo-900 p-2.5 rounded-xl text-indigo-600 dark:text-indigo-300 shadow-sm">
+                                <Key size={20} />
+                            </div>
+                            <div className="text-left">
+                                <div className="text-[10px] text-indigo-400 dark:text-indigo-300 font-bold uppercase tracking-wider">每日驗證碼 (Admin)</div>
+                                <div className="text-xl font-black text-indigo-600 dark:text-indigo-200 font-mono tracking-widest">{getDailyPasscode()}</div>
+                            </div>
+                        </div>
+                        <div className="text-[10px] text-indigo-300 font-bold relative z-10 bg-white dark:bg-gray-800 px-2 py-1 rounded-lg shadow-sm">
+                            Daily Access
+                        </div>
+                     </div>
+                )}
+
             </div>
         </div>
       </div>
@@ -405,7 +420,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                     <LogOut size={12} /> 登出帳號
                 </button>
-                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.4.1 Build 20251132</p>
+                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.4.2 Build 20251133</p>
             </div>
       </div>
     </div>

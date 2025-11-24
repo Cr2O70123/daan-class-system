@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BookOpen, ShieldCheck } from 'lucide-react';
+import { getDailyPasscode } from '../services/authService';
 
 interface LoginScreenProps {
   onLogin: (name: string, studentId: string) => void;
@@ -28,8 +29,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
         return;
     }
 
-    if (passcode.toUpperCase() !== 'DAAN-E3Y') {
-      setError('驗證碼錯誤');
+    const dailyCode = getDailyPasscode();
+    
+    // Check against dynamic daily code
+    if (passcode.toUpperCase() !== dailyCode) {
+      setError('驗證碼錯誤 (請詢問今日代碼)');
       return;
     }
     
@@ -80,7 +84,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               type="text"
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
-              placeholder="請輸入驗證碼"
+              placeholder="請輸入今日驗證碼"
               className="w-full bg-gray-600 text-white placeholder-gray-400 border-none rounded-md px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>

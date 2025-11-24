@@ -2,6 +2,14 @@ import { User } from '../types';
 import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
 
+// Generate Daily Passcode: DAAN-MMDD (e.g., DAAN-1105)
+export const getDailyPasscode = () => {
+    const now = new Date();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    return `DAAN-${month}${day}`;
+};
+
 export const login = async (name: string, studentId: string): Promise<User> => {
     const isAdmin = name === 'admin1204'; 
     
