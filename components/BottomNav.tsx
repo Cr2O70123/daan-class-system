@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, ShoppingBag, User, Gamepad2 } from 'lucide-react';
+import { Home, BookOpen, ShoppingBag, User, Gamepad2, Calendar } from 'lucide-react';
 import { Tab } from '../types';
 
 interface BottomNavProps {
@@ -12,6 +12,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, setTab }) => {
     { tab: Tab.HOME, label: '首頁', icon: <Home size={24} /> },
     { tab: Tab.RESOURCE, label: '資源', icon: <BookOpen size={24} /> },
     { tab: Tab.PLAYGROUND, label: '遊樂場', icon: <Gamepad2 size={24} /> },
+    { tab: Tab.EXAM, label: '考試', icon: <Calendar size={24} /> },
     { tab: Tab.STORE, label: '商店', icon: <ShoppingBag size={24} /> },
     { tab: Tab.PROFILE, label: '我的', icon: <User size={24} /> },
   ];
@@ -23,7 +24,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, setTab }) => {
           <button
             key={item.tab}
             onClick={() => setTab(item.tab)}
-            className={`flex flex-col items-center justify-center py-3 px-2 transition-all duration-300 w-16 ${
+            className={`flex flex-col items-center justify-center py-3 px-2 transition-all duration-300 w-14 ${
               currentTab === item.tab 
                 ? 'text-blue-600 dark:text-blue-400 -translate-y-1' 
                 : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300'

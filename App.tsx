@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { BottomNav } from './components/BottomNav';
-import { InstallModal } from './components/InstallModal';
 import { LoginScreen } from './screens/LoginScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { AskScreen } from './screens/AskScreen';
@@ -17,7 +16,7 @@ import { ResistorGameScreen } from './screens/ResistorGameScreen';
 import { PlaygroundScreen } from './screens/PlaygroundScreen';
 import { CheckInModal } from './components/CheckInModal';
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
-import { RefreshCw, X, ZoomIn } from 'lucide-react';
+import { RefreshCw, X } from 'lucide-react';
 
 // Services
 import { WORD_DATABASE } from './services/mockData'; 
@@ -93,7 +92,6 @@ const App = () => {
   const [showWordChallenge, setShowWordChallenge] = useState(false);
   const [showResistorGame, setShowResistorGame] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
-  const [showInstallModal, setShowInstallModal] = useState(false);
   
   // Global Lightbox
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
@@ -168,11 +166,6 @@ const App = () => {
     };
     initSession();
     loadData();
-    
-    // Simulating install prompt check
-    if (Math.random() > 0.7) {
-        setShowInstallModal(true);
-    }
   }, []);
 
   // Dark Mode Effect
@@ -197,7 +190,6 @@ const App = () => {
         try {
             await updateUserInDb(updatedUser);
             setUser(updatedUser);
-            // alert("新的一天！愛心已補滿 ❤️");
         } catch(e) {
             console.error("Failed to reset hearts", e);
         }
@@ -248,7 +240,6 @@ const App = () => {
     try {
         await updateUserInDb(updatedUser);
         setUser(updatedUser);
-        // alert(`簽到成功！獲得 ${reward} PT (連續 ${newStreak} 天)`);
     } catch (e) {
         alert("簽到失敗，請檢查網路");
     }
@@ -269,7 +260,6 @@ const App = () => {
 
   const loadData = async () => {
     try {
-        // Real data fetch - no artificial delays
         const [qData, rData, eData] = await Promise.all([
             fetchQuestions(),
             fetchResources(),
@@ -308,16 +298,13 @@ const App = () => {
       if (!user) return;
       try {
           await createReply(user, qid, content, image);
-          // Update local state optimistically or reload
           await loadData(); 
           
-          // Give User Points (5pt for reply)
           const newPoints = user.points + 5;
           const updatedUser = { ...user, points: newPoints };
           await updateUserInDb(updatedUser);
           setUser(updatedUser);
           
-          // Update currently selected question
           const updatedQuestions = await fetchQuestions();
           const targetQ = updatedQuestions.find(q => q.id === qid);
           if (targetQ) setSelectedQuestion(targetQ);
@@ -334,7 +321,6 @@ const App = () => {
           return;
       }
 
-      // Optimistic checks
       if (user.inventory.includes(product.id) && product.category !== 'frame') {
           alert("您已擁有此商品");
           return;
@@ -346,7 +332,6 @@ const App = () => {
           newInventory.push(product.id);
       }
       
-      // Auto-equip frames
       let newAvatarFrame = user.avatarFrame;
       if (product.category === 'frame') {
           newAvatarFrame = product.id;
@@ -377,8 +362,7 @@ const App = () => {
       try {
           await markBestAnswer(qid, rid);
           await loadData();
-          // Award Points logic would go here (handled by DB triggers or separate update)
-          if (selectedQuestion) setSelectedQuestion(null); // Close detail to refresh
+          if (selectedQuestion) setSelectedQuestion(null); 
       } catch(e) {
           alert("操作失敗");
       }
@@ -386,7 +370,6 @@ const App = () => {
 
   const handleFinishChallenge = async (result: GameResult) => {
       if (!user) return;
-      // Calculate points: score / 50
       const earnedPt = Math.floor(result.score / 50);
       const newPoints = user.points + earnedPt;
       const updatedUser = { ...user, points: newPoints };
@@ -401,8 +384,6 @@ const App = () => {
       setShowResistorGame(false);
   };
 
-  // --- Missing Handlers ---
-
   const handleReport = (type: 'question' | 'reply', id: number, content: string, reason: string) => {
       const newReport: Report = {
           id: Date.now(),
@@ -413,7 +394,6 @@ const App = () => {
           reporter: user?.name || 'Anonymous'
       };
       setReports(prev => [...prev, newReport]);
-      // In a real app, send to server here
   };
   
   const handleAddResource = async (title: string, description: string, tags: string[], images: string[]) => {
@@ -444,7 +424,6 @@ const App = () => {
           newLikedBy.push(user.name);
       }
 
-      // Optimistic update
       setResources(resources.map(r => r.id === id ? { ...r, likes: newLikes, likedBy: newLikedBy } : r));
       
       try {
@@ -511,7 +490,6 @@ const App = () => {
       }
   };
 
-  // Moderation Handlers
   const handleBanUser = async (studentId: string) => {
       try {
           await banUser(studentId);
@@ -545,8 +523,6 @@ const App = () => {
       }
   };
 
-  // --- Render ---
-
   if (isLoading) {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center space-y-4">
@@ -563,7 +539,6 @@ const App = () => {
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       
-      {/* Global Lightbox Overlay */}
       {lightboxImage && (
           <div 
             className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-200"
@@ -581,9 +556,6 @@ const App = () => {
               />
           </div>
       )}
-
-      {/* Modals & Overlays */}
-      <InstallModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
       
       <CheckInModal 
         isOpen={showCheckInModal} 
@@ -652,7 +624,6 @@ const App = () => {
         </div>
       )}
 
-      {/* Conditional Full Screen Views */}
       {showLeaderboardOverlay ? (
           <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe flex flex-col">
                <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-2">
@@ -698,9 +669,8 @@ const App = () => {
                             pushHistory();
                             setCurrentTab(Tab.ASK);
                         }}
-                        onStartChallenge={() => {
-                            pushHistory();
-                            setShowWordChallenge(true);
+                        onNavigateToPlayground={() => {
+                            setCurrentTab(Tab.PLAYGROUND);
                         }}
                         onOpenLeaderboard={() => {
                             pushHistory();
@@ -762,7 +732,6 @@ const App = () => {
                         user={user} 
                         setUser={async (newUser) => {
                             setUser(newUser);
-                            // Auto save changes from profile screen (like avatar/frame equip)
                             await updateUserInDb(newUser);
                         }}
                         onNavigateToModeration={() => {

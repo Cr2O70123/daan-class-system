@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles, Crown, TrendingUp, RefreshCw, Loader2, Calendar, Gift } from 'lucide-react';
+import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles, Crown, TrendingUp, RefreshCw, Loader2, Calendar, Gift, Gamepad2 } from 'lucide-react';
 import { Question } from '../types';
 
 interface HomeScreenProps {
   questions: Question[];
   onQuestionClick: (question: Question) => void;
   onAskClick: () => void;
-  onStartChallenge?: () => void;
+  onNavigateToPlayground?: () => void;
   onOpenLeaderboard?: () => void;
   onOpenCheckIn?: () => void;
   onRefresh?: () => Promise<void>;
@@ -27,7 +27,7 @@ const getFrameStyle = (frameId?: string) => {
   }
 };
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard, onOpenCheckIn, onRefresh, onImageClick }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onNavigateToPlayground, onOpenLeaderboard, onOpenCheckIn, onRefresh, onImageClick }) => {
   const [activeSubject, setActiveSubject] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
@@ -67,6 +67,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
           startX.current = e.touches[0].clientX;
           isHorizontalSwipe.current = false;
       }
+      // Carousel Swipe logic
+      const touch = e.touches[0];
+      carouselStartX.current = touch.clientX;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -84,12 +87,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
 
       // Only pull if at top, scrolling down, and NOT a horizontal swipe
       if (window.scrollY === 0 && deltaY > 0 && !isRefreshing && !isHorizontalSwipe.current) {
-          // Add resistance
           setPullY(Math.min(deltaY * 0.4, 120)); 
       }
   };
 
-  const handleTouchEnd = async () => {
+  const handleTouchEnd = async (e: React.TouchEvent) => {
       if (pullY > PULL_THRESHOLD && onRefresh && !isRefreshing) {
           setIsRefreshing(true);
           setPullY(50); // Snap to loading position
@@ -104,6 +106,18 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
       } else {
           setPullY(0);
       }
+
+      // Carousel Manual Swipe
+      if (isHorizontalSwipe.current) {
+          const touch = e.changedTouches[0];
+          const diff = touch.clientX - carouselStartX.current;
+          if (diff > 50) {
+              setCurrentBannerIndex(prev => (prev === 0 ? 2 : prev - 1));
+          } else if (diff < -50) {
+              setCurrentBannerIndex(prev => (prev === 2 ? 0 : prev + 1));
+          }
+      }
+      
       isHorizontalSwipe.current = false;
   };
 
@@ -198,26 +212,26 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
                 className="flex transition-transform duration-500 ease-in-out h-full"
                 style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
             >
-                {/* Slide 1: Word Challenge */}
+                {/* Slide 1: Game Center (Playground) */}
                 <div 
                     className="w-full h-full flex-shrink-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-between p-4 cursor-pointer relative"
-                    onClick={onStartChallenge}
+                    onClick={onNavigateToPlayground}
                 >
                     <div className="z-10">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold backdrop-blur-sm">每周更新</span>
+                            <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold backdrop-blur-sm">全新上線</span>
                             <div className="flex text-yellow-300">
                                 <Sparkles size={12} className="animate-pulse" />
                             </div>
                         </div>
-                        <h3 className="font-bold text-xl leading-tight">單字挑戰賽</h3>
-                        <p className="text-xs text-indigo-100 opacity-90 mt-1">累積連擊，衝擊排行榜拿獎金！</p>
+                        <h3 className="font-bold text-xl leading-tight">遊戲大廳</h3>
+                        <p className="text-xs text-indigo-100 opacity-90 mt-1">電阻挑戰、單字 PK，多款小遊戲等你來戰！</p>
                     </div>
                     <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm border border-white/20 z-10">
-                        <Trophy size={28} className="text-yellow-300" />
+                        <Gamepad2 size={28} className="text-yellow-300" />
                     </div>
                     <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4">
-                        <Trophy size={100} />
+                        <Gamepad2 size={100} />
                     </div>
                 </div>
 
@@ -263,6 +277,16 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
                         <Gift size={100} />
                     </div>
                 </div>
+            </div>
+
+             {/* Dots Indicator */}
+             <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-20">
+                {[0, 1, 2].map((idx) => (
+                    <div 
+                        key={idx}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${currentBannerIndex === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/50'}`}
+                    />
+                ))}
             </div>
         </div>
 
