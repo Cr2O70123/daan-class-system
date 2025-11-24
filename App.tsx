@@ -12,6 +12,7 @@ import { ResourceScreen } from './screens/ResourceScreen';
 import { ResourceDetailScreen } from './screens/ResourceDetailScreen';
 import { ExamScreen } from './screens/ExamScreen';
 import { WordChallengeScreen } from './screens/WordChallengeScreen';
+import { CheckInModal } from './components/CheckInModal';
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
 import { WifiOff, RefreshCcw } from 'lucide-react';
 
@@ -87,6 +88,7 @@ export default function App() {
   const [showModeration, setShowModeration] = useState(false);
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
   const [showWordChallenge, setShowWordChallenge] = useState(false);
+  const [showCheckInModal, setShowCheckInModal] = useState(false);
 
   // --- Effects ---
 
@@ -245,6 +247,60 @@ export default function App() {
       } catch (e: any) {
           console.error("Update hearts failed", e);
           alert(`更新愛心失敗: ${e.message}\n請確認 SQL 資料庫已執行更新指令。`);
+      }
+  };
+
+  // Check-in Logic
+  const handleCheckIn = async () => {
+      if (!user) return;
+
+      const today = new Date().toDateString();
+      const lastCheckIn = user.lastCheckInDate;
+
+      if (lastCheckIn === today) {
+          alert("今天已經簽到過了喔！");
+          return;
+      }
+
+      // Calculate Streak
+      let newStreak = (user.checkInStreak || 0);
+      
+      if (lastCheckIn) {
+          const lastDate = new Date(lastCheckIn);
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          if (lastDate.toDateString() === yesterday.toDateString()) {
+              // Consecutive
+              newStreak += 1;
+          } else {
+              // Missed a day or more
+              newStreak = 1;
+          }
+      } else {
+          // First time
+          newStreak = 1;
+      }
+
+      // Rewards
+      // 7-day cycle logic: Day 7 gets 100, others get 20
+      const cycleDay = ((newStreak - 1) % 7) + 1;
+      const rewardPoints = cycleDay === 7 ? 100 : 20;
+
+      const updatedUser = {
+          ...user,
+          points: user.points + rewardPoints,
+          checkInStreak: newStreak,
+          lastCheckInDate: today
+      };
+
+      try {
+          await updateUserInDb(updatedUser);
+          setUser(updatedUser);
+          setShowCheckInModal(false); // Or keep open and show animation?
+          alert(`簽到成功！獲得 ${rewardPoints} PT\n目前連續簽到：${newStreak} 天`);
+      } catch (e: any) {
+          alert("簽到失敗，請稍後再試。");
       }
   };
 
@@ -625,6 +681,7 @@ export default function App() {
                     onStartChallenge={() => setShowWordChallenge(true)}
                     onOpenLeaderboard={() => setShowLeaderboardOverlay(true)}
                     onRefresh={handleRefresh}
+                    onOpenCheckIn={() => setShowCheckInModal(true)}
                />;
       case Tab.RESOURCE:
         return <ResourceScreen 
@@ -645,6 +702,7 @@ export default function App() {
                     setUser={handleUpdateUser}
                     onNavigateToModeration={() => setShowModeration(true)}
                     onNavigateToLeaderboard={() => setShowLeaderboardOverlay(true)}
+                    onOpenCheckIn={() => setShowCheckInModal(true)}
                     onLogout={handleLogout}
                     isDarkMode={darkMode}
                     toggleDarkMode={() => setDarkMode(!darkMode)}
@@ -670,6 +728,15 @@ export default function App() {
             <BottomNav 
                 currentTab={currentTab === Tab.ASK ? Tab.HOME : currentTab} 
                 setTab={setTab} 
+            />
+            
+            {/* Global Modal */}
+            <CheckInModal 
+                isOpen={showCheckInModal} 
+                onClose={() => setShowCheckInModal(false)}
+                onCheckIn={handleCheckIn}
+                streak={user.checkInStreak || 0}
+                isCheckedInToday={user.lastCheckInDate === new Date().toDateString()}
             />
         </main>
     </div>

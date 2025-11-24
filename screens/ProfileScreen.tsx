@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
 
 interface ProfileScreenProps {
@@ -8,6 +8,7 @@ interface ProfileScreenProps {
   setUser: (user: User) => void;
   onNavigateToModeration: () => void;
   onNavigateToLeaderboard: () => void;
+  onOpenCheckIn: () => void;
   onLogout: () => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -36,6 +37,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setUser, 
     onNavigateToModeration, 
     onNavigateToLeaderboard,
+    onOpenCheckIn,
     onLogout, 
     isDarkMode, 
     toggleDarkMode,
@@ -206,25 +208,33 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
                 
                 {/* Stats & Actions Grid */}
-                <div className={`grid ${user.isAdmin ? 'grid-cols-3' : 'grid-cols-2'} gap-4 w-full mt-2`}>
+                <div className={`grid ${user.isAdmin ? 'grid-cols-4' : 'grid-cols-3'} gap-3 w-full mt-2`}>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center">
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{user.points}</div>
-                        <div className="text-xs text-blue-400 dark:text-blue-300 font-bold">目前積分</div>
+                        <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{user.points}</div>
+                        <div className="text-[10px] text-blue-400 dark:text-blue-300 font-bold">積分</div>
                     </div>
+                    
+                    <button onClick={onOpenCheckIn} className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-3 text-center hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors">
+                        <div className="text-xl font-bold text-green-600 dark:text-green-400 flex items-center justify-center gap-1">
+                            <Calendar size={20} />
+                        </div>
+                        <div className="text-[10px] text-green-500 dark:text-green-300 font-bold">每日簽到</div>
+                    </button>
+
                     <button onClick={onNavigateToLeaderboard} className="bg-yellow-50 dark:bg-yellow-900/20 rounded-2xl p-3 text-center hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors">
-                        <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400 flex items-center justify-center gap-1">
+                        <div className="text-xl font-bold text-yellow-600 dark:text-yellow-400 flex items-center justify-center gap-1">
                             <Trophy size={20} />
                         </div>
-                        <div className="text-xs text-yellow-500 dark:text-yellow-300 font-bold">班級榜單</div>
+                        <div className="text-[10px] text-yellow-500 dark:text-yellow-300 font-bold">班級榜單</div>
                     </button>
                     
                     {/* Admin Button - Only visible if isAdmin is true */}
                     {user.isAdmin && (
                          <button onClick={onNavigateToModeration} className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-3 text-center hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
-                            <div className="text-2xl font-bold text-red-600 dark:text-red-400 flex items-center justify-center gap-1">
+                            <div className="text-xl font-bold text-red-600 dark:text-red-400 flex items-center justify-center gap-1">
                                 <ShieldAlert size={20} />
                             </div>
-                            <div className="text-xs text-red-500 dark:text-red-300 font-bold">管理後台</div>
+                            <div className="text-[10px] text-red-500 dark:text-red-300 font-bold">管理後台</div>
                         </button>
                     )}
                 </div>

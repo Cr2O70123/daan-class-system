@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Trophy, Medal, Loader2, RefreshCw, Crown, TrendingUp } from 'lucide-react';
+import { Trophy, Medal, Loader2, RefreshCw, Crown, TrendingUp, Flame, Moon, UserPlus } from 'lucide-react';
 import { User, LeaderboardEntry } from '../types';
 import { fetchClassLeaderboard } from '../services/dataService';
 
@@ -54,9 +54,20 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
       return 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800';
   };
 
+  const isUserActiveToday = (lastDate?: string) => {
+      if (!lastDate) return false;
+      const today = new Date().toDateString();
+      return lastDate === today;
+  };
+
   // Find current user's rank in the fetched list
   const currentUserEntry = leaderboard.find(e => e.studentId === currentUser.studentId);
   const currentUserRank = currentUserEntry ? currentUserEntry.rank : '-';
+
+  // Calculate empty slots to fill visuals
+  const MIN_DISPLAY_ROWS = 8;
+  const emptyRowsCount = Math.max(0, MIN_DISPLAY_ROWS - leaderboard.length);
+  const emptyRows = Array.from({ length: emptyRowsCount });
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900 transition-colors">
@@ -77,52 +88,84 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
                 <Loader2 size={32} className="animate-spin mb-2" />
                 <p className="text-xs">數據同步中...</p>
             </div>
-        ) : leaderboard.length === 0 ? (
-            <div className="text-center py-20 text-gray-400 text-sm">暫無排名資料</div>
         ) : (
-            leaderboard.map((entry) => {
-                const isMe = entry.studentId === currentUser.studentId;
-                return (
-                    <div 
-                        key={entry.rank} 
-                        className={`flex items-center p-3 rounded-2xl border shadow-sm transition-all ${getRowStyle(entry.rank, isMe)}`}
-                    >
-                        {/* Rank */}
-                        <div className="flex-shrink-0 w-12 flex justify-center">
-                            {getRankDisplay(entry.rank)}
-                        </div>
-                        
-                        {/* Avatar */}
-                        <div className={`flex-shrink-0 w-12 h-12 rounded-full ${entry.avatarColor} text-white flex items-center justify-center font-bold mx-2 shadow-sm overflow-hidden ${getFrameStyle(entry.avatarFrame)}`}>
-                            {entry.avatarImage ? (
-                                <img src={entry.avatarImage} alt="avatar" className="w-full h-full object-cover" />
-                            ) : (
-                                entry.name.charAt(0)
-                            )}
-                        </div>
-                        
-                        {/* Info */}
-                        <div className="flex-grow min-w-0">
-                            <div className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2 truncate">
-                                {entry.name}
-                                {isMe && <span className="flex-shrink-0 text-[9px] bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold">ME</span>}
+            <>
+                {leaderboard.map((entry) => {
+                    const isMe = entry.studentId === currentUser.studentId;
+                    const isActive = isUserActiveToday(entry.lastCheckInDate);
+                    const streak = entry.checkInStreak || 0;
+
+                    return (
+                        <div 
+                            key={entry.rank} 
+                            className={`flex items-center p-3 rounded-2xl border shadow-sm transition-all ${getRowStyle(entry.rank, isMe)}`}
+                        >
+                            {/* Rank */}
+                            <div className="flex-shrink-0 w-12 flex justify-center">
+                                {getRankDisplay(entry.rank)}
                             </div>
-                            <div className="flex items-center gap-2 mt-0.5">
-                                <span className="text-[10px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 rounded-full font-bold">
-                                    Lv.{entry.level}
-                                </span>
-                                <span className="text-xs text-gray-400 truncate">{entry.studentId}</span>
+                            
+                            {/* Avatar */}
+                            <div className={`flex-shrink-0 w-12 h-12 rounded-full ${entry.avatarColor} text-white flex items-center justify-center font-bold mx-2 shadow-sm overflow-hidden ${getFrameStyle(entry.avatarFrame)}`}>
+                                {entry.avatarImage ? (
+                                    <img src={entry.avatarImage} alt="avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    entry.name.charAt(0)
+                                )}
+                            </div>
+                            
+                            {/* Info */}
+                            <div className="flex-grow min-w-0">
+                                <div className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2 truncate">
+                                    {entry.name}
+                                    {isMe && <span className="flex-shrink-0 text-[9px] bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-bold">ME</span>}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 px-2 rounded-full font-bold">
+                                        Lv.{entry.level}
+                                    </span>
+                                    {/* Status Badge */}
+                                    {isActive ? (
+                                        <div className="flex items-center gap-0.5 text-[10px] text-orange-500 font-bold">
+                                            <Flame size={10} className="fill-orange-500" />
+                                            {streak > 1 && <span>{streak}天</span>}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-0.5 text-[10px] text-gray-300 dark:text-gray-600">
+                                            <Moon size={10} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            
+                            {/* Score */}
+                            <div className="text-right pl-2">
+                                <div className="font-black font-mono text-lg text-blue-600 dark:text-blue-400 leading-none">{entry.points}</div>
+                                <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">PT</div>
                             </div>
                         </div>
-                        
-                        {/* Score */}
+                    );
+                })}
+
+                {/* Placeholders for empty slots */}
+                {emptyRows.map((_, idx) => (
+                     <div key={`empty-${idx}`} className="flex items-center p-3 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 opacity-40">
+                        <div className="flex-shrink-0 w-12 flex justify-center text-gray-300 font-mono font-bold">
+                            {leaderboard.length + idx + 1}
+                        </div>
+                        <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 mx-2 flex items-center justify-center text-gray-300">
+                            <UserPlus size={20} />
+                        </div>
+                        <div className="flex-grow">
+                            <div className="font-bold text-gray-300 dark:text-gray-600 text-sm">虛位以待...</div>
+                            <div className="text-[10px] text-gray-300 dark:text-gray-700 bg-gray-100 dark:bg-gray-800 rounded-full w-12 h-3 mt-1"></div>
+                        </div>
                         <div className="text-right pl-2">
-                            <div className="font-black font-mono text-lg text-blue-600 dark:text-blue-400 leading-none">{entry.points}</div>
-                            <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">PT</div>
+                             <div className="text-gray-300 dark:text-gray-700 font-bold font-mono">---</div>
                         </div>
-                    </div>
-                );
-            })
+                     </div>
+                ))}
+            </>
         )}
       </div>
 

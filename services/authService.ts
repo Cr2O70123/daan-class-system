@@ -30,7 +30,9 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             last_heart_reset: new Date().toDateString(),
             inventory: [],
             avatar_image: null,
-            is_banned: false
+            is_banned: false,
+            consecutive_check_in_days: 0,
+            last_check_in_date: null
         };
 
         const { data: createdUser, error: createError } = await supabase
@@ -75,6 +77,11 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         nameColor: user.name_color || undefined,
         hearts: user.hearts ?? 3, // Default to 3 if null
         lastHeartReset: user.last_heart_reset || new Date().toDateString(),
+        
+        // Check-in
+        lastCheckInDate: user.last_check_in_date,
+        checkInStreak: user.consecutive_check_in_days || 0,
+
         isBanned: user.is_banned,
         banExpiresAt: user.ban_expires_at
     };
@@ -131,6 +138,11 @@ export const checkSession = async (): Promise<User | null> => {
         nameColor: user.name_color || undefined,
         hearts: user.hearts ?? 3,
         lastHeartReset: user.last_heart_reset || new Date().toDateString(),
+        
+        // Check-in
+        lastCheckInDate: user.last_check_in_date,
+        checkInStreak: user.consecutive_check_in_days || 0,
+
         isBanned: user.is_banned,
         banExpiresAt: user.ban_expires_at
     };
@@ -154,7 +166,11 @@ export const updateUserInDb = async (user: User) => {
         name_color: user.nameColor,     
         inventory: user.inventory,
         avatar_color: user.avatarColor,
-        settings: user.settings
+        settings: user.settings,
+        
+        // Check-in
+        last_check_in_date: user.lastCheckInDate,
+        consecutive_check_in_days: user.checkInStreak
     };
 
     const { error } = await supabase

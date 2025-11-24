@@ -63,11 +63,9 @@
 
       /* Safe Area Utility */
       .pt-safe {
-        padding-top: env(safe-area-inset-top, 20px);
+        /* Ensure a minimum padding of 24px + any safe area inset */
+        padding-top: calc(env(safe-area-inset-top, 0px) + 24px);
       }
-      /* For sticky headers, we need to include the safe area in the top position if strictly needed, 
-         but usually padding is enough. If sticky top-0 is used, top-0 is relative to viewport.
-      */
     </style>
 <script type="importmap">
 {

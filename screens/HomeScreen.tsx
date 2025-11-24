@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles, Crown, TrendingUp, RefreshCw, Loader2 } from 'lucide-react';
+import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles, Crown, TrendingUp, RefreshCw, Loader2, Calendar, Gift } from 'lucide-react';
 import { Question } from '../types';
 
 interface HomeScreenProps {
@@ -8,6 +8,7 @@ interface HomeScreenProps {
   onAskClick: () => void;
   onStartChallenge?: () => void;
   onOpenLeaderboard?: () => void;
+  onOpenCheckIn?: () => void;
   onRefresh?: () => Promise<void>;
 }
 
@@ -24,7 +25,7 @@ const getFrameStyle = (frameId?: string) => {
   }
 };
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard, onRefresh }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard, onOpenCheckIn, onRefresh }) => {
   const [activeSubject, setActiveSubject] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
@@ -36,6 +37,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
   const containerRef = useRef<HTMLDivElement>(null);
   const PULL_THRESHOLD = 80;
 
+  // Carousel Touch State
+  const carouselStartX = useRef(0);
+  const carouselRef = useRef<HTMLDivElement>(null);
+
   const filteredQuestions = questions.filter(q => {
     const matchesSubject = activeSubject === '全部' || q.tags.includes(activeSubject);
     const matchesSearch = q.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -43,16 +48,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
     return matchesSubject && matchesSearch;
   });
 
-  // Carousel Logic
+  // Carousel Auto Logic
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentBannerIndex((prev) => (prev === 0 ? 1 : 0));
-    }, 5000); // 5 seconds per slide
+      setCurrentBannerIndex((prev) => (prev === 2 ? 0 : prev + 1));
+    }, 6000); 
     return () => clearInterval(timer);
   }, []);
 
   // Pull to Refresh Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
+      // Only trigger pull refresh if at top
       if (window.scrollY === 0 && !isRefreshing) {
           startY.current = e.touches[0].clientY;
       }
@@ -82,6 +88,28 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
           }
       } else {
           setPullY(0);
+      }
+  };
+
+  // Carousel Manual Swipe Handlers
+  const handleCarouselTouchStart = (e: React.TouchEvent) => {
+      e.stopPropagation(); // Prevent interfering with pull-to-refresh if possible
+      carouselStartX.current = e.touches[0].clientX;
+  };
+
+  const handleCarouselTouchEnd = (e: React.TouchEvent) => {
+      e.stopPropagation();
+      const endX = e.changedTouches[0].clientX;
+      const deltaX = endX - carouselStartX.current;
+      
+      if (Math.abs(deltaX) > 50) {
+          if (deltaX > 0) {
+              // Swipe Right -> Prev
+              setCurrentBannerIndex(prev => prev === 0 ? 2 : prev - 1);
+          } else {
+              // Swipe Left -> Next
+              setCurrentBannerIndex(prev => prev === 2 ? 0 : prev + 1);
+          }
       }
   };
 
@@ -159,7 +187,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
       >
         
         {/* CAROUSEL BANNER */}
-        <div className="relative w-full overflow-hidden rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none h-32">
+        <div 
+            className="relative w-full overflow-hidden rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none h-32"
+            ref={carouselRef}
+            onTouchStart={handleCarouselTouchStart}
+            onTouchEnd={handleCarouselTouchEnd}
+        >
             <div 
                 className="flex transition-transform duration-500 ease-in-out h-full"
                 style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
@@ -182,7 +215,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
                     <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm border border-white/20 z-10">
                         <Trophy size={28} className="text-yellow-300" />
                     </div>
-                    {/* Background decoration */}
                     <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4">
                         <Trophy size={100} />
                     </div>
@@ -206,23 +238,41 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
                     <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm border border-white/20 z-10">
                         <Crown size={28} className="text-white" />
                     </div>
-                    {/* Background decoration */}
                     <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4">
                         <Crown size={100} />
+                    </div>
+                </div>
+
+                {/* Slide 3: Check-in */}
+                <div 
+                    className="w-full h-full flex-shrink-0 bg-gradient-to-r from-blue-500 to-cyan-500 text-white flex items-center justify-between p-4 cursor-pointer relative"
+                    onClick={onOpenCheckIn}
+                >
+                    <div className="z-10">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold backdrop-blur-sm">每日好禮</span>
+                        </div>
+                        <h3 className="font-bold text-xl leading-tight">每日簽到</h3>
+                        <p className="text-xs text-blue-100 opacity-90 mt-1">連續 7 天領取大寶箱！</p>
+                    </div>
+                    <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm border border-white/20 z-10">
+                        <Calendar size={28} className="text-white" />
+                    </div>
+                    <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4">
+                        <Gift size={100} />
                     </div>
                 </div>
             </div>
 
             {/* Dots Indicator */}
             <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-20">
-                <button 
-                    onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(0); }}
-                    className={`w-1.5 h-1.5 rounded-full transition-all ${currentBannerIndex === 0 ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/80'}`} 
-                />
-                <button 
-                    onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(1); }}
-                    className={`w-1.5 h-1.5 rounded-full transition-all ${currentBannerIndex === 1 ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/80'}`} 
-                />
+                {[0, 1, 2].map(idx => (
+                    <button 
+                        key={idx}
+                        onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(idx); }}
+                        className={`w-1.5 h-1.5 rounded-full transition-all ${currentBannerIndex === idx ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/80'}`} 
+                    />
+                ))}
             </div>
         </div>
 

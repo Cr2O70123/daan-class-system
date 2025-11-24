@@ -1,4 +1,3 @@
-
 import { supabase } from './supabaseClient';
 import { Question, Resource, Exam, User, GameLeaderboardEntry, LeaderboardEntry } from '../types';
 import { calculateLevel } from './levelService';
@@ -247,7 +246,7 @@ export const unbanUser = async (studentId: string) => {
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     const { data, error } = await supabase
         .from('users')
-        .select('name, student_id, points, avatar_color, avatar_image, avatar_frame')
+        .select('name, student_id, points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
         .eq('is_banned', false) // Exclude banned users
         .order('points', { ascending: false })
         .limit(100); // Top 100 students
@@ -265,7 +264,9 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         level: calculateLevel(u.points),
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
-        avatarFrame: u.avatar_frame
+        avatarFrame: u.avatar_frame,
+        checkInStreak: u.consecutive_check_in_days || 0,
+        lastCheckInDate: u.last_check_in_date
     }));
 };
 

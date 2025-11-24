@@ -41,6 +41,10 @@ export interface User {
   hearts: number; // Max 3
   lastHeartReset: string; // Date string to track daily reset
 
+  // Check-in System
+  lastCheckInDate?: string;
+  checkInStreak?: number;
+
   // Moderation
   isBanned?: boolean;
   banExpiresAt?: string;
@@ -112,6 +116,8 @@ export interface LeaderboardEntry {
   avatarColor: string;
   avatarImage?: string;
   avatarFrame?: string;
+  checkInStreak?: number; // New
+  lastCheckInDate?: string; // New
 }
 
 export interface Product {
