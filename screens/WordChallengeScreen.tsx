@@ -34,11 +34,13 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // Interaction State
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   
   // Mistake Tracking
   const [wrongWords, setWrongWords] = useState<Word[]>([]);
-  const [hasReviewed, setHasReviewed] = useState(false);
+  const [reviewedIds, setReviewedIds] = useState<number[]>([]);
+  const [bonusClaimed, setBonusClaimed] = useState(false);
 
   const timerRef = useRef<number | null>(null);
 
@@ -103,9 +105,11 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       setMaxCombo(0);
       setCorrectCount(0);
       setWrongWords([]);
-      setHasReviewed(false);
+      setReviewedIds([]);
+      setBonusClaimed(false);
       setLevel(3);
       setFeedback(null);
+      setShowCorrectAnswer(false);
       setSelectedOption(null);
       setIsProcessing(false);
       generateQuestion();
@@ -132,8 +136,11 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       setIsProcessing(true);
       setSelectedOption(answer);
 
-      if (answer === currentWord.zh) {
-          // Correct
+      const isCorrect = answer === currentWord.zh;
+      const targetWord = currentWord;
+
+      if (isCorrect) {
+          // Correct Logic
           const timeBonus = 2;
           const comboBonus = Math.min(combo * 10, 50); 
           const points = 100 + comboBonus;
@@ -144,39 +151,63 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
           setTimeLeft(prev => Math.min(prev + timeBonus, 60)); 
           setCorrectCount(prev => prev + 1);
           setFeedback('correct');
+          setShowCorrectAnswer(true);
+
+          setTimeout(() => {
+              setFeedback(null);
+              setShowCorrectAnswer(false);
+              setSelectedOption(null);
+              setIsProcessing(false);
+              if (timeLeft > 0) generateQuestion();
+          }, 800);
 
       } else {
-          // Wrong
+          // Wrong Logic
           setTimeLeft(prev => Math.max(prev - 5, 0));
           setCombo(0);
-          setFeedback('wrong');
           
-          // Track Mistake (Prevent duplicates)
-          if (!wrongWords.find(w => w.id === currentWord.id)) {
-              setWrongWords(prev => [...prev, currentWord]);
-          }
-      }
+          setWrongWords(prev => {
+              // Ensure we don't add duplicates
+              if (prev.find(w => w.id === targetWord.id)) return prev;
+              return [...prev, targetWord];
+          });
+          
+          setFeedback('wrong');
+          // Initially do NOT show correct answer to focus on mistake
+          setShowCorrectAnswer(false);
 
-      // Add delay to show feedback
-      setTimeout(() => {
-          setFeedback(null);
-          setSelectedOption(null);
-          setIsProcessing(false);
-          // Only generate next question if time is remaining
-          generateQuestion();
-      }, 1000);
+          // After short delay, reveal correct answer
+          setTimeout(() => {
+              setShowCorrectAnswer(true);
+          }, 500);
+
+          // Move to next question after longer delay
+          setTimeout(() => {
+              setFeedback(null);
+              setShowCorrectAnswer(false);
+              setSelectedOption(null);
+              setIsProcessing(false);
+              if (timeLeft > 0) generateQuestion();
+          }, 1500);
+      }
   };
 
-  const handleReviewDone = () => {
-      if (!hasReviewed) {
-          setScore(prev => prev + 500); // Bonus score for review (equivalent to 10PT)
-          setHasReviewed(true);
-          // Just subtle visual feedback instead of alert
+  const handleReviewWord = (id: number) => {
+      if (!reviewedIds.includes(id)) {
+          setReviewedIds(prev => [...prev, id]);
       }
   };
+
+  useEffect(() => {
+      // Check bonus condition - Ensure ALL words are reviewed
+      if (wrongWords.length > 0 && reviewedIds.length === wrongWords.length && !bonusClaimed) {
+           setScore(prev => prev + 500);
+           setBonusClaimed(true);
+      }
+  }, [reviewedIds, wrongWords.length, bonusClaimed]);
 
   const handleClaim = async () => {
-      // Submit score to DB
+      // Ensure score is submitted before finishing
       await submitGameScore(user, score);
       
       onFinish({ score, maxCombo, correctCount });
@@ -199,7 +230,12 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
     }
   };
 
-  const bgClass = feedback === 'correct' ? 'bg-green-100 dark:bg-green-900/40' : feedback === 'wrong' ? 'bg-red-100 dark:bg-red-900/40' : 'bg-gray-100 dark:bg-gray-900';
+  // Background color transition based on feedback
+  const bgClass = feedback === 'correct' 
+    ? 'bg-green-50 dark:bg-green-900/40' 
+    : feedback === 'wrong' 
+        ? 'bg-red-50 dark:bg-red-900/40' 
+        : 'bg-gray-100 dark:bg-gray-900';
 
   // --- MENU ---
   if (gameState === 'menu') {
@@ -249,24 +285,33 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                                 <Trophy size={40} />
                             </div>
                             <h1 className="text-2xl font-black mb-2 text-gray-800 dark:text-white">英文單字挑戰</h1>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">挑戰英文單字力，累積高分！</p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">挑戰單字力，累積高分！</p>
                             
-                            <div className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-100 dark:border-yellow-900/30">
-                                <h4 className="text-xs font-bold text-yellow-600 dark:text-yellow-400 mb-2 flex items-center justify-center gap-1">
-                                    <Crown size={12} /> 排行榜前三名獎勵
+                            <div className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-100 dark:border-yellow-900/30 text-left">
+                                <h4 className="text-xs font-bold text-yellow-600 dark:text-yellow-400 mb-3 flex items-center justify-center gap-1 border-b border-yellow-200 dark:border-yellow-800 pb-2">
+                                    <Crown size={14} /> 排行榜獎勵 (每週)
                                 </h4>
-                                <div className="flex flex-col gap-1 text-sm font-bold text-gray-700 dark:text-gray-200">
-                                    <div className="flex justify-between items-center px-4">
-                                        <span>🥇 第一名</span>
-                                        <span className="text-blue-600 dark:text-blue-400">300 PT</span>
+                                <div className="space-y-2 text-sm font-bold text-gray-700 dark:text-gray-200">
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 text-center">🥇</span>
+                                            <span>第一名</span>
+                                        </div>
+                                        <span className="text-blue-600 dark:text-blue-400 font-mono">300 PT</span>
                                     </div>
-                                    <div className="flex justify-between items-center px-4">
-                                        <span>🥈 第二名</span>
-                                        <span className="text-blue-600 dark:text-blue-400">200 PT</span>
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 text-center">🥈</span>
+                                            <span>第二名</span>
+                                        </div>
+                                        <span className="text-blue-600 dark:text-blue-400 font-mono">200 PT</span>
                                     </div>
-                                    <div className="flex justify-between items-center px-4">
-                                        <span>🥉 第三名</span>
-                                        <span className="text-blue-600 dark:text-blue-400">100 PT</span>
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-5 text-center">🥉</span>
+                                            <span>第三名</span>
+                                        </div>
+                                        <span className="text-blue-600 dark:text-blue-400 font-mono">100 PT</span>
                                     </div>
                                 </div>
                             </div>
@@ -333,7 +378,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                           <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
                               <li>🎯 <b>目標：</b> 限時內答對越多單字越好。</li>
                               <li>🔥 <b>連擊：</b> 連續答對可獲得分數加成。</li>
-                              <li>📈 <b>難度：</b> 單字等級隨答題數提升 (Lv 3-6)。</li>
+                              <li>📈 <b>難度：</b> 單字等級隨答題數提升。</li>
                               <li>💰 <b>獎勵：</b> 結束後可獲得 PT 積分。</li>
                           </ul>
                           <button onClick={() => setShowHelp(false)} className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl mt-6">我知道了</button>
@@ -347,13 +392,13 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // --- PLAYING ---
   if (gameState === 'playing') {
       return (
-          <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden transition-colors duration-300 ${bgClass}`}>
+          <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden transition-all duration-300 ${bgClass}`}>
               {/* CSS for Shake Animation */}
               <style>{`
                   @keyframes shake {
                       0%, 100% { transform: translateX(0); }
-                      10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-                      20%, 40%, 60%, 80% { transform: translateX(4px); }
+                      10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+                      20%, 40%, 60%, 80% { transform: translateX(6px); }
                   }
                   .animate-shake {
                       animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
@@ -361,7 +406,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
               `}</style>
 
               {/* Top Bar */}
-              <div className="flex justify-between items-center p-6">
+              <div className="flex justify-between items-center p-6 z-10">
                   <div className="text-center">
                       <div className="text-xs text-gray-400 uppercase font-bold">Score</div>
                       <div className="text-2xl font-black text-gray-800 dark:text-white">{score}</div>
@@ -379,7 +424,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
               </div>
 
               {/* Question */}
-              <div className="flex-1 flex flex-col items-center justify-center px-6 pb-12">
+              <div className="flex-1 flex flex-col items-center justify-center px-6 pb-12 z-10">
                   <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-[10px] font-bold px-3 py-1 rounded-full mb-6">
                       LEVEL {level}
                   </span>
@@ -387,23 +432,28 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                   
                   <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
                     {options.map((opt, idx) => {
+                        const isThisCorrect = opt === currentWord?.zh;
+                        const isThisSelected = opt === selectedOption;
+                        
                         // Logic for button appearance
-                        // Base style: maintain size with py-4, fixed width etc
                         let buttonClass = "w-full py-4 rounded-xl text-lg font-bold border-2 shadow-sm transition-all duration-200 transform ";
                         
                         if (feedback) {
-                            if (opt === currentWord?.zh) {
-                                // Correct Answer: Green
+                            if (showCorrectAnswer && isThisCorrect) {
+                                // Correct Answer Revealed: Green
                                 buttonClass += "bg-green-500 border-green-600 text-white scale-100";
-                            } else if (opt === selectedOption && feedback === 'wrong') {
+                            } else if (isThisSelected && feedback === 'wrong') {
                                 // Selected Wrong Answer: Red + Shake
                                 buttonClass += "bg-red-500 border-red-600 text-white animate-shake scale-100";
+                            } else if (feedback === 'correct' && isThisCorrect) {
+                                // Correct Answer Selected (Immediate): Green
+                                buttonClass += "bg-green-500 border-green-600 text-white scale-100";
                             } else {
-                                // Other Answers: Faded
-                                buttonClass += "bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed scale-100";
+                                // Other Answers: Faded but maintain visibility and size
+                                buttonClass += "bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 opacity-50 scale-100";
                             }
                         } else {
-                            // Normal State: White/DarkBG
+                            // Normal State
                             buttonClass += "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:border-blue-400 hover:text-blue-600 active:scale-[0.98]";
                         }
 
@@ -428,11 +478,11 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   return (
       <div className="fixed inset-0 z-50 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden transition-colors">
            <div className="flex-1 flex items-center justify-center p-6">
-                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-200 dark:border-gray-700 w-full max-w-sm text-center shadow-xl">
-                    <h2 className="text-2xl font-black mb-1 text-gray-800 dark:text-white">挑戰結束</h2>
-                    <p className="text-gray-400 text-sm mb-6">Good Job!</p>
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-200 dark:border-gray-700 w-full max-w-sm text-center shadow-xl flex flex-col max-h-full">
+                    <h2 className="text-2xl font-black mb-1 text-gray-800 dark:text-white flex-shrink-0">挑戰結束</h2>
+                    <p className="text-gray-400 text-sm mb-6 flex-shrink-0">Good Job!</p>
 
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-6 mb-6">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-6 mb-4 flex-shrink-0">
                         <div className="text-5xl font-mono font-black text-blue-600 dark:text-blue-400 mb-4">{score}</div>
                         <div className="flex justify-between text-xs font-bold text-gray-500 dark:text-gray-400 px-4">
                             <div className="flex flex-col items-center">
@@ -446,44 +496,59 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                         </div>
                     </div>
 
-                    {/* Mistake Review Section */}
+                    {/* Mistake Review Section - Scrollable if needed */}
+                    <div className="flex-1 overflow-y-auto mb-4 min-h-0">
                     {wrongWords.length > 0 && (
-                        <div className="mb-6 text-left">
-                            <h3 className="text-sm font-bold text-red-500 mb-2 flex items-center gap-1">
-                                <AlertCircle size={14} /> 本次易錯單字 (必須複習)
+                        <div className="text-left">
+                            <h3 className="text-sm font-bold text-red-500 mb-2 flex items-center gap-1 sticky top-0 bg-white dark:bg-gray-800 py-1">
+                                <AlertCircle size={14} /> 點擊錯誤單字以複習 (+500 Bonus)
                             </h3>
-                            <div className="bg-red-50 dark:bg-red-900/10 rounded-xl p-3 max-h-32 overflow-y-auto border border-red-100 dark:border-red-900/30 space-y-2 mb-2">
-                                {wrongWords.map((w, i) => (
-                                    <div key={i} className="flex justify-between text-sm border-b border-red-100 dark:border-red-900/30 last:border-0 pb-1 last:pb-0">
-                                        <span className="font-bold text-gray-800 dark:text-gray-200">{w.en}</span>
-                                        <span className="text-gray-500 dark:text-gray-400">{w.zh}</span>
-                                    </div>
-                                ))}
+                            <div className="space-y-2">
+                                {wrongWords.map((w) => {
+                                    const isReviewed = reviewedIds.includes(w.id);
+                                    return (
+                                        <button 
+                                            key={w.id} 
+                                            onClick={() => handleReviewWord(w.id)}
+                                            className={`w-full flex justify-between items-center text-sm p-3 rounded-xl border transition-all ${
+                                                isReviewed 
+                                                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-gray-400 dark:text-gray-500' 
+                                                : 'bg-white dark:bg-gray-700 border-red-200 dark:border-red-800 shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20'
+                                            }`}
+                                        >
+                                            <div className="flex gap-2 items-center">
+                                                {isReviewed ? <Check size={14} className="text-green-500"/> : <div className="w-3.5 h-3.5 rounded-full border-2 border-red-300"></div>}
+                                                <span className={`font-bold ${isReviewed ? 'line-through decoration-gray-400' : 'text-gray-800 dark:text-gray-200'}`}>{w.en}</span>
+                                            </div>
+                                            <span className={`${isReviewed ? 'text-gray-300' : 'text-gray-500 dark:text-gray-400'}`}>{w.zh}</span>
+                                        </button>
+                                    )
+                                })}
                             </div>
-                            <button 
-                                onClick={handleReviewDone}
-                                disabled={hasReviewed}
-                                className={`w-full py-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors ${hasReviewed ? 'bg-green-100 text-green-600 cursor-default' : 'bg-red-100 text-red-600 hover:bg-red-200 animate-pulse'}`}
-                            >
-                                {hasReviewed ? <><Check size={12}/> 複習完成</> : <><BookOpen size={12}/> 我已閱讀並記住 (+500 Bonus)</>}
-                            </button>
+                            {bonusClaimed && (
+                                <div className="text-center text-xs text-green-600 dark:text-green-400 font-bold mt-2 animate-bounce bg-green-100 dark:bg-green-900/30 py-1 rounded-lg">
+                                    🎉 複習完成！獎勵已計入
+                                </div>
+                            )}
                         </div>
                     )}
+                    </div>
 
-                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 flex justify-center items-center gap-1">
+                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-4 flex-shrink-0 flex justify-center items-center gap-1">
                         遊戲積分: <span className="font-bold text-blue-600 dark:text-blue-400">+{Math.floor(score / 50)} PT</span>
                     </div>
 
                     <button 
                         onClick={handleClaim}
-                        disabled={wrongWords.length > 0 && !hasReviewed}
-                        className={`w-full font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 ${
-                            wrongWords.length > 0 && !hasReviewed 
+                        // Requires all wrong words to be reviewed (clicked) before proceeding if there are any
+                        disabled={wrongWords.length > 0 && !bonusClaimed}
+                        className={`w-full font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 flex-shrink-0 ${
+                            wrongWords.length > 0 && !bonusClaimed 
                             ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed' 
                             : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:scale-[1.02]'
                         }`}
                     >
-                        {wrongWords.length > 0 && !hasReviewed ? "請先點擊上方按鈕完成複習" : "領取獎勵並返回"}
+                        {wrongWords.length > 0 && !bonusClaimed ? "請完成上方複習" : "領取獎勵並返回"}
                     </button>
                 </div>
            </div>

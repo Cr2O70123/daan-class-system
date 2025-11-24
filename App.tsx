@@ -174,7 +174,7 @@ export default function App() {
             setConnectionError(true);
         } else {
             // Alert full error details if available for debugging
-            alert(`登入失敗: ${JSON.stringify(e, null, 2)}`);
+            alert(`登入失敗: ${JSON.stringify(e.message || e, null, 2)}`);
         }
     }
   };
@@ -371,17 +371,13 @@ export default function App() {
              updatedUser.nameColor = textClass;
         }
         
-        // Optimistic update
-        setUser(updatedUser);
         try {
             // Strictly await DB update to ensure consistency
             await updateUserInDb(updatedUser);
+            setUser(updatedUser);
             alert(`購買成功：${product.name}`);
         } catch (e) {
             alert("購買失敗，請檢查連線，積分已回溯");
-            // Reload user data from DB to rollback optimistic update
-            const session = await checkSession();
-            if(session) setUser(session);
         }
     } else {
         alert("積分不足！");
@@ -439,12 +435,12 @@ export default function App() {
       const pointsWon = Math.floor(result.score / 50); 
       if (!user.isAdmin && pointsWon > 0) {
           const u = { ...user, points: user.points + pointsWon };
-          setUser(u);
           try {
             await updateUserInDb(u);
+            setUser(u); // Sync state after DB confirms
           } catch (e) {
             console.error("Failed to sync points", e);
-            // Optional: alert user that points might not have synced
+            alert("積分同步失敗，請檢查連線");
           }
       }
   };

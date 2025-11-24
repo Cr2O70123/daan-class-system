@@ -149,7 +149,8 @@ export const updateUserInDb = async (user: User) => {
         avatar_frame: user.avatarFrame, 
         name_color: user.nameColor,     
         inventory: user.inventory,
-        avatar_color: user.avatarColor
+        avatar_color: user.avatarColor,
+        settings: user.settings
     };
 
     const { error } = await supabase
@@ -159,7 +160,7 @@ export const updateUserInDb = async (user: User) => {
         
     if (error) {
         console.error('Error updating user:', error);
-        // Throw error to ensure calling functions know the update failed
-        throw error;
+        // Throw proper error message to be caught by UI
+        throw new Error(error.message || "Database update failed");
     }
 };
