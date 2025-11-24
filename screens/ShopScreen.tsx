@@ -16,7 +16,7 @@ const PRODUCTS: Product[] = [
       price: 99999, // Unattainable price just in case
       color: 'bg-amber-100 text-amber-600', 
       icon: <Crown size={20} />, 
-      description: '內測專屬紀念，擁有獨特流光特效', 
+      description: '內測專屬紀念，榮耀象徵', 
       category: 'frame', 
       isRare: true, 
       tag: '限定' 

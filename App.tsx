@@ -34,7 +34,8 @@ const getFrameStyle = (frameId?: string) => {
       case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
       case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
       case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
-      case 'frame_beta': return 'ring-2 ring-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)] border border-white/50';
+      // Beta Frame: Gear/Crown tech look
+      case 'frame_beta': return 'ring-2 ring-amber-500 border-2 border-dashed border-yellow-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]';
       default: return 'ring-2 ring-white dark:ring-gray-700';
     }
 };
@@ -552,11 +553,11 @@ const App = () => {
       {/* Conditional Full Screen Views */}
       {showLeaderboardOverlay ? (
           <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe flex flex-col">
-               <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-2">
+               <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-4">
                    <h2 className="font-bold text-lg text-gray-800 dark:text-white">全班等級排名</h2>
                    <button 
                         onClick={() => setShowLeaderboardOverlay(false)} 
-                        className="text-blue-600 dark:text-blue-400 font-bold px-2 py-1 hover:bg-blue-50 dark:hover:bg-gray-800 rounded transition-colors"
+                        className="text-blue-600 dark:text-blue-400 font-bold px-4 py-1 hover:bg-blue-50 dark:hover:bg-gray-800 rounded transition-colors"
                    >
                        返回
                    </button>
@@ -625,7 +626,6 @@ const App = () => {
                         onLogout={() => { logout(); setUser(null); }}
                         isDarkMode={user.settings?.darkMode || false}
                         toggleDarkMode={async () => {
-                            // Ensure persistence
                             const newSettings = { 
                                 ...user.settings!, 
                                 darkMode: !user.settings?.darkMode 

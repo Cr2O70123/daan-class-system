@@ -81,13 +81,13 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onC
             </div>
         </div>
 
-        {/* Grid Layout for Days */}
+        {/* Grid Layout for Days - Symmetrical 4 Top, 3 Bottom */}
         <div className="p-6 bg-white dark:bg-gray-800 overflow-y-auto">
             {/* Top Row: 4 Days */}
             <div className="grid grid-cols-4 gap-3 mb-3">
                 {[1, 2, 3, 4].map(day => renderDay(day))}
             </div>
-            {/* Bottom Row: 3 Days (Centered visually by grid placement or flex) */}
+            {/* Bottom Row: 3 Days (Centered) */}
             <div className="grid grid-cols-3 gap-3 w-[75%] mx-auto">
                 {[5, 6, 7].map(day => renderDay(day))}
             </div>
