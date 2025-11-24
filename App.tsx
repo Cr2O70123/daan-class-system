@@ -618,6 +618,7 @@ export default function App() {
                     onQuestionClick={setSelectedQuestion} 
                     onAskClick={() => setTab(Tab.ASK)}
                     onStartChallenge={() => setShowWordChallenge(true)}
+                    onOpenLeaderboard={() => setShowLeaderboardOverlay(true)}
                />;
       case Tab.RESOURCE:
         return <ResourceScreen 

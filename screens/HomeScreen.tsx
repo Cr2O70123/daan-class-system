@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles, Crown, TrendingUp } from 'lucide-react';
 import { Question } from '../types';
 
 interface HomeScreenProps {
   questions: Question[];
   onQuestionClick: (question: Question) => void;
   onAskClick: () => void;
-  onStartChallenge?: () => void; // New Prop
+  onStartChallenge?: () => void;
+  onOpenLeaderboard?: () => void;
 }
 
 const SUBJECTS = ['全部', '電子學', '基本電學', '數位邏輯', '微處理機', '程式設計', '國文', '英文', '數學', '其他'];
@@ -22,9 +23,10 @@ const getFrameStyle = (frameId?: string) => {
   }
 };
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard }) => {
   const [activeSubject, setActiveSubject] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
   const filteredQuestions = questions.filter(q => {
     const matchesSubject = activeSubject === '全部' || q.tags.includes(activeSubject);
@@ -32,6 +34,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
                           q.content.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSubject && matchesSearch;
   });
+
+  // Carousel Logic
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev === 0 ? 1 : 0));
+    }, 5000); // 5 seconds per slide
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div className="relative min-h-full">
@@ -75,27 +85,73 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
 
       <div className="p-5 space-y-5 pb-24">
         
-        {/* GAME BANNER */}
-        {onStartChallenge && (
+        {/* CAROUSEL BANNER */}
+        <div className="relative w-full overflow-hidden rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none h-32">
             <div 
-                onClick={onStartChallenge}
-                className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl p-4 shadow-lg shadow-indigo-200 dark:shadow-none text-white flex items-center justify-between cursor-pointer transform transition-all active:scale-[0.98]"
+                className="flex transition-transform duration-500 ease-in-out h-full"
+                style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
             >
-                <div>
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold backdrop-blur-sm">每周更新</span>
-                        <div className="flex text-yellow-300">
-                            <Sparkles size={12} className="animate-pulse" />
+                {/* Slide 1: Word Challenge */}
+                <div 
+                    className="w-full h-full flex-shrink-0 bg-gradient-to-r from-violet-600 to-indigo-600 text-white flex items-center justify-between p-4 cursor-pointer relative"
+                    onClick={onStartChallenge}
+                >
+                    <div className="z-10">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-bold backdrop-blur-sm">每周更新</span>
+                            <div className="flex text-yellow-300">
+                                <Sparkles size={12} className="animate-pulse" />
+                            </div>
                         </div>
+                        <h3 className="font-bold text-xl leading-tight">單字挑戰賽</h3>
+                        <p className="text-xs text-indigo-100 opacity-90 mt-1">累積連擊，衝擊排行榜拿獎金！</p>
                     </div>
-                    <h3 className="font-bold text-lg leading-tight">單字挑戰賽</h3>
-                    <p className="text-xs text-indigo-100 opacity-90 mt-1">累積連擊，衝擊排行榜拿獎金！</p>
+                    <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm border border-white/20 z-10">
+                        <Trophy size={28} className="text-yellow-300" />
+                    </div>
+                    {/* Background decoration */}
+                    <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4">
+                        <Trophy size={100} />
+                    </div>
                 </div>
-                <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm border border-white/20">
-                    <Trophy size={28} className="text-yellow-300" />
+
+                {/* Slide 2: Leaderboard */}
+                <div 
+                    className="w-full h-full flex-shrink-0 bg-gradient-to-r from-amber-500 to-orange-600 text-white flex items-center justify-between p-4 cursor-pointer relative"
+                    onClick={onOpenLeaderboard}
+                >
+                    <div className="z-10">
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-black/10 px-2 py-0.5 rounded text-[10px] font-bold backdrop-blur-sm">風雲人物</span>
+                            <div className="flex text-white">
+                                <TrendingUp size={12} />
+                            </div>
+                        </div>
+                        <h3 className="font-bold text-xl leading-tight">班級積分榜</h3>
+                        <p className="text-xs text-orange-100 opacity-90 mt-1">積極解題，挑戰學霸稱號！</p>
+                    </div>
+                    <div className="bg-white/10 p-3 rounded-full backdrop-blur-sm border border-white/20 z-10">
+                        <Crown size={28} className="text-white" />
+                    </div>
+                    {/* Background decoration */}
+                    <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-4 translate-y-4">
+                        <Crown size={100} />
+                    </div>
                 </div>
             </div>
-        )}
+
+            {/* Dots Indicator */}
+            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-20">
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(0); }}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${currentBannerIndex === 0 ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/80'}`} 
+                />
+                <button 
+                    onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(1); }}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${currentBannerIndex === 1 ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/80'}`} 
+                />
+            </div>
+        </div>
 
         {/* Questions List */}
         {filteredQuestions.length === 0 ? (
