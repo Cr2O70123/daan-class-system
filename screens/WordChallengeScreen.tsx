@@ -30,7 +30,11 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   const [options, setOptions] = useState<string[]>([]);
   const [correctCount, setCorrectCount] = useState(0);
   const [level, setLevel] = useState(3); // Start at Level 3
+  
+  // Interaction State
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Mistake Tracking
   const [wrongWords, setWrongWords] = useState<Word[]>([]);
@@ -55,10 +59,6 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
   const generateQuestion = () => {
     // Difficulty Progression Logic
-    // 0-4 Correct: Level 3
-    // 5-9 Correct: Level 4
-    // 10-14 Correct: Level 5
-    // 15+ Correct: Level 6
     let nextLevel = 3;
     if (correctCount >= 15) nextLevel = 6;
     else if (correctCount >= 10) nextLevel = 5;
@@ -105,6 +105,9 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       setWrongWords([]);
       setHasReviewed(false);
       setLevel(3);
+      setFeedback(null);
+      setSelectedOption(null);
+      setIsProcessing(false);
       generateQuestion();
 
       if (timerRef.current) clearInterval(timerRef.current);
@@ -125,7 +128,9 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   };
 
   const handleAnswer = (answer: string) => {
-      if (!currentWord) return;
+      if (isProcessing || !currentWord) return;
+      setIsProcessing(true);
+      setSelectedOption(answer);
 
       if (answer === currentWord.zh) {
           // Correct
@@ -146,23 +151,27 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
           setCombo(0);
           setFeedback('wrong');
           
-          // Track Mistake
+          // Track Mistake (Prevent duplicates)
           if (!wrongWords.find(w => w.id === currentWord.id)) {
               setWrongWords(prev => [...prev, currentWord]);
           }
       }
 
+      // Add delay to show feedback
       setTimeout(() => {
           setFeedback(null);
-          if (timeLeft > 0) generateQuestion();
-      }, 300);
+          setSelectedOption(null);
+          setIsProcessing(false);
+          // Only generate next question if time is remaining
+          generateQuestion();
+      }, 1000);
   };
 
   const handleReviewDone = () => {
       if (!hasReviewed) {
           setScore(prev => prev + 500); // Bonus score for review (equivalent to 10PT)
           setHasReviewed(true);
-          alert("複習完成！獲得額外分數獎勵！");
+          // Just subtle visual feedback instead of alert
       }
   };
 
@@ -190,19 +199,14 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
     }
   };
 
-  // Standard background for consistency
-  const containerClass = "fixed inset-0 z-50 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden transition-colors";
+  const bgClass = feedback === 'correct' ? 'bg-green-100 dark:bg-green-900/40' : feedback === 'wrong' ? 'bg-red-100 dark:bg-red-900/40' : 'bg-gray-100 dark:bg-gray-900';
 
   // --- MENU ---
   if (gameState === 'menu') {
-      const playCount = 3 - user.hearts; // Hearts starts at 3, decreases on play. Play count is 3 - hearts.
-      // Wait, logic in App.tsx sets hearts to 3 daily. 
-      // handleStartGame does: hearts - 1.
-      // So "Remaining Plays" is simply user.hearts.
       const remainingPlays = Math.max(0, user.hearts);
 
       return (
-          <div className={containerClass}>
+          <div className="fixed inset-0 z-50 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden transition-colors">
               {/* Header */}
               <div className="p-4 bg-white dark:bg-gray-800 shadow-sm flex justify-between items-center z-10">
                   <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
@@ -239,16 +243,32 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
                 {activeTab === 'play' ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-center pb-20">
-                        <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 mb-8 w-full max-w-xs">
+                        <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-sm border border-gray-200 dark:border-gray-700 mb-8 w-full max-w-xs relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
                             <div className="w-20 h-20 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 dark:text-blue-400">
                                 <Trophy size={40} />
                             </div>
                             <h1 className="text-2xl font-black mb-2 text-gray-800 dark:text-white">英文單字挑戰</h1>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">挑戰 Level 3-6 必考單字</p>
-                            <div className="mt-4 flex justify-center gap-2">
-                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded">學術</span>
-                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded">商業</span>
-                                <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs px-2 py-1 rounded">工程</span>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">挑戰英文單字力，累積高分！</p>
+                            
+                            <div className="mt-6 bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-xl border border-yellow-100 dark:border-yellow-900/30">
+                                <h4 className="text-xs font-bold text-yellow-600 dark:text-yellow-400 mb-2 flex items-center justify-center gap-1">
+                                    <Crown size={12} /> 排行榜前三名獎勵
+                                </h4>
+                                <div className="flex flex-col gap-1 text-sm font-bold text-gray-700 dark:text-gray-200">
+                                    <div className="flex justify-between items-center px-4">
+                                        <span>🥇 第一名</span>
+                                        <span className="text-blue-600 dark:text-blue-400">300 PT</span>
+                                    </div>
+                                    <div className="flex justify-between items-center px-4">
+                                        <span>🥈 第二名</span>
+                                        <span className="text-blue-600 dark:text-blue-400">200 PT</span>
+                                    </div>
+                                    <div className="flex justify-between items-center px-4">
+                                        <span>🥉 第三名</span>
+                                        <span className="text-blue-600 dark:text-blue-400">100 PT</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -327,7 +347,19 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // --- PLAYING ---
   if (gameState === 'playing') {
       return (
-          <div className={`${containerClass} ${feedback === 'correct' ? 'bg-green-50 dark:bg-green-900/20' : feedback === 'wrong' ? 'bg-red-50 dark:bg-red-900/20' : ''} transition-colors duration-200`}>
+          <div className={`fixed inset-0 z-50 flex flex-col overflow-hidden transition-colors duration-300 ${bgClass}`}>
+              {/* CSS for Shake Animation */}
+              <style>{`
+                  @keyframes shake {
+                      0%, 100% { transform: translateX(0); }
+                      10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+                      20%, 40%, 60%, 80% { transform: translateX(4px); }
+                  }
+                  .animate-shake {
+                      animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+                  }
+              `}</style>
+
               {/* Top Bar */}
               <div className="flex justify-between items-center p-6">
                   <div className="text-center">
@@ -354,15 +386,38 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                   <h2 className="text-4xl font-black text-center mb-10 text-gray-800 dark:text-white drop-shadow-sm">{currentWord?.en}</h2>
                   
                   <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
-                    {options.map((opt, idx) => (
-                        <button
-                            key={idx}
-                            onClick={() => handleAnswer(opt)}
-                            className="bg-white dark:bg-gray-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 py-4 rounded-xl text-lg font-bold border border-gray-200 dark:border-gray-700 shadow-sm active:scale-98 transition-all text-gray-700 dark:text-gray-200"
-                        >
-                            {opt}
-                        </button>
-                    ))}
+                    {options.map((opt, idx) => {
+                        // Logic for button appearance
+                        // Base style: maintain size with py-4, fixed width etc
+                        let buttonClass = "w-full py-4 rounded-xl text-lg font-bold border-2 shadow-sm transition-all duration-200 transform ";
+                        
+                        if (feedback) {
+                            if (opt === currentWord?.zh) {
+                                // Correct Answer: Green
+                                buttonClass += "bg-green-500 border-green-600 text-white scale-100";
+                            } else if (opt === selectedOption && feedback === 'wrong') {
+                                // Selected Wrong Answer: Red + Shake
+                                buttonClass += "bg-red-500 border-red-600 text-white animate-shake scale-100";
+                            } else {
+                                // Other Answers: Faded
+                                buttonClass += "bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed scale-100";
+                            }
+                        } else {
+                            // Normal State: White/DarkBG
+                            buttonClass += "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 hover:border-blue-400 hover:text-blue-600 active:scale-[0.98]";
+                        }
+
+                        return (
+                            <button
+                                key={idx}
+                                onClick={() => handleAnswer(opt)}
+                                disabled={isProcessing}
+                                className={buttonClass}
+                            >
+                                {opt}
+                            </button>
+                        );
+                    })}
                   </div>
               </div>
           </div>
@@ -371,7 +426,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
   // --- GAME OVER ---
   return (
-      <div className={containerClass}>
+      <div className="fixed inset-0 z-50 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden transition-colors">
            <div className="flex-1 flex items-center justify-center p-6">
                 <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl border border-gray-200 dark:border-gray-700 w-full max-w-sm text-center shadow-xl">
                     <h2 className="text-2xl font-black mb-1 text-gray-800 dark:text-white">挑戰結束</h2>
@@ -395,9 +450,9 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                     {wrongWords.length > 0 && (
                         <div className="mb-6 text-left">
                             <h3 className="text-sm font-bold text-red-500 mb-2 flex items-center gap-1">
-                                <AlertCircle size={14} /> 本次易錯單字
+                                <AlertCircle size={14} /> 本次易錯單字 (必須複習)
                             </h3>
-                            <div className="bg-red-50 dark:bg-red-900/10 rounded-xl p-3 max-h-32 overflow-y-auto border border-red-100 dark:border-red-900/30 space-y-2">
+                            <div className="bg-red-50 dark:bg-red-900/10 rounded-xl p-3 max-h-32 overflow-y-auto border border-red-100 dark:border-red-900/30 space-y-2 mb-2">
                                 {wrongWords.map((w, i) => (
                                     <div key={i} className="flex justify-between text-sm border-b border-red-100 dark:border-red-900/30 last:border-0 pb-1 last:pb-0">
                                         <span className="font-bold text-gray-800 dark:text-gray-200">{w.en}</span>
@@ -408,22 +463,27 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                             <button 
                                 onClick={handleReviewDone}
                                 disabled={hasReviewed}
-                                className={`w-full mt-2 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors ${hasReviewed ? 'bg-gray-100 text-gray-400 cursor-default' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
+                                className={`w-full py-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors ${hasReviewed ? 'bg-green-100 text-green-600 cursor-default' : 'bg-red-100 text-red-600 hover:bg-red-200 animate-pulse'}`}
                             >
-                                {hasReviewed ? <><Check size={12}/> 已領取獎勵</> : <><BookOpen size={12}/> 複習完成 (+10 PT)</>}
+                                {hasReviewed ? <><Check size={12}/> 複習完成</> : <><BookOpen size={12}/> 我已閱讀並記住 (+500 Bonus)</>}
                             </button>
                         </div>
                     )}
 
                     <div className="text-sm text-gray-500 dark:text-gray-400 mb-6 flex justify-center items-center gap-1">
-                        獲得積分: <span className="font-bold text-blue-600 dark:text-blue-400">+{Math.floor(score / 50)} PT</span>
+                        遊戲積分: <span className="font-bold text-blue-600 dark:text-blue-400">+{Math.floor(score / 50)} PT</span>
                     </div>
 
                     <button 
                         onClick={handleClaim}
-                        className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-bold py-4 rounded-2xl shadow-lg hover:scale-[1.02] transition-transform active:scale-95"
+                        disabled={wrongWords.length > 0 && !hasReviewed}
+                        className={`w-full font-bold py-4 rounded-2xl shadow-lg transition-transform active:scale-95 ${
+                            wrongWords.length > 0 && !hasReviewed 
+                            ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed' 
+                            : 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:scale-[1.02]'
+                        }`}
                     >
-                        領取獎勵並返回
+                        {wrongWords.length > 0 && !hasReviewed ? "請先點擊上方按鈕完成複習" : "領取獎勵並返回"}
                     </button>
                 </div>
            </div>

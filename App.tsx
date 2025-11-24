@@ -341,20 +341,20 @@ export default function App() {
       }
   };
 
-  const handleBuyProduct = (product: Product) => {
+  const handleBuyProduct = async (product: Product) => {
     if(!user) return;
     const isOwned = user.inventory.includes(product.id) || user.avatarFrame === product.id || user.nameColor === product.color;
     if (isOwned) {
         if (product.category === 'frame') {
             const u = { ...user, avatarFrame: product.id };
             setUser(u);
-            updateUserInDb(u);
+            await updateUserInDb(u);
             alert(`已裝備：${product.name}`);
         } else if (product.category === 'cosmetic') {
             const textClass = product.color.split(' ').find(c => c.startsWith('text-'));
             const u = { ...user, nameColor: textClass };
             setUser(u);
-            updateUserInDb(u);
+            await updateUserInDb(u);
             alert(`已啟用：${product.name}`);
         }
         return;
@@ -370,9 +370,19 @@ export default function App() {
              const textClass = product.color.split(' ').find(c => c.startsWith('text-'));
              updatedUser.nameColor = textClass;
         }
+        
+        // Optimistic update
         setUser(updatedUser);
-        updateUserInDb(updatedUser);
-        alert(`購買成功：${product.name}`);
+        try {
+            // Strictly await DB update to ensure consistency
+            await updateUserInDb(updatedUser);
+            alert(`購買成功：${product.name}`);
+        } catch (e) {
+            alert("購買失敗，請檢查連線，積分已回溯");
+            // Reload user data from DB to rollback optimistic update
+            const session = await checkSession();
+            if(session) setUser(session);
+        }
     } else {
         alert("積分不足！");
     }
@@ -424,13 +434,18 @@ export default function App() {
       }
   };
 
-  const handleFinishChallenge = (result: GameResult) => {
+  const handleFinishChallenge = async (result: GameResult) => {
       if (!user) return;
       const pointsWon = Math.floor(result.score / 50); 
       if (!user.isAdmin && pointsWon > 0) {
           const u = { ...user, points: user.points + pointsWon };
           setUser(u);
-          updateUserInDb(u);
+          try {
+            await updateUserInDb(u);
+          } catch (e) {
+            console.error("Failed to sync points", e);
+            // Optional: alert user that points might not have synced
+          }
       }
   };
 

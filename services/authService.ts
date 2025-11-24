@@ -157,5 +157,9 @@ export const updateUserInDb = async (user: User) => {
         .update(updatePayload)
         .eq('student_id', user.studentId);
         
-    if (error) console.error('Error updating user:', error);
+    if (error) {
+        console.error('Error updating user:', error);
+        // Throw error to ensure calling functions know the update failed
+        throw error;
+    }
 };
