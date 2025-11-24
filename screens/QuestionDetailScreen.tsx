@@ -9,6 +9,7 @@ interface QuestionDetailScreenProps {
   onAddReply: (questionId: number, content: string, image?: string) => void;
   onReport: (type: 'question' | 'reply', id: number, content: string, reason: string) => void;
   onMarkBest: (questionId: number, replyId: number) => void;
+  onImageClick?: (url: string) => void;
 }
 
 const REPORT_REASONS = [
@@ -26,7 +27,8 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
   onBack,
   onAddReply,
   onReport,
-  onMarkBest
+  onMarkBest,
+  onImageClick
 }) => {
   const [replyText, setReplyText] = useState('');
   const [replyImage, setReplyImage] = useState<string | null>(null);
@@ -40,9 +42,6 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
   const [selectedBestAnswerId, setSelectedBestAnswerId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // LIGHTBOX STATE
-  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -134,16 +133,6 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
   return (
     <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col pb-safe relative transition-colors">
       
-      {/* --- LIGHTBOX MODAL --- */}
-      {lightboxImage && (
-          <div className="fixed inset-0 z-[60] bg-black flex items-center justify-center animate-in fade-in duration-200" onClick={() => setLightboxImage(null)}>
-              <button className="absolute top-4 right-4 text-white p-2 bg-gray-800/50 rounded-full">
-                  <X size={24} />
-              </button>
-              <img src={lightboxImage} alt="Full View" className="max-w-full max-h-full object-contain p-2" />
-          </div>
-      )}
-
       {/* --- REPORT MODAL --- */}
       {reportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -233,7 +222,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
           {question.image && (
             <div 
                 className="mt-3 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 cursor-zoom-in"
-                onClick={() => setLightboxImage(question.image || null)}
+                onClick={() => onImageClick && onImageClick(question.image!)}
             >
                 <img src={question.image} alt="Question Attachment" className="w-full object-cover max-h-64" />
             </div>
@@ -324,7 +313,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
                 {reply.image && (
                     <div 
                         className="mt-3 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 cursor-zoom-in w-fit"
-                        onClick={() => setLightboxImage(reply.image || null)}
+                        onClick={() => onImageClick && onImageClick(reply.image!)}
                     >
                         <img src={reply.image} alt="Reply attachment" className="max-h-48 object-cover" />
                     </div>

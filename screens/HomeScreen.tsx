@@ -10,6 +10,7 @@ interface HomeScreenProps {
   onOpenLeaderboard?: () => void;
   onOpenCheckIn?: () => void;
   onRefresh?: () => Promise<void>;
+  onImageClick?: (url: string) => void;
 }
 
 const SUBJECTS = ['全部', '電子學', '基本電學', '數位邏輯', '微處理機', '程式設計', '國文', '英文', '數學', '其他'];
@@ -26,7 +27,7 @@ const getFrameStyle = (frameId?: string) => {
   }
 };
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard, onOpenCheckIn, onRefresh }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard, onOpenCheckIn, onRefresh, onImageClick }) => {
   const [activeSubject, setActiveSubject] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
@@ -35,6 +36,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
   const [pullY, setPullY] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const startY = useRef(0);
+  const startX = useRef(0);
+  const isHorizontalSwipe = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const PULL_THRESHOLD = 80;
 
@@ -59,19 +62,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
 
   // Pull to Refresh Handlers
   const handleTouchStart = (e: React.TouchEvent) => {
-      // Only trigger pull refresh if at top
       if (window.scrollY === 0 && !isRefreshing) {
           startY.current = e.touches[0].clientY;
+          startX.current = e.touches[0].clientX;
+          isHorizontalSwipe.current = false;
       }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
       const currentY = e.touches[0].clientY;
-      const delta = currentY - startY.current;
+      const currentX = e.touches[0].clientX;
+      const deltaY = currentY - startY.current;
+      const deltaX = currentX - startX.current;
       
-      // Only pull if at top and scrolling down
-      if (window.scrollY === 0 && delta > 0 && !isRefreshing) {
-          setPullY(Math.min(delta * 0.4, 120)); // Resistance
+      // Determine if swipe is mostly horizontal (e.g., carousel)
+      if (!isHorizontalSwipe.current) {
+          if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+              isHorizontalSwipe.current = true;
+          }
+      }
+
+      // Only pull if at top, scrolling down, and NOT a horizontal swipe
+      if (window.scrollY === 0 && deltaY > 0 && !isRefreshing && !isHorizontalSwipe.current) {
+          // Add resistance
+          setPullY(Math.min(deltaY * 0.4, 120)); 
       }
   };
 
@@ -85,11 +99,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
               setTimeout(() => {
                   setIsRefreshing(false);
                   setPullY(0);
-              }, 500);
+              }, 300); // Short delay for animation smoothness
           }
       } else {
           setPullY(0);
       }
+      isHorizontalSwipe.current = false;
   };
 
   // Carousel Manual Swipe Handlers
@@ -155,7 +170,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
 
       <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 pt-safe z-10 shadow-sm transition-colors transform translate-z-0">
          {/* Search Bar */}
-         <div className="px-4 pt-3 pb-1">
+         <div className="px-4 pt-1 pb-1">
             <div className="relative">
                 <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input 
@@ -325,7 +340,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
                         </p>
                     </div>
                     {q.image && (
-                        <div className="w-16 h-16 flex-shrink-0 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                        <div 
+                            className="w-16 h-16 flex-shrink-0 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 cursor-zoom-in"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onImageClick && q.image) onImageClick(q.image);
+                            }}
+                        >
                             <img src={q.image} alt="thumbnail" className="w-full h-full object-cover" />
                         </div>
                     )}

@@ -15,7 +15,7 @@ import { ExamScreen } from './screens/ExamScreen';
 import { WordChallengeScreen } from './screens/WordChallengeScreen';
 import { CheckInModal } from './components/CheckInModal';
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
-import { RefreshCcw } from 'lucide-react';
+import { RefreshCcw, X, ZoomIn } from 'lucide-react';
 
 // Services
 import { WORD_DATABASE } from './services/mockData'; 
@@ -41,7 +41,7 @@ const getFrameStyle = (frameId?: string) => {
 };
 
 const Header = ({ user }: { user: User }) => (
-  <div className="bg-white dark:bg-gray-800 px-4 pb-3 pt-safe sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
+  <div className="bg-white dark:bg-gray-800 px-4 pb-2 pt-safe sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
     <div className="flex flex-col">
         <h1 className="text-lg font-bold text-gray-800 dark:text-white tracking-wide">電子三乙功課系統</h1>
         <div className="flex items-center gap-2 mt-0.5">
@@ -91,6 +91,9 @@ const App = () => {
   const [showWordChallenge, setShowWordChallenge] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
+  
+  // Global Lightbox
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // Init
   useEffect(() => {
@@ -211,11 +214,14 @@ const App = () => {
 
   const loadData = async () => {
     try {
-        const qData = await fetchQuestions();
+        // Real data fetch - no artificial delays
+        const [qData, rData, eData] = await Promise.all([
+            fetchQuestions(),
+            fetchResources(),
+            fetchExams()
+        ]);
         setQuestions(qData);
-        const rData = await fetchResources();
         setResources(rData);
-        const eData = await fetchExams();
         setExams(eData);
     } catch (e) {
         console.error("Failed to load data", e);
@@ -501,6 +507,23 @@ const App = () => {
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       
+      {/* Global Lightbox Overlay */}
+      {lightboxImage && (
+          <div 
+            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-200"
+            onClick={() => setLightboxImage(null)}
+          >
+              <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
+                  <X size={24} />
+              </button>
+              <img 
+                src={lightboxImage} 
+                alt="Zoomed Content" 
+                className="max-w-full max-h-full object-contain p-4 cursor-zoom-out" 
+              />
+          </div>
+      )}
+
       {/* Modals & Overlays */}
       <InstallModal isOpen={showInstallModal} onClose={() => setShowInstallModal(false)} />
       
@@ -535,6 +558,7 @@ const App = () => {
                 onAddReply={handleAddReply}
                 onReport={handleReport}
                 onMarkBest={handleMarkBest}
+                onImageClick={setLightboxImage}
              />
         </div>
       )}
@@ -546,6 +570,7 @@ const App = () => {
                 currentUser={user} 
                 onBack={() => setSelectedResource(null)}
                 onLike={handleLikeResource}
+                onImageClick={setLightboxImage}
              />
         </div>
       )}
@@ -553,7 +578,7 @@ const App = () => {
       {/* Conditional Full Screen Views */}
       {showLeaderboardOverlay ? (
           <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe flex flex-col">
-               <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-4">
+               <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-2">
                    <h2 className="font-bold text-lg text-gray-800 dark:text-white">全班等級排名</h2>
                    <button 
                         onClick={() => setShowLeaderboardOverlay(false)} 
@@ -594,6 +619,7 @@ const App = () => {
                         onOpenLeaderboard={() => setShowLeaderboardOverlay(true)}
                         onOpenCheckIn={() => setShowCheckInModal(true)}
                         onRefresh={loadData}
+                        onImageClick={setLightboxImage}
                     />
                 )}
                 {currentTab === Tab.RESOURCE && (
@@ -604,6 +630,7 @@ const App = () => {
                         onLikeResource={handleLikeResource}
                         onResourceClick={setSelectedResource}
                         onRefresh={loadData}
+                        onImageClick={setLightboxImage}
                     />
                 )}
                 {currentTab === Tab.EXAM && (
@@ -644,7 +671,10 @@ const App = () => {
                     />
                 )}
                 {currentTab === Tab.ASK && (
-                    <AskScreen onPostQuestion={handlePostQuestion} />
+                    <AskScreen 
+                        onPostQuestion={handlePostQuestion} 
+                        onImageClick={setLightboxImage}
+                    />
                 )}
             </div>
 

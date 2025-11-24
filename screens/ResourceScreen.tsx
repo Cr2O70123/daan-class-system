@@ -9,6 +9,7 @@ interface ResourceScreenProps {
   onLikeResource: (id: number) => void;
   onResourceClick: (resource: Resource) => void;
   onRefresh?: () => Promise<void>;
+  onImageClick?: (url: string) => void;
 }
 
 const RESOURCE_TAGS = ['全部', '筆記', '考古題', '教學影片', '好用工具', '其他'];
@@ -25,7 +26,7 @@ const getFrameStyle = (frameId?: string) => {
     }
   };
 
-export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, currentUser, onAddResource, onLikeResource, onResourceClick, onRefresh }) => {
+export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, currentUser, onAddResource, onLikeResource, onResourceClick, onRefresh, onImageClick }) => {
   const [activeTag, setActiveTag] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -41,6 +42,8 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
   const [pullY, setPullY] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const startY = useRef(0);
+  const startX = useRef(0);
+  const isHorizontalSwipe = useRef(false);
   const PULL_THRESHOLD = 80;
 
   const filteredResources = resources.filter(r => {
@@ -95,15 +98,27 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
    const handleTouchStart = (e: React.TouchEvent) => {
     if (window.scrollY === 0 && !isRefreshing) {
         startY.current = e.touches[0].clientY;
+        startX.current = e.touches[0].clientX;
+        isHorizontalSwipe.current = false;
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     const currentY = e.touches[0].clientY;
-    const delta = currentY - startY.current;
+    const currentX = e.touches[0].clientX;
+    const deltaY = currentY - startY.current;
+    const deltaX = currentX - startX.current;
     
-    if (window.scrollY === 0 && delta > 0 && !isRefreshing) {
-        setPullY(Math.min(delta * 0.4, 120)); 
+    // Determine if swipe is mostly horizontal
+    if (!isHorizontalSwipe.current) {
+        if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+            isHorizontalSwipe.current = true;
+        }
+    }
+    
+    // Only pull if at top, scrolling down, and NOT horizontal swipe
+    if (window.scrollY === 0 && deltaY > 0 && !isRefreshing && !isHorizontalSwipe.current) {
+        setPullY(Math.min(deltaY * 0.4, 120)); 
     }
   };
 
@@ -117,11 +132,12 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
             setTimeout(() => {
                 setIsRefreshing(false);
                 setPullY(0);
-            }, 500);
+            }, 300);
         }
     } else {
         setPullY(0);
     }
+    isHorizontalSwipe.current = false;
   };
 
 
@@ -166,7 +182,7 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
         {/* Header - Aligned with Home Screen Style */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 pt-safe z-10 shadow-sm transition-colors">
              {/* Search Bar */}
-            <div className="px-4 pt-3 pb-1">
+            <div className="px-4 pt-1 pb-1">
                 <div className="relative">
                     <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                     <input 
@@ -236,10 +252,16 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
                             </p>
                             
                             {hasImages && res.images && (
-                                <div className="mb-4 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 relative h-32 group">
+                                <div 
+                                    className="mb-4 rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 relative h-32 group cursor-zoom-in"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (onImageClick && res.images && res.images.length > 0) onImageClick(res.images[0]);
+                                    }}
+                                >
                                     <img src={res.images[0]} alt="Resource" className="w-full h-full object-cover" />
                                     {res.images.length > 1 && (
-                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none">
                                             <div className="text-white font-bold flex items-center gap-2">
                                                 <Layers size={20} />
                                                 <span>+{res.images.length - 1}</span>

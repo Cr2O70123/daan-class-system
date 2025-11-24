@@ -7,6 +7,7 @@ interface ResourceDetailScreenProps {
   currentUser: User;
   onBack: () => void;
   onLike: (id: number) => void;
+  onImageClick?: (url: string) => void;
 }
 
 // Reuse the rich text renderer logic (simplified or extracted)
@@ -56,7 +57,7 @@ const getFrameStyle = (frameId?: string) => {
     }
 };
 
-export const ResourceDetailScreen: React.FC<ResourceDetailScreenProps> = ({ resource, currentUser, onBack, onLike }) => {
+export const ResourceDetailScreen: React.FC<ResourceDetailScreenProps> = ({ resource, currentUser, onBack, onLike, onImageClick }) => {
   const isLiked = resource.likedBy.includes(currentUser.name);
 
   return (
@@ -107,7 +108,11 @@ export const ResourceDetailScreen: React.FC<ResourceDetailScreenProps> = ({ reso
             {resource.images && resource.images.length > 0 && (
                 <div className="space-y-3 mb-6">
                     {resource.images.map((img, idx) => (
-                        <div key={idx} className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm">
+                        <div 
+                            key={idx} 
+                            className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-700 shadow-sm cursor-zoom-in"
+                            onClick={() => onImageClick && onImageClick(img)}
+                        >
                             <img src={img} alt={`Attachment ${idx + 1}`} className="w-full object-contain bg-black/5 dark:bg-black/20" />
                         </div>
                     ))}

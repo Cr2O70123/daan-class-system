@@ -4,11 +4,12 @@ import { Question } from '../types';
 
 interface AskScreenProps {
   onPostQuestion: (question: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => void;
+  onImageClick?: (url: string) => void;
 }
 
 const SUBJECTS = ['電子學', '基本電學', '數位邏輯', '微處理機', '程式設計', '國文', '英文', '數學', '其他'];
 
-export const AskScreen: React.FC<AskScreenProps> = ({ onPostQuestion }) => {
+export const AskScreen: React.FC<AskScreenProps> = ({ onPostQuestion, onImageClick }) => {
   const [selectedSubject, setSelectedSubject] = useState('電子學');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -137,10 +138,10 @@ export const AskScreen: React.FC<AskScreenProps> = ({ onPostQuestion }) => {
         <label className="block text-sm font-bold text-gray-700 mb-2">上傳圖片 (選填)</label>
         
         {image ? (
-            <div className="relative rounded-xl overflow-hidden border border-gray-200 inline-block">
+            <div className="relative rounded-xl overflow-hidden border border-gray-200 inline-block cursor-zoom-in" onClick={() => onImageClick && onImageClick(image)}>
                 <img src={image} alt="Preview" className="max-h-48 w-full object-contain bg-gray-50" />
                 <button 
-                    onClick={() => setImage(null)}
+                    onClick={(e) => { e.stopPropagation(); setImage(null); }}
                     className="absolute top-2 right-2 bg-gray-900/70 text-white p-1 rounded-full hover:bg-gray-900 transition-colors"
                 >
                     <X size={16} />
