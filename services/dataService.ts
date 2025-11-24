@@ -72,7 +72,11 @@ export const createQuestion = async (user: User, title: string, content: string,
     }]);
     
     if (error) {
-        console.error("Supabase create question failed:", error);
+        // DETAILED LOGGING for debugging
+        console.error("Supabase create question failed. Error object:", error);
+        console.error("Payload was:", {
+            title, content, image: sanitizedImage ? 'BASE64_IMAGE_PRESENT' : 'NULL', tags: sanitizedTags, user: user.name
+        });
         throw error;
     }
 };

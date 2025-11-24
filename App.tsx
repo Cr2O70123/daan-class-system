@@ -173,7 +173,8 @@ export default function App() {
         } else if (e.message === "DB_CONNECTION_FAILED") {
             setConnectionError(true);
         } else {
-            alert("登入失敗，請檢查網路連線");
+            // Alert full error details if available for debugging
+            alert(`登入失敗: ${JSON.stringify(e, null, 2)}`);
         }
     }
   };
@@ -213,8 +214,9 @@ export default function App() {
              setUser(updatedUser);
              updateUserInDb(updatedUser);
         }
-    } catch (e) {
-        alert("發佈失敗，請檢查網路連線");
+    } catch (e: any) {
+        // Show specific Supabase error
+        alert(`發佈失敗: ${e.message || JSON.stringify(e)}`);
     }
   };
 
