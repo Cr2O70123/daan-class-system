@@ -12,9 +12,11 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         .eq('student_id', studentId)
         .single();
     
+    // PGRST116 is the error code for "Row not found" (which is expected for new users)
     if (error && error.code !== 'PGRST116') { 
         console.error('Supabase Auth Error:', error);
-        throw new Error("DB_CONNECTION_FAILED");
+        // Throw a descriptive string including the code for debugging
+        throw new Error(`DB_ERROR: ${error.message} (Code: ${error.code})`);
     }
 
     // 2. If user not found, create new one
@@ -40,7 +42,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             
         if (createError) {
             console.error('Error creating user in DB:', createError);
-            throw new Error("DB_CREATE_FAILED");
+            throw new Error(`CREATE_USER_FAILED: ${createError.message}`);
         }
         user = createdUser;
     }
@@ -95,10 +97,20 @@ export const checkSession = async (): Promise<User | null> => {
         .eq('student_id', storedId)
         .single();
 
-    if (error || !user) {
-            // Strict mode: If DB fails, session is invalid.
-            // We do NOT return a mock user.
-            throw new Error("SESSION_VERIFY_FAILED");
+    if (error) {
+        console.error("Session check error:", error);
+        // Don't throw here to avoid locking user out if offline, just return null (logged out)
+        // or throw specific error if critical
+        if (error.code !== 'PGRST116') {
+             throw new Error(`SESSION_ERROR: ${error.message}`);
+        }
+        return null;
+    }
+
+    if (!user) {
+        // User deleted or invalid
+        localStorage.removeItem('student_id');
+        return null;
     }
 
     if (user.is_banned) {
@@ -160,7 +172,6 @@ export const updateUserInDb = async (user: User) => {
         
     if (error) {
         console.error('Error updating user:', error);
-        // Throw proper error message to be caught by UI
-        throw new Error(error.message || "Database update failed");
+        throw new Error(`UPDATE_FAILED: ${error.message || JSON.stringify(error)}`);
     }
 };

@@ -100,8 +100,13 @@ export default function App() {
                 setUser(sessionUser);
                 await loadAllData();
             }
-        } catch (e) {
-            console.error("Auto Login Failed:", e);
+        } catch (e: any) {
+             // If we get an error during auto-login, we just don't log them in
+             // unless it's a critical DB connection error
+             if (e.message && e.message.includes("SESSION_ERROR")) {
+                 console.error("Auto login error:", e);
+                 setConnectionError(true);
+             }
         }
         setIsLoading(false);
     };
@@ -170,11 +175,12 @@ export default function App() {
     } catch (e: any) {
         if (e.message === "ACCOUNT_BANNED") {
             alert("此帳號已被停權，請聯絡管理員。");
-        } else if (e.message === "DB_CONNECTION_FAILED") {
-            setConnectionError(true);
+        } else if (e.message && e.message.includes("DB_ERROR")) {
+            // Display detailed DB error to user
+            alert(`連線錯誤: ${e.message}`);
         } else {
-            // Alert full error details if available for debugging
-            alert(`登入失敗: ${JSON.stringify(e.message || e, null, 2)}`);
+            // General error
+            alert(`登入失敗: ${e.message || "未知錯誤"}`);
         }
     }
   };
@@ -376,8 +382,8 @@ export default function App() {
             await updateUserInDb(updatedUser);
             setUser(updatedUser);
             alert(`購買成功：${product.name}`);
-        } catch (e) {
-            alert("購買失敗，請檢查連線，積分已回溯");
+        } catch (e: any) {
+            alert(`購買失敗: ${e.message}`);
         }
     } else {
         alert("積分不足！");
