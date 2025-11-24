@@ -13,6 +13,72 @@ interface WordChallengeScreenProps {
 
 const INITIAL_TIME = 30; // Seconds
 
+// Sound Effect Helper using Web Audio API
+const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start') => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    const now = ctx.currentTime;
+    
+    switch (type) {
+      case 'correct':
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now); // C5
+        osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1); // C6
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+        break;
+      case 'wrong':
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.linearRampToValueAtTime(100, now + 0.2);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.start(now);
+        osc.stop(now + 0.3);
+        break;
+      case 'tick':
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(800, now);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+        osc.start(now);
+        osc.stop(now + 0.05);
+        break;
+      case 'gameover':
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(300, now);
+        osc.frequency.exponentialRampToValueAtTime(100, now + 1);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.linearRampToValueAtTime(0, now + 1);
+        osc.start(now);
+        osc.stop(now + 1);
+        break;
+      case 'start':
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440, now);
+          osc.frequency.setValueAtTime(880, now + 0.1);
+          gain.gain.setValueAtTime(0.1, now);
+          gain.gain.linearRampToValueAtTime(0, now + 0.3);
+          osc.start(now);
+          osc.stop(now + 0.3);
+          break;
+    }
+  } catch (e) {
+    // Ignore audio errors
+  }
+};
+
 export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({ 
     user, words, onBack, onFinish, onUpdateHearts 
 }) => {
@@ -94,6 +160,8 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
           return;
       }
       
+      playSound('start');
+
       // Update Play Count (Hearts)
       onUpdateHearts(user.hearts - 1);
 
@@ -115,6 +183,10 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       if (timerRef.current) clearInterval(timerRef.current);
       timerRef.current = window.setInterval(() => {
           setTimeLeft(prev => {
+              // Sound Effect for Tick when time is running out (<= 5 seconds)
+              if (prev <= 6 && prev > 1) {
+                  playSound('tick');
+              }
               if (prev <= 1) {
                   endGame();
                   return 0;
@@ -126,6 +198,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
   const endGame = () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      playSound('gameover');
       setGameState('gameover');
   };
 
@@ -139,6 +212,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
       if (isCorrect) {
           // Correct Logic
+          playSound('correct');
           const timeBonus = 2;
           const comboBonus = Math.min(combo * 10, 50); 
           const points = 100 + comboBonus;
@@ -161,6 +235,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
       } else {
           // Wrong Logic
+          playSound('wrong');
           setTimeLeft(prev => Math.max(prev - 5, 0));
           setCombo(0);
           
