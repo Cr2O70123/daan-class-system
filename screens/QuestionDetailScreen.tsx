@@ -197,8 +197,8 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
         </div>
       )}
 
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 sticky top-0 z-30 px-4 py-3 flex items-center justify-between shadow-sm transition-colors">
+      {/* Header - Added pt-safe */}
+      <div className="bg-white dark:bg-gray-800 sticky top-0 pt-safe z-30 px-4 py-3 flex items-center justify-between shadow-sm transition-colors">
         <div className="flex items-center">
             <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />

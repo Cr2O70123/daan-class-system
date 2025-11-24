@@ -158,8 +158,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </div>
       )}
 
-      {/* Header Profile Section */}
-      <div className="bg-white dark:bg-gray-800 pb-6 rounded-b-[2rem] shadow-sm mb-6 overflow-hidden transition-colors">
+      {/* Header Profile Section - Added pt-safe */}
+      <div className="bg-white dark:bg-gray-800 pb-6 rounded-b-[2rem] shadow-sm mb-6 overflow-hidden transition-colors pt-safe">
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 h-32 relative">
             <div className="absolute top-0 left-0 w-full h-full opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-400 via-transparent to-transparent"></div>
         </div>
@@ -297,7 +297,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                     <LogOut size={12} /> 登出帳號
                 </button>
-                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.3.0 Build 20251130</p>
+                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.4.0 Build 20251131</p>
             </div>
       </div>
     </div>

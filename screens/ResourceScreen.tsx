@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Tag, Heart, Plus, Image as ImageIcon, X, Search, XCircle, Layers } from 'lucide-react';
+import { Tag, Heart, Plus, Image as ImageIcon, X, Search, XCircle, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { Resource, User } from '../types';
 
 interface ResourceScreenProps {
@@ -8,6 +8,7 @@ interface ResourceScreenProps {
   onAddResource: (title: string, description: string, tags: string[], images: string[]) => void;
   onLikeResource: (id: number) => void;
   onResourceClick: (resource: Resource) => void;
+  onRefresh?: () => Promise<void>;
 }
 
 const RESOURCE_TAGS = ['全部', '筆記', '考古題', '教學影片', '好用工具', '其他'];
@@ -23,7 +24,7 @@ const getFrameStyle = (frameId?: string) => {
     }
   };
 
-export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, currentUser, onAddResource, onLikeResource, onResourceClick }) => {
+export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, currentUser, onAddResource, onLikeResource, onResourceClick, onRefresh }) => {
   const [activeTag, setActiveTag] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,6 +35,12 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [images, setImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pull to Refresh State
+  const [pullY, setPullY] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const startY = useRef(0);
+  const PULL_THRESHOLD = 80;
 
   const filteredResources = resources.filter(r => {
       const matchesTag = activeTag === '全部' || r.tags.includes(activeTag);
@@ -83,10 +90,71 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
     setIsModalOpen(false);
   };
 
+   // Pull to Refresh Handlers
+   const handleTouchStart = (e: React.TouchEvent) => {
+    if (window.scrollY === 0 && !isRefreshing) {
+        startY.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const currentY = e.touches[0].clientY;
+    const delta = currentY - startY.current;
+    
+    if (window.scrollY === 0 && delta > 0 && !isRefreshing) {
+        setPullY(Math.min(delta * 0.4, 120)); 
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullY > PULL_THRESHOLD && onRefresh && !isRefreshing) {
+        setIsRefreshing(true);
+        setPullY(50); 
+        try {
+            await onRefresh();
+        } finally {
+            setTimeout(() => {
+                setIsRefreshing(false);
+                setPullY(0);
+            }, 500);
+        }
+    } else {
+        setPullY(0);
+    }
+  };
+
+
   return (
-    <div className="pb-24 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+    <div 
+        className="pb-24 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+    >
+        {/* Pull to Refresh Indicator */}
+        <div 
+            className="fixed left-0 right-0 z-0 flex justify-center pointer-events-none transition-all duration-200"
+            style={{ 
+                top: '100px', 
+                transform: `translateY(${pullY > 0 ? pullY - 40 : -100}px)`,
+                opacity: pullY > 0 ? 1 : 0
+            }}
+        >
+            <div className="bg-white dark:bg-gray-800 rounded-full p-2 shadow-md border border-gray-100 dark:border-gray-700">
+                {isRefreshing ? (
+                    <Loader2 className="animate-spin text-green-600" size={24} />
+                ) : (
+                    <RefreshCw 
+                        size={24} 
+                        className={`text-green-600 transition-transform ${pullY > PULL_THRESHOLD ? 'rotate-180' : ''}`} 
+                        style={{ transform: `rotate(${pullY * 2}deg)` }}
+                    />
+                )}
+            </div>
+        </div>
+
         {/* Header - Aligned with Home Screen Style */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 z-10 shadow-sm transition-colors">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 pt-safe z-10 shadow-sm transition-colors">
              {/* Search Bar */}
             <div className="px-4 pt-3 pb-1">
                 <div className="relative">
@@ -125,7 +193,10 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
         </div>
 
         {/* List */}
-        <div className="p-4 space-y-4">
+        <div 
+            className="p-4 space-y-4 relative z-1 bg-gray-50 dark:bg-gray-900 transition-transform duration-300 ease-out"
+            style={{ transform: `translateY(${isRefreshing ? 50 : 0}px)` }}
+        >
             {filteredResources.length === 0 ? (
                 <div className="text-center py-10 opacity-50">
                     <p className="text-gray-400 dark:text-gray-500 font-bold">沒有找到資源</p>

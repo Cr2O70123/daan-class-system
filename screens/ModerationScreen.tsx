@@ -34,8 +34,8 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
 
   return (
     <div className="pb-24">
-      {/* Header */}
-      <div className="bg-red-600 text-white p-4 sticky top-0 z-20 flex items-center gap-3 shadow-md">
+      {/* Header - Added pt-safe */}
+      <div className="bg-red-600 text-white p-4 pt-safe sticky top-0 z-20 flex items-center gap-3 shadow-md">
         <button onClick={onBack} className="hover:bg-red-700 p-1 rounded transition-colors">
             <ShieldCheck size={24} />
         </button>
@@ -46,7 +46,7 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-200 bg-white sticky top-[60px] z-10">
+      <div className="flex border-b border-gray-200 bg-white sticky top-[calc(60px+env(safe-area-inset-top,20px))] z-10">
         <button 
             onClick={() => setActiveTab('content')}
             className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'content' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500 hover:text-gray-700'}`}

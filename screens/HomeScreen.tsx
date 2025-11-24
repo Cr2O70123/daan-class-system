@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles, Crown, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { MessageCircle, CheckCircle2, Search, XCircle, Plus, Trophy, Sparkles, Crown, TrendingUp, RefreshCw, Loader2 } from 'lucide-react';
 import { Question } from '../types';
 
 interface HomeScreenProps {
@@ -8,6 +8,7 @@ interface HomeScreenProps {
   onAskClick: () => void;
   onStartChallenge?: () => void;
   onOpenLeaderboard?: () => void;
+  onRefresh?: () => Promise<void>;
 }
 
 const SUBJECTS = ['全部', '電子學', '基本電學', '數位邏輯', '微處理機', '程式設計', '國文', '英文', '數學', '其他'];
@@ -23,10 +24,17 @@ const getFrameStyle = (frameId?: string) => {
   }
 };
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionClick, onAskClick, onStartChallenge, onOpenLeaderboard, onRefresh }) => {
   const [activeSubject, setActiveSubject] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+
+  // Pull to Refresh State
+  const [pullY, setPullY] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const startY = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const PULL_THRESHOLD = 80;
 
   const filteredQuestions = questions.filter(q => {
     const matchesSubject = activeSubject === '全部' || q.tags.includes(activeSubject);
@@ -43,9 +51,71 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
     return () => clearInterval(timer);
   }, []);
 
+  // Pull to Refresh Handlers
+  const handleTouchStart = (e: React.TouchEvent) => {
+      if (window.scrollY === 0 && !isRefreshing) {
+          startY.current = e.touches[0].clientY;
+      }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+      const currentY = e.touches[0].clientY;
+      const delta = currentY - startY.current;
+      
+      // Only pull if at top and scrolling down
+      if (window.scrollY === 0 && delta > 0 && !isRefreshing) {
+          setPullY(Math.min(delta * 0.4, 120)); // Resistance
+      }
+  };
+
+  const handleTouchEnd = async () => {
+      if (pullY > PULL_THRESHOLD && onRefresh && !isRefreshing) {
+          setIsRefreshing(true);
+          setPullY(50); // Snap to loading position
+          try {
+              await onRefresh();
+          } finally {
+              setTimeout(() => {
+                  setIsRefreshing(false);
+                  setPullY(0);
+              }, 500);
+          }
+      } else {
+          setPullY(0);
+      }
+  };
+
   return (
-    <div className="relative min-h-full">
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 z-10 shadow-sm transition-colors">
+    <div 
+        className="relative min-h-full"
+        ref={containerRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+    >
+      {/* Pull to Refresh Indicator */}
+      <div 
+        className="fixed left-0 right-0 z-0 flex justify-center pointer-events-none transition-all duration-200"
+        style={{ 
+            top: '100px', // Below header
+            transform: `translateY(${pullY > 0 ? pullY - 40 : -100}px)`,
+            opacity: pullY > 0 ? 1 : 0
+        }}
+      >
+        <div className="bg-white dark:bg-gray-800 rounded-full p-2 shadow-md border border-gray-100 dark:border-gray-700">
+            {isRefreshing ? (
+                <Loader2 className="animate-spin text-blue-600" size={24} />
+            ) : (
+                <RefreshCw 
+                    size={24} 
+                    className={`text-blue-600 transition-transform ${pullY > PULL_THRESHOLD ? 'rotate-180' : ''}`} 
+                    style={{ transform: `rotate(${pullY * 2}deg)` }}
+                />
+            )}
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 pt-safe z-10 shadow-sm transition-colors transform translate-z-0">
          {/* Search Bar */}
          <div className="px-4 pt-3 pb-1">
             <div className="relative">
@@ -83,7 +153,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
          </div>
       </div>
 
-      <div className="p-5 space-y-5 pb-24">
+      <div 
+        className="p-5 space-y-5 pb-24 transition-transform duration-300 ease-out bg-gray-50 dark:bg-gray-900 relative z-1"
+        style={{ transform: `translateY(${isRefreshing ? 50 : 0}px)` }}
+      >
         
         {/* CAROUSEL BANNER */}
         <div className="relative w-full overflow-hidden rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none h-32">

@@ -2,7 +2,7 @@
 <html lang="zh-TW">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>電子三乙功課系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -55,10 +55,19 @@
 
       body {
         background-color: #f3f4f6;
+        overscroll-behavior-y: none; /* Prevent native pull-to-refresh on some browsers to use ours */
       }
       .dark body {
         background-color: #111827;
       }
+
+      /* Safe Area Utility */
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 20px);
+      }
+      /* For sticky headers, we need to include the safe area in the top position if strictly needed, 
+         but usually padding is enough. If sticky top-0 is used, top-0 is relative to viewport.
+      */
     </style>
 <script type="importmap">
 {

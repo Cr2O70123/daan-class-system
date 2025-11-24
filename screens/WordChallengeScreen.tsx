@@ -350,8 +350,8 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
       return (
           <div className="fixed inset-0 z-50 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden transition-colors">
-              {/* Header */}
-              <div className="p-4 bg-white dark:bg-gray-800 shadow-sm flex justify-between items-center z-10">
+              {/* Header - Added pt-safe */}
+              <div className="p-4 pt-safe bg-white dark:bg-gray-800 shadow-sm flex justify-between items-center z-10">
                   <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
                       <ArrowLeft size={24} className="text-gray-600 dark:text-gray-300" />
                   </button>
@@ -615,8 +615,8 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                   }
               `}</style>
 
-              {/* Top Bar */}
-              <div className="flex justify-between items-center p-6 z-10">
+              {/* Top Bar - Added pt-safe */}
+              <div className="flex justify-between items-center p-6 pt-safe z-10">
                   <div className="text-center">
                       <div className="text-xs text-gray-400 uppercase font-bold">Score</div>
                       <div className="text-2xl font-black text-gray-800 dark:text-white">{score}</div>
@@ -693,7 +693,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-6 mb-4 flex-shrink-0">
                         <div className="text-5xl font-mono font-black text-blue-600 dark:text-blue-400 mb-4">{score}</div>
-                        <div className="flex justify-between text-xs font-bold text-gray-500 dark:text-gray-400 px-4">
+                        <div className="flex justify-between text-xs font-bold text-gray-50 dark:text-gray-400 px-4">
                             <div className="flex flex-col items-center">
                                 <span className="uppercase tracking-wider mb-1">Max Combo</span>
                                 <span className="text-lg text-gray-800 dark:text-white">{maxCombo}</span>

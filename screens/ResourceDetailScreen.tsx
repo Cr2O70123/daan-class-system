@@ -60,8 +60,8 @@ export const ResourceDetailScreen: React.FC<ResourceDetailScreenProps> = ({ reso
 
   return (
     <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col pb-safe relative transition-colors">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 sticky top-0 z-30 px-4 py-3 flex items-center shadow-sm transition-colors">
+      {/* Header - Added pt-safe */}
+      <div className="bg-white dark:bg-gray-800 sticky top-0 pt-safe z-30 px-4 py-3 flex items-center shadow-sm transition-colors">
         <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
         </button>

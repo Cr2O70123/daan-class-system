@@ -45,12 +45,14 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({ exams, onAddExam, onDele
 
   return (
     <div className="pb-24 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 p-6 pt-8 rounded-b-[2rem] shadow-sm mb-6 border-b border-gray-100 dark:border-gray-700">
-        <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2 mb-1">
-            <Calendar className="text-red-500" /> 近期考試
-        </h2>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">掌握時間，輕鬆應對</p>
+      {/* Header - Added pt-safe */}
+      <div className="bg-white dark:bg-gray-800 p-6 pt-safe rounded-b-[2rem] shadow-sm mb-6 border-b border-gray-100 dark:border-gray-700">
+        <div className="mt-2">
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white flex items-center gap-2 mb-1">
+                <Calendar className="text-red-500" /> 近期考試
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">掌握時間，輕鬆應對</p>
+        </div>
       </div>
 
       {/* List */}

@@ -53,9 +53,9 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
 
   return (
     <div className="pb-24 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 pt-8 text-white mb-4 shadow-lg rounded-b-[2rem]">
-        <div className="flex items-center justify-between">
+      {/* Header Banner - Added pt-safe */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 pt-safe text-white mb-4 shadow-lg rounded-b-[2rem]">
+        <div className="flex items-center justify-between mt-2">
           <div>
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <ShoppingBag className="text-blue-200" /> 福利社

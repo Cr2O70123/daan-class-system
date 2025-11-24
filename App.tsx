@@ -37,7 +37,7 @@ const getFrameStyle = (frameId?: string) => {
 };
 
 const Header = ({ user }: { user: User }) => (
-  <div className="bg-white dark:bg-gray-800 px-4 py-3 sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
+  <div className="bg-white dark:bg-gray-800 px-4 pb-3 pt-safe sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
     <div className="flex flex-col">
         <h1 className="text-lg font-bold text-gray-800 dark:text-white tracking-wide">電子三乙功課系統</h1>
         <div className="flex items-center gap-2 mt-0.5">
@@ -125,6 +125,7 @@ export default function App() {
       } catch (e) {
           console.error("Data Fetch Failed:", e);
           setConnectionError(true);
+          throw e; // Rethrow for refresh handler
       }
   };
 
@@ -193,6 +194,10 @@ export default function App() {
   }, [user?.studentId, user?.lastHeartReset]); 
 
   // --- Handlers ---
+
+  const handleRefresh = async () => {
+      await loadAllData();
+  };
 
   const handleLogin = async (name: string, studentId: string) => {
     try {
@@ -493,7 +498,7 @@ export default function App() {
 
   if (connectionError) {
       return (
-          <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 text-center">
+          <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6 text-center pt-safe">
               <div className="bg-red-100 p-6 rounded-full text-red-500 mb-6">
                   <WifiOff size={48} />
               </div>
@@ -508,7 +513,7 @@ export default function App() {
 
   if (isLoading && !user) {
       return (
-          <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+          <div className="min-h-screen bg-gray-100 dark:bg-gray-900 flex items-center justify-center pt-safe">
               <div className="text-gray-500 font-bold animate-pulse">系統載入中...</div>
           </div>
       );
@@ -565,7 +570,7 @@ export default function App() {
       return (
         <div className={commonLayoutClasses}>
              <main className="w-full max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col">
-                <div className="bg-white dark:bg-gray-800 p-4 flex items-center shadow-sm sticky top-0 z-30 border-b border-gray-100 dark:border-gray-700">
+                <div className="bg-white dark:bg-gray-800 p-4 pt-safe flex items-center shadow-sm sticky top-0 z-30 border-b border-gray-100 dark:border-gray-700">
                     <button onClick={() => setShowLeaderboardOverlay(false)} className="text-blue-600 font-bold">返回</button>
                     <h1 className="flex-1 text-center font-bold text-gray-800 dark:text-white text-lg">全班等級排名</h1>
                     <div className="w-8"></div>
@@ -619,6 +624,7 @@ export default function App() {
                     onAskClick={() => setTab(Tab.ASK)}
                     onStartChallenge={() => setShowWordChallenge(true)}
                     onOpenLeaderboard={() => setShowLeaderboardOverlay(true)}
+                    onRefresh={handleRefresh}
                />;
       case Tab.RESOURCE:
         return <ResourceScreen 
@@ -627,6 +633,7 @@ export default function App() {
                   onLikeResource={handleLikeResource}
                   onResourceClick={setSelectedResource}
                   currentUser={user}
+                  onRefresh={handleRefresh}
                 />;
       case Tab.EXAM:
         return <ExamScreen exams={exams} onAddExam={handleAddExam} onDeleteExam={handleDeleteExam} />;
@@ -649,7 +656,7 @@ export default function App() {
                     onDeleteResource={handleDeleteResource}
                />;
       default: 
-        return <HomeScreen questions={questions} onQuestionClick={setSelectedQuestion} onAskClick={() => setTab(Tab.ASK)} />;
+        return <HomeScreen questions={questions} onQuestionClick={setSelectedQuestion} onAskClick={() => setTab(Tab.ASK)} onRefresh={handleRefresh} />;
     }
   };
 
@@ -657,7 +664,7 @@ export default function App() {
     <div className={commonLayoutClasses}>
         <main className="max-w-md mx-auto bg-gray-50 dark:bg-gray-900 min-h-screen shadow-xl relative flex flex-col transition-colors duration-300">
             <Header user={user} />
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto no-scrollbar">
                 {renderScreen()}
             </div>
             <BottomNav 
