@@ -59,18 +59,23 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onC
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+      <div className="bg-white dark:bg-gray-800 rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] relative">
         
+        {/* Close Button - Enhanced hit area */}
+        <button 
+            onClick={(e) => { e.stopPropagation(); onClose(); }} 
+            className="absolute top-4 right-4 bg-black/20 hover:bg-black/30 text-white p-2 rounded-full transition-colors z-50"
+            style={{ margin: 0 }}
+        >
+            <X size={20} />
+        </button>
+
         {/* Header */}
         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white text-center relative overflow-hidden">
             {/* Background decoration */}
             <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
             
-            <button onClick={onClose} className="absolute top-4 right-4 bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition-colors z-10">
-                <X size={18} />
-            </button>
-            
-            <h2 className="text-2xl font-black mb-1 flex items-center justify-center gap-2 relative z-10">
+            <h2 className="text-2xl font-black mb-1 flex items-center justify-center gap-2 relative z-10 mt-2">
                 <Calendar className="text-blue-200" /> 每日簽到
             </h2>
             <p className="text-blue-100 text-sm mb-5 relative z-10">連續簽到，累積獎勵加倍！</p>

@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
 
 interface ProfileScreenProps {
@@ -28,9 +28,24 @@ const getFrameStyle = (frameId?: string) => {
       case 'frame_neon': return 'ring-4 ring-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]';
       case 'frame_fire': return 'ring-4 ring-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)]';
       case 'frame_pixel': return 'ring-4 ring-purple-500 border-4 border-dashed border-white';
-      case 'frame_beta': return 'ring-4 ring-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)] border-2 border-white/50';
+      case 'frame_beta': return 'ring-4 ring-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)] border-2 border-white/50 border-dashed';
       default: return 'ring-4 ring-white dark:ring-gray-800 shadow-xl';
     }
+};
+
+const AVATAR_COLORS = [
+  'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-500', 'bg-emerald-500',
+  'bg-teal-500', 'bg-cyan-500', 'bg-blue-500', 'bg-indigo-500', 'bg-violet-500', 
+  'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500', 'bg-slate-500'
+];
+
+// Mock Frame Metadata for Inventory Display
+const FRAME_META: Record<string, { name: string, icon: React.ReactNode, color: string }> = {
+    'frame_gold': { name: '黃金光環', icon: <Crown size={14}/>, color: 'text-yellow-500' },
+    'frame_neon': { name: '霓虹科技', icon: <Zap size={14}/>, color: 'text-cyan-500' },
+    'frame_fire': { name: '烈焰燃燒', icon: <Zap size={14}/>, color: 'text-orange-500' },
+    'frame_pixel': { name: '復古像素', icon: <Crown size={14}/>, color: 'text-purple-500' },
+    'frame_beta': { name: '內測紀念', icon: <Crown size={14}/>, color: 'text-amber-500' },
 };
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ 
@@ -51,7 +66,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 }) => {
   const [avatarImage, setAvatarImage] = useState<string | undefined>(user.avatarImage);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
-  const [activeHistoryTab, setActiveHistoryTab] = useState<'questions' | 'answers' | 'resources'>('questions');
+  const [activeHistoryTab, setActiveHistoryTab] = useState<'questions' | 'answers' | 'resources' | 'inventory'>('questions');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const progressPercent = calculateProgress(user.points);
@@ -62,13 +77,72 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         setAvatarImage(reader.result as string);
+        // Note: Actual DB update happens when parent saves or via useEffect mechanism in a real app
+        // Here we just update local UI state prop
         setUser({ ...user, avatarImage: reader.result as string });
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const handleRandomColor = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const randomColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+      setUser({ ...user, avatarColor: randomColor });
+  };
+
+  const handleEquipFrame = (frameId: string) => {
+      if (user.avatarFrame === frameId) {
+          // Unequip
+          setUser({ ...user, avatarFrame: undefined });
+      } else {
+          // Equip
+          setUser({ ...user, avatarFrame: frameId });
+      }
+  };
+
+  const renderInventory = () => {
+      const ownedFrames = user.inventory.filter(id => id.startsWith('frame_'));
+      // Also include beta frame if the user has it (it might not be in inventory array in some legacy data, but let's assume inventory tracks it)
+      // Or if user already has it equipped.
+      
+      // Merge owned items
+      const allItems = Array.from(new Set([...ownedFrames]));
+      if (user.avatarFrame && !allItems.includes(user.avatarFrame)) allItems.push(user.avatarFrame);
+
+      if (allItems.length === 0) return <p className="text-center text-xs text-gray-400 py-6">背包是空的，去商店逛逛吧！</p>;
+
+      return (
+          <div className="grid grid-cols-2 gap-3 p-2">
+              {allItems.map(itemId => {
+                  const meta = FRAME_META[itemId] || { name: '未知物品', icon: <Package size={14}/>, color: 'text-gray-500' };
+                  const isEquipped = user.avatarFrame === itemId;
+                  
+                  return (
+                      <button 
+                        key={itemId}
+                        onClick={() => handleEquipFrame(itemId)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${isEquipped ? 'bg-blue-50 border-blue-500 shadow-sm' : 'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}
+                      >
+                          <div className={`w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-600 flex items-center justify-center ${meta.color}`}>
+                              {meta.icon}
+                          </div>
+                          <div className="text-left flex-1">
+                              <div className="text-xs font-bold text-gray-800 dark:text-gray-200">{meta.name}</div>
+                              <div className={`text-[10px] ${isEquipped ? 'text-blue-600 font-bold' : 'text-gray-400'}`}>
+                                  {isEquipped ? '使用中' : '點擊裝備'}
+                              </div>
+                          </div>
+                      </button>
+                  )
+              })}
+          </div>
+      );
+  };
+
   const renderHistoryList = () => {
+    if (activeHistoryTab === 'inventory') return renderInventory();
+
     if (activeHistoryTab === 'questions') {
       if (userQuestions.length === 0) return <p className="text-center text-xs text-gray-400 py-4">尚無提問記錄</p>;
       return (
@@ -170,17 +244,34 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="px-6 relative">
             <div className="flex flex-col items-center -mt-12">
                 {/* Avatar */}
-                <div className="mb-3 relative group cursor-pointer w-24 h-24" onClick={() => fileInputRef.current?.click()}>
-                    <div className={`w-full h-full rounded-full ${user.avatarColor} text-white text-4xl font-bold flex items-center justify-center ${getFrameStyle(user.avatarFrame)} overflow-hidden bg-cover bg-center`}>
+                <div className="mb-3 relative group w-24 h-24">
+                    <div 
+                        className={`w-full h-full rounded-full ${user.avatarColor} text-white text-4xl font-bold flex items-center justify-center ${getFrameStyle(user.avatarFrame)} overflow-hidden bg-cover bg-center shadow-lg`}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
                         {avatarImage ? (
                             <img src={avatarImage} alt="avatar" className="w-full h-full object-cover" />
                         ) : (
                             user.name.charAt(0) || 'U'
                         )}
                     </div>
-                    <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
+                    
+                    {/* Camera Button */}
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm cursor-pointer z-10"
+                    >
                         <Camera className="text-white drop-shadow-md" size={32} />
                     </div>
+
+                    {/* Random Color Button */}
+                    <button 
+                        onClick={handleRandomColor}
+                        className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-700 p-1.5 rounded-full shadow-md border border-gray-100 dark:border-gray-600 text-gray-500 hover:text-blue-500 z-20"
+                        title="隨機顏色"
+                    >
+                        <RefreshCw size={14} />
+                    </button>
                 </div>
                 
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
@@ -247,24 +338,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       <div className="px-4 space-y-4">
             {/* History Tabs Section */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden transition-colors">
-                <div className="flex border-b border-gray-100 dark:border-gray-700">
+                <div className="flex border-b border-gray-100 dark:border-gray-700 overflow-x-auto no-scrollbar">
                     <button 
                         onClick={() => setActiveHistoryTab('questions')}
-                        className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'questions' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`flex-1 min-w-[80px] py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'questions' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
                     >
-                        <HelpCircle size={14} /> 提問 ({userQuestions.length})
+                        <HelpCircle size={14} /> 提問
                     </button>
                     <button 
                         onClick={() => setActiveHistoryTab('answers')}
-                        className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'answers' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`flex-1 min-w-[80px] py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'answers' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
                     >
-                        <MessageCircle size={14} /> 回答 ({userReplies.reduce((acc, q) => acc + q.replies.filter(r=>r.author === user.name).length, 0)})
+                        <MessageCircle size={14} /> 回答
                     </button>
                     <button 
                         onClick={() => setActiveHistoryTab('resources')}
-                        className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'resources' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
+                        className={`flex-1 min-w-[80px] py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'resources' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
                     >
-                        <BookOpen size={14} /> 資源 ({userResources.length})
+                        <BookOpen size={14} /> 資源
+                    </button>
+                    <button 
+                        onClick={() => setActiveHistoryTab('inventory')}
+                        className={`flex-1 min-w-[80px] py-3 text-xs font-bold flex items-center justify-center gap-1 transition-colors ${activeHistoryTab === 'inventory' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600'}`}
+                    >
+                        <Package size={14} /> 物品
                     </button>
                 </div>
                 
@@ -308,7 +405,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                     <LogOut size={12} /> 登出帳號
                 </button>
-                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.4.0 Build 20251131</p>
+                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.4.1 Build 20251132</p>
             </div>
       </div>
     </div>

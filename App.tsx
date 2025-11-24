@@ -85,7 +85,7 @@ const App = () => {
   const [exams, setExams] = useState<Exam[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
 
-  // UI States
+  // UI States - Modal/Overlay Management for Back Button
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
@@ -97,6 +97,58 @@ const App = () => {
   
   // Global Lightbox
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // --- BACK BUTTON HANDLING ---
+  useEffect(() => {
+      const handlePopState = (event: PopStateEvent) => {
+          // Order of closing: Lightbox -> Modals -> Games/Overlays -> Tabs
+          if (lightboxImage) {
+              setLightboxImage(null);
+              return;
+          }
+          if (showCheckInModal) {
+              setShowCheckInModal(false);
+              return;
+          }
+          if (showWordChallenge) {
+              setShowWordChallenge(false);
+              return;
+          }
+          if (showResistorGame) {
+              setShowResistorGame(false);
+              return;
+          }
+          if (selectedQuestion) {
+              setSelectedQuestion(null);
+              return;
+          }
+          if (selectedResource) {
+              setSelectedResource(null);
+              return;
+          }
+          if (showLeaderboardOverlay) {
+              setShowLeaderboardOverlay(false);
+              return;
+          }
+          if (showModeration) {
+              setShowModeration(false);
+              return;
+          }
+          if (currentTab !== Tab.HOME) {
+              setCurrentTab(Tab.HOME);
+              return;
+          }
+          // If none of above, default browser back behavior (exit)
+      };
+
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+  }, [lightboxImage, showCheckInModal, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
+
+  // Helper to push state when opening overlay
+  const pushHistory = () => {
+      window.history.pushState({ overlay: true }, '');
+  };
 
   // Init
   useEffect(() => {
@@ -515,7 +567,9 @@ const App = () => {
       {lightboxImage && (
           <div 
             className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-200"
-            onClick={() => setLightboxImage(null)}
+            onClick={() => {
+                setLightboxImage(null);
+            }}
           >
               <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full hover:bg-white/20 transition-colors">
                   <X size={24} />
@@ -575,7 +629,10 @@ const App = () => {
                 onAddReply={handleAddReply}
                 onReport={handleReport}
                 onMarkBest={handleMarkBest}
-                onImageClick={setLightboxImage}
+                onImageClick={(url) => {
+                    pushHistory();
+                    setLightboxImage(url);
+                }}
              />
         </div>
       )}
@@ -587,7 +644,10 @@ const App = () => {
                 currentUser={user} 
                 onBack={() => setSelectedResource(null)}
                 onLike={handleLikeResource}
-                onImageClick={setLightboxImage}
+                onImageClick={(url) => {
+                    pushHistory();
+                    setLightboxImage(url);
+                }}
              />
         </div>
       )}
@@ -630,13 +690,31 @@ const App = () => {
                 {currentTab === Tab.HOME && (
                     <HomeScreen 
                         questions={questions} 
-                        onQuestionClick={setSelectedQuestion}
-                        onAskClick={() => setCurrentTab(Tab.ASK)}
-                        onStartChallenge={() => setShowWordChallenge(true)}
-                        onOpenLeaderboard={() => setShowLeaderboardOverlay(true)}
-                        onOpenCheckIn={() => setShowCheckInModal(true)}
+                        onQuestionClick={(q) => {
+                            pushHistory();
+                            setSelectedQuestion(q);
+                        }}
+                        onAskClick={() => {
+                            pushHistory();
+                            setCurrentTab(Tab.ASK);
+                        }}
+                        onStartChallenge={() => {
+                            pushHistory();
+                            setShowWordChallenge(true);
+                        }}
+                        onOpenLeaderboard={() => {
+                            pushHistory();
+                            setShowLeaderboardOverlay(true);
+                        }}
+                        onOpenCheckIn={() => {
+                            pushHistory();
+                            setShowCheckInModal(true);
+                        }}
                         onRefresh={loadData}
-                        onImageClick={setLightboxImage}
+                        onImageClick={(url) => {
+                            pushHistory();
+                            setLightboxImage(url);
+                        }}
                     />
                 )}
                 {currentTab === Tab.RESOURCE && (
@@ -645,22 +723,31 @@ const App = () => {
                         currentUser={user}
                         onAddResource={handleAddResource}
                         onLikeResource={handleLikeResource}
-                        onResourceClick={setSelectedResource}
+                        onResourceClick={(r) => {
+                            pushHistory();
+                            setSelectedResource(r);
+                        }}
                         onRefresh={loadData}
-                        onImageClick={setLightboxImage}
+                        onImageClick={(url) => {
+                            pushHistory();
+                            setLightboxImage(url);
+                        }}
                     />
                 )}
                 {currentTab === Tab.PLAYGROUND && (
                     <PlaygroundScreen 
                         user={user}
-                        onOpenWordChallenge={() => setShowWordChallenge(true)}
-                        onOpenResistorGame={() => setShowResistorGame(true)}
+                        onOpenWordChallenge={() => {
+                            pushHistory();
+                            setShowWordChallenge(true);
+                        }}
+                        onOpenResistorGame={() => {
+                            pushHistory();
+                            setShowResistorGame(true);
+                        }}
                     />
                 )}
                 {currentTab === Tab.EXAM && (
-                    // We keep this route accessible even if not in bottom nav directly
-                    // Or we could fully remove it. Let's keep it but it might only be reachable if we added a link elsewhere.
-                    // For now, Playgound replaces it in Nav.
                     <ExamScreen 
                         exams={exams} 
                         onAddExam={handleAddExam}
@@ -673,10 +760,23 @@ const App = () => {
                 {currentTab === Tab.PROFILE && (
                     <ProfileScreen 
                         user={user} 
-                        setUser={setUser}
-                        onNavigateToModeration={() => setShowModeration(true)}
-                        onNavigateToLeaderboard={() => setShowLeaderboardOverlay(true)}
-                        onOpenCheckIn={() => setShowCheckInModal(true)}
+                        setUser={async (newUser) => {
+                            setUser(newUser);
+                            // Auto save changes from profile screen (like avatar/frame equip)
+                            await updateUserInDb(newUser);
+                        }}
+                        onNavigateToModeration={() => {
+                            pushHistory();
+                            setShowModeration(true);
+                        }}
+                        onNavigateToLeaderboard={() => {
+                            pushHistory();
+                            setShowLeaderboardOverlay(true);
+                        }}
+                        onOpenCheckIn={() => {
+                            pushHistory();
+                            setShowCheckInModal(true);
+                        }}
                         onLogout={() => { logout(); setUser(null); }}
                         isDarkMode={user.settings?.darkMode || false}
                         toggleDarkMode={async () => {
@@ -686,7 +786,6 @@ const App = () => {
                             };
                             const updated = { ...user, settings: newSettings };
                             setUser(updated);
-                            // Strictly await the DB update to prevent loss on reload
                             await updateUserInDb(updated);
                         }}
                         userQuestions={questions.filter(q => q.author === user.name)}
@@ -700,7 +799,10 @@ const App = () => {
                 {currentTab === Tab.ASK && (
                     <AskScreen 
                         onPostQuestion={handlePostQuestion} 
-                        onImageClick={setLightboxImage}
+                        onImageClick={(url) => {
+                            pushHistory();
+                            setLightboxImage(url);
+                        }}
                     />
                 )}
             </div>

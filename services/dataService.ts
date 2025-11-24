@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient';
 import { Question, Resource, Exam, User, GameLeaderboardEntry, LeaderboardEntry } from '../types';
 import { calculateLevel } from './levelService';
@@ -73,17 +74,12 @@ export const createQuestion = async (user: User, title: string, content: string,
     }]);
     
     if (error) {
-        // DETAILED LOGGING for debugging
         console.error("Supabase create question failed. Error object:", error);
-        console.error("Payload was:", {
-            title, content, image: sanitizedImage ? 'BASE64_IMAGE_PRESENT' : 'NULL', tags: sanitizedTags, user: user.name
-        });
         throw error;
     }
 };
 
 export const deleteQuestion = async (id: number) => {
-    // Delete replies associated first (if cascade not set in DB)
     await supabase.from('replies').delete().eq('question_id', id);
     const { error } = await supabase.from('questions').delete().eq('id', id);
     if (error) throw error;
@@ -241,15 +237,15 @@ export const unbanUser = async (studentId: string) => {
     if (error) throw error;
 };
 
-// --- Class Leaderboard (Real Data - Real-time from Users table) ---
+// --- Class Leaderboard (Real Data) ---
 
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     const { data, error } = await supabase
         .from('users')
-        .select('name, student_id, points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
-        .eq('is_banned', false) // Exclude banned users
+        .select('name, student_id, points, level, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
+        .eq('is_banned', false)
         .order('points', { ascending: false })
-        .limit(100); // Top 100 students
+        .limit(100);
 
     if (error) {
         console.error("Error fetching leaderboard:", error);
@@ -261,7 +257,7 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         name: u.name,
         studentId: u.student_id,
         points: u.points,
-        level: calculateLevel(u.points),
+        level: calculateLevel(u.points), // Recalculate just in case
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
         avatarFrame: u.avatar_frame,
@@ -292,29 +288,30 @@ export const submitGameScore = async (user: User, score: number) => {
 };
 
 export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> => {
-    // 1. Calculate Start of Week (Monday 00:00:00)
+    // Calculate start of the current week (Monday)
     const now = new Date();
-    const day = now.getDay();
-    // JavaScript getDay(): Sunday=0, Monday=1...
-    // We want Monday to be the start. 
-    // If today is Sunday (0), we go back 6 days. If Monday (1), go back 0 days.
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    const startOfWeek = new Date(now.setDate(diff));
+    const day = now.getDay(); // 0 (Sun) to 6 (Sat)
+    // If Sunday (0), subtract 6 days to get previous Monday. 
+    // If Monday (1) to Saturday (6), subtract (day - 1).
+    const diff = now.getDate() - (day === 0 ? 6 : day - 1);
+    
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(diff);
     startOfWeek.setHours(0, 0, 0, 0);
 
-    // 2. Fetch scores created AFTER the start of the week
     const { data, error } = await supabase
         .from('game_scores')
         .select('*')
-        .gte('created_at', startOfWeek.toISOString()) // Weekly Filter
-        .order('score', { ascending: false });
+        .gte('created_at', startOfWeek.toISOString()) // Re-enabled weekly filter
+        .order('score', { ascending: false })
+        .limit(100);
 
     if (error) {
         console.error("Error fetching game leaderboard:", error);
         return [];
     }
 
-    // 3. Deduplication: Keep only highest score per student for this week
+    // Deduplication: Keep only highest score per student
     const uniqueEntries: Record<string, GameLeaderboardEntry> = {};
     
     data.forEach((entry: any) => {
@@ -329,7 +326,7 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
         }
     });
 
-    // 4. Sort and take top 10
+    // Sort and take top 10
     const sorted = Object.values(uniqueEntries).sort((a, b) => b.score - a.score).slice(0, 10);
     
     return sorted.map((entry, index) => ({

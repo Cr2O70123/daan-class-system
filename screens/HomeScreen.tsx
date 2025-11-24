@@ -107,28 +107,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
       isHorizontalSwipe.current = false;
   };
 
-  // Carousel Manual Swipe Handlers
-  const handleCarouselTouchStart = (e: React.TouchEvent) => {
-      e.stopPropagation(); // Prevent interfering with pull-to-refresh if possible
-      carouselStartX.current = e.touches[0].clientX;
-  };
-
-  const handleCarouselTouchEnd = (e: React.TouchEvent) => {
-      e.stopPropagation();
-      const endX = e.changedTouches[0].clientX;
-      const deltaX = endX - carouselStartX.current;
-      
-      if (Math.abs(deltaX) > 50) {
-          if (deltaX > 0) {
-              // Swipe Right -> Prev
-              setCurrentBannerIndex(prev => prev === 0 ? 2 : prev - 1);
-          } else {
-              // Swipe Left -> Next
-              setCurrentBannerIndex(prev => prev === 2 ? 0 : prev + 1);
-          }
-      }
-  };
-
   return (
     <div 
         className="relative min-h-full"
@@ -215,8 +193,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
         <div 
             className="relative w-full overflow-hidden rounded-2xl shadow-lg shadow-indigo-200 dark:shadow-none h-32"
             ref={carouselRef}
-            onTouchStart={handleCarouselTouchStart}
-            onTouchEnd={handleCarouselTouchEnd}
         >
             <div 
                 className="flex transition-transform duration-500 ease-in-out h-full"
@@ -287,17 +263,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
                         <Gift size={100} />
                     </div>
                 </div>
-            </div>
-
-            {/* Dots Indicator */}
-            <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-20">
-                {[0, 1, 2].map(idx => (
-                    <button 
-                        key={idx}
-                        onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(idx); }}
-                        className={`w-1.5 h-1.5 rounded-full transition-all ${currentBannerIndex === idx ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/80'}`} 
-                    />
-                ))}
             </div>
         </div>
 
