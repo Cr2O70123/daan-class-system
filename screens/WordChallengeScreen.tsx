@@ -198,9 +198,15 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
   const handleClaim = async () => {
       // Ensure score is submitted before finishing
-      await submitGameScore(user, score);
-      onFinish({ score, maxCombo, correctCount });
-      onBack();
+      try {
+          await submitGameScore(user, score);
+          // Pass result back to App.tsx to update user PT
+          await onFinish({ score, maxCombo, correctCount });
+          onBack();
+      } catch(e) {
+          console.error("Error submitting score", e);
+          alert("分數上傳失敗，請檢查網路");
+      }
   };
 
   useEffect(() => {

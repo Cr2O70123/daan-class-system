@@ -101,8 +101,6 @@ export default function App() {
                 await loadAllData();
             }
         } catch (e: any) {
-             // If we get an error during auto-login, we just don't log them in
-             // unless it's a critical DB connection error
              if (e.message && e.message.includes("SESSION_ERROR")) {
                  console.error("Auto login error:", e);
                  setConnectionError(true);
@@ -151,13 +149,17 @@ export default function App() {
 
   // Heart Daily Reset Check
   useEffect(() => {
-    const checkReset = () => {
+    const checkReset = async () => {
         if (!user) return;
         const today = new Date().toDateString();
         if (user.lastHeartReset !== today) {
             const updatedUser = { ...user, hearts: 3, lastHeartReset: today };
-            setUser(updatedUser);
-            updateUserInDb(updatedUser);
+            try {
+                await updateUserInDb(updatedUser);
+                setUser(updatedUser);
+            } catch (e) {
+                console.error("Reset hearts failed", e);
+            }
         }
     };
     const interval = setInterval(checkReset, 60000); 
@@ -176,10 +178,8 @@ export default function App() {
         if (e.message === "ACCOUNT_BANNED") {
             alert("此帳號已被停權，請聯絡管理員。");
         } else if (e.message && e.message.includes("DB_ERROR")) {
-            // Display detailed DB error to user
             alert(`連線錯誤: ${e.message}`);
         } else {
-            // General error
             alert(`登入失敗: ${e.message || "未知錯誤"}`);
         }
     }
@@ -196,16 +196,24 @@ export default function App() {
     setDarkMode(false);
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
-    setUser(updatedUser);
-    updateUserInDb(updatedUser);
+  const handleUpdateUser = async (updatedUser: User) => {
+    try {
+        await updateUserInDb(updatedUser);
+        setUser(updatedUser);
+    } catch (e) {
+        alert("資料更新失敗，請檢查網路連線");
+    }
   };
 
-  const handleHeartUpdate = (newHearts: number) => {
+  const handleHeartUpdate = async (newHearts: number) => {
       if(!user) return;
       const updatedUser = { ...user, hearts: newHearts };
-      setUser(updatedUser);
-      updateUserInDb(updatedUser);
+      try {
+          await updateUserInDb(updatedUser);
+          setUser(updatedUser);
+      } catch (e) {
+          console.error("Update hearts failed", e);
+      }
   };
 
   const handlePostQuestion = async (newQ: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => {
@@ -217,11 +225,10 @@ export default function App() {
         
         if(!user.isAdmin) {
              const updatedUser = {...user, points: user.points + 5};
+             await updateUserInDb(updatedUser); // Await DB logic
              setUser(updatedUser);
-             updateUserInDb(updatedUser);
         }
     } catch (e: any) {
-        // Show specific Supabase error
         alert(`發佈失敗: ${e.message || JSON.stringify(e)}`);
     }
   };
@@ -243,8 +250,7 @@ export default function App() {
           await deleteReply(id);
           await loadAllData();
           if (selectedQuestion) {
-              // Re-select logic handled by effect or simple re-find
-              const updatedQs = await fetchQuestions(); // Optimize?
+              const updatedQs = await fetchQuestions();
               const q = updatedQs.find(q => q.id === selectedQuestion.id);
               if (q) setSelectedQuestion(q);
           }
@@ -286,8 +292,8 @@ export default function App() {
 
         if (!user.isAdmin) {
             const updatedUser = {...user, points: user.points + 10};
+            await updateUserInDb(updatedUser); // Await DB logic
             setUser(updatedUser);
-            updateUserInDb(updatedUser);
         }
         alert(`回答成功！獲得 10 PT`);
     } catch (e) {
@@ -300,15 +306,15 @@ export default function App() {
     try {
         await markBestAnswer(questionId, replyId);
         await loadAllData();
-        // Update selection
+        
         const updatedQs = await fetchQuestions();
         const updatedQ = updatedQs.find(q => q.id === questionId);
         if (updatedQ) setSelectedQuestion(updatedQ);
 
         if (!user.isAdmin) {
             const updatedUser = {...user, points: user.points + 10};
+            await updateUserInDb(updatedUser); // Await DB logic
             setUser(updatedUser);
-            updateUserInDb(updatedUser);
         }
         alert(`已選為最佳解答！`);
     } catch (e) {
@@ -351,21 +357,28 @@ export default function App() {
     if(!user) return;
     const isOwned = user.inventory.includes(product.id) || user.avatarFrame === product.id || user.nameColor === product.color;
     if (isOwned) {
+        // Just switching equipment (cosmetic/frame), no point deduction
         if (product.category === 'frame') {
             const u = { ...user, avatarFrame: product.id };
-            setUser(u);
-            await updateUserInDb(u);
-            alert(`已裝備：${product.name}`);
+            try {
+                await updateUserInDb(u);
+                setUser(u);
+                alert(`已裝備：${product.name}`);
+            } catch (e) { alert("裝備失敗"); }
         } else if (product.category === 'cosmetic') {
             const textClass = product.color.split(' ').find(c => c.startsWith('text-'));
             const u = { ...user, nameColor: textClass };
-            setUser(u);
-            await updateUserInDb(u);
-            alert(`已啟用：${product.name}`);
+            try {
+                await updateUserInDb(u);
+                setUser(u);
+                alert(`已啟用：${product.name}`);
+            } catch (e) { alert("啟用失敗"); }
         }
         return;
     }
+    
     if(user.points >= product.price) {
+        // Buying new item
         let updatedUser = {
             ...user,
             points: user.isAdmin ? user.points : user.points - product.price,
@@ -378,8 +391,7 @@ export default function App() {
         }
         
         try {
-            // Strictly await DB update to ensure consistency
-            await updateUserInDb(updatedUser);
+            await updateUserInDb(updatedUser); // Critical: Await this
             setUser(updatedUser);
             alert(`購買成功：${product.name}`);
         } catch (e: any) {
@@ -398,8 +410,8 @@ export default function App() {
 
           if(!user.isAdmin) {
               const u = {...user, points: user.points + 20};
+              await updateUserInDb(u); // Await DB
               setUser(u);
-              updateUserInDb(u);
           }
           alert('發佈成功！獲得 20 PT');
       } catch (e) {
@@ -417,7 +429,6 @@ export default function App() {
         ? res.likedBy.filter(name => name !== user.name) 
         : [...res.likedBy, user.name];
       
-      // Optimistic update locally
       setResources(resources.map(r => r.id === resourceId ? { ...r, likes: newLikedBy.length, likedBy: newLikedBy } : r));
       if (selectedResource?.id === resourceId) {
           setSelectedResource({ ...selectedResource, likes: newLikedBy.length, likedBy: newLikedBy });
@@ -442,8 +453,8 @@ export default function App() {
       if (!user.isAdmin && pointsWon > 0) {
           const u = { ...user, points: user.points + pointsWon };
           try {
-            await updateUserInDb(u);
-            setUser(u); // Sync state after DB confirms
+            await updateUserInDb(u); // Sync to Cloud
+            setUser(u); // Then Sync to UI
           } catch (e) {
             console.error("Failed to sync points", e);
             alert("積分同步失敗，請檢查連線");

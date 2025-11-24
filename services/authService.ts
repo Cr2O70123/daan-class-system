@@ -15,8 +15,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
     // PGRST116 is the error code for "Row not found" (which is expected for new users)
     if (error && error.code !== 'PGRST116') { 
         console.error('Supabase Auth Error:', error);
-        // Throw a descriptive string including the code for debugging
-        throw new Error(`DB_ERROR: ${error.message} (Code: ${error.code})`);
+        throw new Error(`DB_ERROR: ${error.message}`);
     }
 
     // 2. If user not found, create new one
@@ -98,34 +97,24 @@ export const checkSession = async (): Promise<User | null> => {
         .single();
 
     if (error) {
+        // If offline or other error, return null to force re-login or handle gracefully
         console.error("Session check error:", error);
-        // Don't throw here to avoid locking user out if offline, just return null (logged out)
-        // or throw specific error if critical
-        if (error.code !== 'PGRST116') {
-             throw new Error(`SESSION_ERROR: ${error.message}`);
-        }
         return null;
     }
 
-    if (!user) {
-        // User deleted or invalid
-        localStorage.removeItem('student_id');
-        return null;
-    }
-
-    if (user.is_banned) {
+    if (!user || user.is_banned) {
         localStorage.removeItem('student_id');
         return null;
     }
 
     let inventory: string[] = [];
     if (user.inventory) {
-            if (typeof user.inventory === 'string') {
-                try { inventory = JSON.parse(user.inventory); } catch(e) {}
-            } else {
-                inventory = user.inventory;
-            }
+        if (typeof user.inventory === 'string') {
+            try { inventory = JSON.parse(user.inventory); } catch(e) {}
+        } else {
+            inventory = user.inventory;
         }
+    }
     
     const isAdmin = user.name === 'admin1204';
 
@@ -172,6 +161,8 @@ export const updateUserInDb = async (user: User) => {
         
     if (error) {
         console.error('Error updating user:', error);
-        throw new Error(`UPDATE_FAILED: ${error.message || JSON.stringify(error)}`);
+        throw new Error(error.message || "Unknown DB Error");
     }
+    // Return true to indicate success for await calls
+    return true;
 };
