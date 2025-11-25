@@ -6,26 +6,8 @@ import { updateUserInDb } from './authService';
 // --- HBuilderX / UniPush Integration ---
 
 export const registerPushClientId = async (user: User) => {
-    // Check if running inside HBuilderX (plus environment)
-    // @ts-ignore
-    if (window.plus) {
-        try {
-            // @ts-ignore
-            const info = window.plus.push.getClientInfo();
-            const cid = info.clientid;
-
-            if (cid && cid !== user.pushClientId) {
-                console.log("Registering Push CID:", cid);
-                const updatedUser = { ...user, pushClientId: cid };
-                await updateUserInDb(updatedUser);
-                return updatedUser;
-            }
-        } catch (e) {
-            console.error("Failed to get push client info", e);
-        }
-    } else {
-        console.log("Not in HBuilderX environment, skipping push registration.");
-    }
+    // Native push registration logic removed to prevent "Push module not added" errors.
+    // We now use Supabase Realtime + uni.postMessage bridge.
     return user;
 };
 

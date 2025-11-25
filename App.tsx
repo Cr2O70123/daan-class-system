@@ -29,7 +29,8 @@ import {
     fetchResources, createResource, deleteResource, updateResourceLikes,
     fetchExams, createExam, deleteExam, banUser, unbanUser
 } from './services/dataService';
-import { fetchNotifications, registerPushClientId } from './services/notificationService';
+import { fetchNotifications } from './services/notificationService';
+import { supabase } from './services/supabaseClient';
 
 // Helper to get frame styles (Used in Header)
 const getFrameStyle = (frameId?: string) => {
@@ -198,8 +199,6 @@ const App = () => {
                 setUser(sessionUser);
                 // Check for daily reset when session loads
                 checkDailyReset(sessionUser);
-                // HBuilderX Push Registration
-                await registerPush(sessionUser);
                 // Fetch Notifications
                 refreshNotifications(sessionUser.studentId);
             }
@@ -211,16 +210,52 @@ const App = () => {
     };
     initSession();
     loadData();
-
-    // HBuilderX Event Listener for Push
-    const handlePlusReady = () => {
-        if (user) registerPush(user);
-    };
-    document.addEventListener('plusready', handlePlusReady);
-    return () => document.removeEventListener('plusready', handlePlusReady);
   }, []);
 
-  // Polling for new notifications (every 60s)
+  // Supabase Realtime Listener for Notifications
+  useEffect(() => {
+    if (!user) return;
+
+    // Listen for new notifications intended for this user
+    const channel = supabase
+      .channel('public:notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.studentId}`
+        },
+        (payload) => {
+            console.log('Realtime notification received:', payload);
+            const newNotif = payload.new as Notification;
+            
+            // 1. Update Unread Count locally
+            setUnreadNotifications(prev => prev + 1);
+
+            // 2. Trigger HBuilderX Native Bridge (Vibrate + Modal)
+            // @ts-ignore
+            if (window.uni) {
+                // @ts-ignore
+                window.uni.postMessage({
+                    data: {
+                        action: 'notify',
+                        title: newNotif.title,
+                        content: newNotif.content
+                    }
+                });
+            }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
+  // Polling for new notifications (every 60s) as backup
   useEffect(() => {
       if (!user) return;
       const interval = setInterval(() => {
@@ -228,13 +263,6 @@ const App = () => {
       }, 60000);
       return () => clearInterval(interval);
   }, [user]);
-
-  const registerPush = async (currentUser: User) => {
-      const updatedUser = await registerPushClientId(currentUser);
-      if (updatedUser.pushClientId !== currentUser.pushClientId) {
-          setUser(updatedUser);
-      }
-  };
 
   const refreshNotifications = async (studentId: string) => {
       try {
@@ -359,7 +387,6 @@ const App = () => {
         const loggedUser = await login(name, studentId);
         setUser(loggedUser);
         checkDailyReset(loggedUser);
-        registerPush(loggedUser); // Register Push on Login
     } catch (error: any) {
         alert("登入失敗: " + error.message);
     }
