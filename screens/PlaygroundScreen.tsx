@@ -1,7 +1,8 @@
 
 
+
 import React from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3 } from 'lucide-react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
@@ -14,9 +15,10 @@ interface PlaygroundScreenProps {
 interface ExtendedPlaygroundProps extends PlaygroundScreenProps {
     onOpenLuckyWheel?: () => void;
     onOpenBlockBlast?: () => void; // New prop
+    onOpenPkGame?: () => void; // New prop for PK
 }
 
-export const PlaygroundScreen: React.FC<ExtendedPlaygroundProps> = ({ onOpenWordChallenge, onOpenResistorGame, onOpenLuckyWheel, onOpenBlockBlast, user }) => {
+export const PlaygroundScreen: React.FC<ExtendedPlaygroundProps> = ({ onOpenWordChallenge, onOpenResistorGame, onOpenLuckyWheel, onOpenBlockBlast, onOpenPkGame, user }) => {
   return (
     <div className="pb-24 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
       
@@ -35,7 +37,35 @@ export const PlaygroundScreen: React.FC<ExtendedPlaygroundProps> = ({ onOpenWord
 
       <div className="px-4 space-y-4">
 
-        {/* New Game: Lucky Wheel */}
+        {/* New Game: PK Battle */}
+        <div 
+            onClick={onOpenPkGame}
+            className="group relative bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:shadow-lg"
+        >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-red-500 to-rose-600 rounded-bl-[100px] opacity-10 group-hover:opacity-20 transition-opacity"></div>
+            
+            <div className="flex justify-between items-start mb-4">
+                <div className="bg-rose-100 dark:bg-rose-900/30 p-3 rounded-2xl text-rose-600 dark:text-rose-400">
+                    <Swords size={24} />
+                </div>
+                <div className="flex items-center gap-1 bg-purple-50 dark:bg-purple-900/20 px-3 py-1 rounded-full border border-purple-100 dark:border-purple-800">
+                    <Trophy size={12} className="text-purple-500" />
+                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400">排名對決</span>
+                </div>
+            </div>
+
+            <h2 className="text-xl font-black text-gray-800 dark:text-white mb-2">知識對決 (PK)</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-4">
+                在線匹配班上同學！即時 1v1 答題對戰，速度與準確度的終極考驗。
+            </p>
+
+            <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
+                <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">多人競技</span>
+                <span className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">即時對戰</span>
+            </div>
+        </div>
+
+        {/* Game: Lucky Wheel */}
         <div 
             onClick={onOpenLuckyWheel}
             className="group relative bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:shadow-lg"
@@ -63,7 +93,7 @@ export const PlaygroundScreen: React.FC<ExtendedPlaygroundProps> = ({ onOpenWord
             </div>
         </div>
 
-        {/* Game 3: Block Blast (New) */}
+        {/* Game: Block Blast */}
         <div 
             onClick={onOpenBlockBlast}
             className="group relative bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:shadow-lg"
@@ -91,7 +121,7 @@ export const PlaygroundScreen: React.FC<ExtendedPlaygroundProps> = ({ onOpenWord
             </div>
         </div>
         
-        {/* Game 1: Word Challenge */}
+        {/* Game: Word Challenge */}
         <div 
             onClick={onOpenWordChallenge}
             className="group relative bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:shadow-lg"
@@ -119,7 +149,7 @@ export const PlaygroundScreen: React.FC<ExtendedPlaygroundProps> = ({ onOpenWord
             </div>
         </div>
 
-        {/* Game 2: Resistor Rush */}
+        {/* Game: Resistor Rush */}
         <div 
             onClick={onOpenResistorGame}
             className="group relative bg-white dark:bg-gray-800 rounded-3xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden cursor-pointer active:scale-[0.98] transition-all hover:shadow-lg"

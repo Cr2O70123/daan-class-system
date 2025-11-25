@@ -176,6 +176,12 @@ export interface GameResult {
   correctCount: number;
 }
 
+export interface PkResult {
+  isWin: boolean;
+  score: number;
+  opponentName: string;
+}
+
 export interface GameLeaderboardEntry {
   rank: number;
   name: string;

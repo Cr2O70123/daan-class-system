@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { LoginScreen } from './screens/LoginScreen';
@@ -19,8 +21,9 @@ import { NotificationScreen } from './screens/NotificationScreen';
 import { CheckInModal } from './components/CheckInModal';
 import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
 import { BlockBlastScreen } from './screens/BlockBlastScreen'; 
+import { PkGameScreen } from './screens/PkGameScreen';
 
-import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification } from './types';
+import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult } from './types';
 import { RefreshCw, X, Bell } from 'lucide-react';
 
 // Services
@@ -120,7 +123,8 @@ const App = () => {
   const [showWordChallenge, setShowWordChallenge] = useState(false);
   const [showResistorGame, setShowResistorGame] = useState(false);
   const [showLuckyWheel, setShowLuckyWheel] = useState(false);
-  const [showBlockBlast, setShowBlockBlast] = useState(false); // New
+  const [showBlockBlast, setShowBlockBlast] = useState(false); 
+  const [showPkGame, setShowPkGame] = useState(false); // New: PK Mode
   
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showNotificationScreen, setShowNotificationScreen] = useState(false);
@@ -135,6 +139,7 @@ const App = () => {
       setShowResistorGame(false);
       setShowLuckyWheel(false);
       setShowBlockBlast(false);
+      setShowPkGame(false);
       setShowLeaderboardOverlay(false);
       setSelectedQuestion(null);
       setSelectedResource(null);
@@ -153,6 +158,7 @@ const App = () => {
           if (showNotificationScreen) { setShowNotificationScreen(false); return; }
           if (showLuckyWheel) { setShowLuckyWheel(false); return; }
           if (showBlockBlast) { setShowBlockBlast(false); return; }
+          if (showPkGame) { setShowPkGame(false); return; }
           if (showWordChallenge) { setShowWordChallenge(false); return; }
           if (showResistorGame) { setShowResistorGame(false); return; }
           if (selectedQuestion) { setSelectedQuestion(null); return; }
@@ -164,7 +170,7 @@ const App = () => {
 
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
-  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
+  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showPkGame, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
 
   const pushHistory = () => {
       window.history.pushState({ overlay: true }, '');
@@ -307,9 +313,6 @@ const App = () => {
       if (!user) return;
       if (user.points < product.price) { alert("積分不足！"); return; }
       
-      // IMPORTANT: Fix for "Points dropped so Level dropped". 
-      // Ensure lifetimePoints is locked in before deducting current points.
-      // If lifetimePoints is undefined, initialize it with current points BEFORE deduction.
       const currentLifetimePoints = user.lifetimePoints ?? user.points;
       
       let updatedUser: User = { 
@@ -339,23 +342,16 @@ const App = () => {
   const handleWheelSpin = async (prize: number, cost: number) => {
       if (!user) return;
       
-      // CRITICAL: Prevent lifetime points from dropping
       const currentLifetimePoints = user.lifetimePoints ?? user.points;
-      
-      // Only count winnings as XP if desired, but NEVER subtract cost from lifetime
-      // Here we assume wheel prizes are bonuses, so we add the prize to lifetime if > 0
       const newLifetime = currentLifetimePoints + (prize > 0 ? prize : 0);
-      
-      // Safety check: ensure lifetime never drops
       const safeLifetime = Math.max(currentLifetimePoints, newLifetime);
-      
       const netPoints = user.points - cost + prize;
       
       const updatedUser = { 
           ...user, 
           points: netPoints,
           lifetimePoints: safeLifetime,
-          level: calculateLevel(safeLifetime) // Recalculate level in case they won big
+          level: calculateLevel(safeLifetime)
       };
       
       try {
@@ -368,7 +364,7 @@ const App = () => {
 
   const handleFinishChallenge = async (result: GameResult) => {
     if (!user) return;
-    const earnedPt = Math.floor(result.score / 10); // Generic scoring (10 score = 1 pt)
+    const earnedPt = Math.floor(result.score / 10); // Generic scoring
     const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt;
     const updatedUser: User = { 
         ...user, 
@@ -378,17 +374,34 @@ const App = () => {
     };
     try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
     
-    // Close all game screens
     setShowWordChallenge(false);
     setShowResistorGame(false);
     setShowBlockBlast(false);
   };
   
-  // Dummy Handlers for existing props
+  // PK Result Handler
+  const handleFinishPk = async (result: PkResult) => {
+      if (!user) return;
+      // result.score is the PT earned
+      const newLifetime = (user.lifetimePoints ?? user.points) + result.score;
+      const updatedUser: User = { 
+          ...user, 
+          points: user.points + result.score,
+          lifetimePoints: newLifetime,
+          level: calculateLevel(newLifetime)
+      };
+      
+      try { 
+          await updateUserInDb(updatedUser); 
+          setUser(updatedUser); 
+      } catch(e) {}
+      
+      setShowPkGame(false);
+  };
+  
   const handleAddResource = async (t: string, d: string, tags: string[], i: string[]) => { 
       if(!user) return;
       await createResource(user, t, d, tags, i); 
-      // Reward logic...
       await loadData(); setCurrentTab(Tab.RESOURCE);
   };
   const handleAddExam = async (s: string, t: string, d: string, tm: string) => { if(user) await createExam(user, s, t, d, tm); loadData(); };
@@ -456,6 +469,14 @@ const App = () => {
               onBack={() => setShowBlockBlast(false)}
               onFinish={handleFinishChallenge}
               onUpdateHearts={async (hearts) => { const u = { ...user, hearts }; setUser(u); await updateUserInDb(u); }}
+          />
+      )}
+      
+      {showPkGame && (
+          <PkGameScreen
+              user={user}
+              onBack={() => setShowPkGame(false)}
+              onFinish={handleFinishPk}
           />
       )}
 
@@ -567,7 +588,8 @@ const App = () => {
                         onOpenWordChallenge={() => { pushHistory(); setShowWordChallenge(true); }}
                         onOpenResistorGame={() => { pushHistory(); setShowResistorGame(true); }}
                         onOpenLuckyWheel={() => { pushHistory(); setShowLuckyWheel(true); }}
-                        onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }} // Connect Block Blast
+                        onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }}
+                        onOpenPkGame={() => { pushHistory(); setShowPkGame(true); }}
                     />
                 )}
                 {currentTab === Tab.EXAM && <ExamScreen exams={exams} onAddExam={handleAddExam} onDeleteExam={()=>{}} />}
