@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 export enum Tab {
@@ -144,7 +145,7 @@ export interface Product {
   icon: React.ReactNode;
   color: string;
   description: string;
-  category: 'tool' | 'cosmetic' | 'frame';
+  category: 'tool' | 'cosmetic' | 'frame' | 'consumable';
   isRare?: boolean; // New: For shiny effect
   tag?: string; // New: For labels like "Sale"
 }

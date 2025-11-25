@@ -1,3 +1,4 @@
+
 import { ResistorColor, ResistorTask } from '../types';
 
 export const RESISTOR_COLORS: ResistorColor[] = [
@@ -45,6 +46,9 @@ const getColorsForValue4Band = (ohms: number, tolerance: number): string[] => {
         multiplierPower--;
     }
     
+    // Fix floating point precision error (e.g. 46.99999 -> 47)
+    temp = Math.round(temp);
+    
     // E.g. 4700 -> 47 * 10^2
     const digit1 = Math.floor(temp / 10);
     const digit2 = Math.floor(temp % 10);
@@ -82,6 +86,9 @@ const getColorsForValue5Band = (ohms: number, tolerance: number): string[] => {
     // Normalize to 3 sig figs (100 - 999)
     while (temp >= 1000) temp /= 10;
     while (temp < 100) temp *= 10;
+    
+    // Fix floating point precision
+    temp = Math.round(temp);
     
     const digit1 = Math.floor(temp / 100);
     const digit2 = Math.floor((temp % 100) / 10);

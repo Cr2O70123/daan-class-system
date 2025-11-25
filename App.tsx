@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { LoginScreen } from './screens/LoginScreen';
@@ -422,6 +423,32 @@ const App = () => {
       if (user.points < product.price) {
           alert("積分不足！");
           return;
+      }
+
+      // Consumable Logic
+      if (product.category === 'consumable') {
+          if (product.id === 'item_heart_refill') {
+              // Deduct points
+              const newPoints = user.points - product.price;
+              // Add heart
+              const newHearts = (user.hearts || 0) + 1;
+              
+              const updatedUser: User = {
+                  ...user,
+                  points: newPoints,
+                  hearts: newHearts
+              };
+              
+              try {
+                  await updateUserInDb(updatedUser);
+                  setUser(updatedUser);
+                  alert(`購買成功！目前遊玩次數: ${newHearts}`);
+              } catch (e) {
+                  console.error("Purchase error", e);
+                  alert("購買失敗，請檢查網路連線");
+              }
+              return;
+          }
       }
 
       if (user.inventory.includes(product.id) && product.category !== 'frame') {

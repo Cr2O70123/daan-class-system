@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Timer, Zap, Play, CheckCircle, AlertCircle, RefreshCw, HelpCircle, X, ChevronRight, Lock } from 'lucide-react';
 import { User, GameResult, ResistorTask, ResistorColor } from '../types';
@@ -155,7 +156,7 @@ export const ResistorGameScreen: React.FC<ResistorGameScreenProps> = ({ user, on
           
           // Clear bands after delay to retry? Or just next task?
           // Let's go to next task to keep "Rush" feel, but show correct briefly
-          setTimeout(nextTask, 1000);
+          setTimeout(nextTask, 2500);
       }
   };
 
@@ -216,8 +217,20 @@ export const ResistorGameScreen: React.FC<ResistorGameScreenProps> = ({ user, on
 
               {/* Feedback Overlay */}
               {feedback && (
-                  <div className={`absolute inset-0 flex items-center justify-center z-30 font-black text-4xl tracking-widest uppercase drop-shadow-md ${feedback === 'correct' ? 'text-green-500' : 'text-red-500'}`}>
-                      {feedback === 'correct' ? 'Nice!' : 'Miss!'}
+                  <div className={`absolute inset-0 flex flex-col items-center justify-center z-30 rounded-xl backdrop-blur-sm bg-white/60 dark:bg-black/60 transition-all animate-in fade-in`}>
+                      <div className={`font-black text-4xl tracking-widest uppercase drop-shadow-md mb-2 ${feedback === 'correct' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          {feedback === 'correct' ? 'Nice!' : 'Miss!'}
+                      </div>
+                      {feedback === 'wrong' && currentTask && (
+                          <div className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+                              <div className="text-[10px] text-gray-500 text-center mb-1 font-bold">正確答案</div>
+                              <div className="flex gap-1">
+                                  {currentTask.correctColors.map((c, i) => (
+                                      <div key={i} className="w-4 h-10 rounded-sm border border-gray-300" style={{ backgroundColor: RESISTOR_COLORS.find(rc => rc.name === c)?.hex }} title={c}></div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
                   </div>
               )}
           </div>

@@ -1,6 +1,7 @@
 
+
 import React, { useState, useMemo } from 'react';
-import { ShoppingBag, Star, Zap, Crown, Palette, Ghost, MessageCircle, LayoutGrid, Brush, ArrowDownNarrowWide, ArrowUpNarrowWide, Pin, Sparkles, Tag } from 'lucide-react';
+import { ShoppingBag, Star, Zap, Crown, Palette, Ghost, MessageCircle, LayoutGrid, Brush, ArrowDownNarrowWide, ArrowUpNarrowWide, Pin, Sparkles, Tag, Heart } from 'lucide-react';
 import { User, Product } from '../types';
 
 interface ShopScreenProps {
@@ -21,6 +22,18 @@ const PRODUCTS: Product[] = [
       category: 'frame', 
       isRare: true, 
       tag: '限定' 
+  },
+
+  // --- Consumables (New) ---
+  { 
+      id: 'item_heart_refill', 
+      name: '能量飲料', 
+      price: 100, 
+      color: 'bg-red-100 text-red-600', 
+      icon: <Zap size={20} className="fill-red-600" />, 
+      description: '立即恢復 1 次遊玩次數', 
+      category: 'consumable',
+      tag: '熱銷'
   },
 
   // --- Avatar Frames (New) ---
@@ -50,7 +63,7 @@ const PRODUCTS: Product[] = [
 ];
 
 export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
-  const [activeCategory, setActiveCategory] = useState<'all' | 'tool' | 'cosmetic' | 'frame'>('all');
+  const [activeCategory, setActiveCategory] = useState<'all' | 'tool' | 'cosmetic' | 'frame' | 'consumable'>('all');
   const [sortOrder, setSortOrder] = useState<'default' | 'asc' | 'desc'>('default');
 
   // Filter and Sort Logic
@@ -64,6 +77,13 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
     } else if (sortOrder === 'desc') {
       result.sort((a, b) => b.price - a.price);
     }
+
+    // Always put consumables first in their category or in all
+    result.sort((a, b) => {
+        if (a.category === 'consumable' && b.category !== 'consumable') return -1;
+        if (a.category !== 'consumable' && b.category === 'consumable') return 1;
+        return 0;
+    });
 
     return result;
   }, [activeCategory, sortOrder]);
@@ -93,7 +113,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <ShoppingBag className="text-blue-200" /> 福利社
             </h2>
-            <p className="text-blue-100 text-sm mt-1 opacity-90">打造你的專屬風格</p>
+            <p className="text-blue-100 text-sm mt-1 opacity-90">消耗積分，強化體驗</p>
           </div>
           <div className="text-right bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20">
             <div className="text-3xl font-bold font-mono tracking-tighter">{user.points}</div>
@@ -117,12 +137,18 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
             </button>
 
             {/* Category Tabs */}
-            <div className="flex-1 flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 min-w-[250px]">
+            <div className="flex-1 flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1 min-w-[300px]">
                 <button 
                     onClick={() => setActiveCategory('all')}
                     className={`flex-1 rounded-md text-xs font-bold transition-all px-2 ${activeCategory === 'all' ? 'bg-white dark:bg-gray-600 shadow-sm text-gray-800 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
                 >
                     全部
+                </button>
+                <button 
+                    onClick={() => setActiveCategory('consumable')}
+                    className={`flex-1 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1 px-2 ${activeCategory === 'consumable' ? 'bg-white dark:bg-gray-600 shadow-sm text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                    <Heart size={12} /> 補給
                 </button>
                 <button 
                     onClick={() => setActiveCategory('frame')}
@@ -149,6 +175,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
       {/* Grid */}
       <div className="px-4 grid grid-cols-2 gap-4">
         {processedProducts.map((product) => {
+          const isConsumable = product.category === 'consumable';
           const isOwned = user.inventory.includes(product.id) || user.avatarFrame === product.id;
           const isEquipped = user.avatarFrame === product.id;
           const canAfford = user.points >= product.price;
@@ -188,6 +215,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
               {product.tag && (
                   <div className={`absolute top-0 left-0 text-[10px] font-bold px-2 py-1 rounded-br-lg z-10 shadow-sm
                       ${product.tag === '特價' ? 'bg-red-500 text-white' : 
+                        product.tag === '熱銷' ? 'bg-orange-500 text-white' :
                         isBetaFrame ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'}
                   `}>
                       {product.tag}
@@ -212,14 +240,14 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
               
               <div className="mt-auto w-full relative z-10">
                   <button
-                    disabled={(isOwned && product.category !== 'frame') || isBetaFrame} 
+                    disabled={(!isConsumable && isOwned && product.category !== 'frame') || isBetaFrame} 
                     onClick={() => onBuy(product)}
                     className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       isBetaFrame 
                         ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-500 cursor-not-allowed border border-amber-200 dark:border-amber-800'
                         : isEquipped 
                             ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 cursor-default'
-                            : isOwned
+                            : (isOwned && !isConsumable)
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200' 
                                 : canAfford 
                                   ? isRare 
@@ -232,7 +260,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                         <span>限定商品</span>
                     ) : isEquipped ? (
                         <span>使用中</span>
-                    ) : isOwned ? (
+                    ) : (isOwned && !isConsumable) ? (
                         <span>{product.category === 'frame' ? '裝備' : '已擁有'}</span>
                     ) : (
                         <>
