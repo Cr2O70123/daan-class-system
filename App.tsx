@@ -393,6 +393,7 @@ const App = () => {
             
             const updatedUser = { ...user, inventory: newInventory };
             setUser(updatedUser);
+            // Wait for DB update to ensure sync
             await updateUserInDb(updatedUser);
         }
 
@@ -402,6 +403,8 @@ const App = () => {
       } catch (e) {
           console.error(e);
           alert("發布失敗，請稍後再試");
+          // If failure, we might want to revert the card consumption locally? 
+          // Ideally, we would reload user from DB.
       }
   };
 
@@ -467,12 +470,11 @@ const App = () => {
           }
       }
 
-      // Check duplicate for non-consumable, non-stackable items if needed.
-      // Assuming 'tool' items like card_anon can be stacked or just one at a time logic.
-      // Logic for stacking tools (e.g. card_anon)
-      if (product.category === 'tool' && product.id === 'card_anon') {
-           // allow stacking
-      } else if (user.inventory.includes(product.id) && product.category !== 'frame') {
+      // Check duplicate for non-consumable, non-stackable items
+      // 'tool' (like anonymous card) and 'consumable' can be stacked/bought multiple times.
+      // 'frame' and 'cosmetic' should typically be unique.
+      const isStackable = product.category === 'tool' || product.category === 'consumable';
+      if (!isStackable && user.inventory.includes(product.id) && product.category !== 'frame') {
           alert("您已擁有此商品");
           return;
       }
@@ -481,8 +483,6 @@ const App = () => {
       const newPoints = user.points - product.price;
       
       const newInventory = [...user.inventory];
-      // For tools like anon card, we might want multiples, but simple implementation: just add to array.
-      // Our DB handles inventory as an array of strings.
       newInventory.push(product.id);
       
       let newAvatarFrame = user.avatarFrame;

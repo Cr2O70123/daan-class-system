@@ -209,6 +209,13 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
               <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useAnonymous ? 'translate-x-6' : 'translate-x-0'}`}></div>
           </div>
       </div>
+      
+      {/* Hint Prompt */}
+      {canUseAnonymous && !useAnonymous && (
+          <div className="text-center text-xs text-blue-500 font-medium animate-pulse">
+              💡 提示：您可以使用匿名卡隱藏身分
+          </div>
+      )}
 
       {/* Submit Button */}
       <button 

@@ -36,7 +36,7 @@ export const fetchQuestions = async (): Promise<Question[]> => {
         authorAvatarImage: q.author_avatar_data?.image,
         authorAvatarFrame: q.author_avatar_data?.frame,
         authorNameColor: q.author_avatar_data?.nameColor,
-        isAnonymous: q.author_name === '匿名同學', // Simple check or add flag in DB if needed
+        isAnonymous: q.author_name === '匿名同學', 
         replies: (q.replies || []).map((r: any) => ({
             id: r.id,
             author: r.author_name,
@@ -60,7 +60,7 @@ export const createQuestion = async (user: User, title: string, content: string,
     // Determine Author Details (Mask if anonymous)
     const authorName = isAnonymous ? '匿名同學' : user.name;
     const avatarData = isAnonymous ? {
-        color: 'bg-gray-400',
+        color: 'bg-gray-500', // Distinct gray for anon
         image: null,
         frame: null,
         nameColor: null
@@ -270,11 +270,10 @@ export const unbanUser = async (studentId: string) => {
     if (error) throw error;
 };
 
-// --- Class Leaderboard (Real Data) ---
+// --- Class Leaderboard ---
 
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
-    // Note: We don't fetch 'level' from DB because it's calculated.
-    // We fetch lifetime_points to calculate level accurately.
+    // We explicitly fetch distinct rows to avoid any duplication issues
     const { data, error } = await supabase
         .from('users')
         .select('name, student_id, points, lifetime_points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
@@ -287,12 +286,19 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         return [];
     }
 
-    return data.map((u: any, index: number) => ({
+    // Ensure uniqueness by student_id just in case DB returns weird data
+    const uniqueMap = new Map();
+    data.forEach((u: any) => {
+        if (!uniqueMap.has(u.student_id)) {
+            uniqueMap.set(u.student_id, u);
+        }
+    });
+
+    return Array.from(uniqueMap.values()).map((u: any, index: number) => ({
         rank: index + 1,
         name: u.name,
         studentId: u.student_id,
         points: u.points,
-        // Calculate level from lifetime_points (fallback to points for legacy data)
         level: calculateLevel(u.lifetime_points ?? u.points), 
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
@@ -324,7 +330,6 @@ export const submitGameScore = async (user: User, score: number) => {
 };
 
 export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> => {
-    // Calculate start of the current week (Monday)
     const now = new Date();
     const day = now.getDay(); 
     const diff = now.getDate() - (day === 0 ? 6 : day - 1);
@@ -333,7 +338,6 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
     startOfWeek.setDate(diff);
     startOfWeek.setHours(0, 0, 0, 0);
 
-    // 1. Fetch raw scores
     const { data, error } = await supabase
         .from('game_scores')
         .select('*')
@@ -345,7 +349,6 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
         return [];
     }
 
-    // 2. Deduplication: Keep only highest score per student
     const uniqueEntries: Record<string, any> = {};
     const studentIds = new Set<string>();
     
@@ -358,8 +361,6 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
 
     const sortedEntries = Object.values(uniqueEntries).sort((a: any, b: any) => b.score - a.score).slice(0, 10);
     
-    // 3. Fetch LATEST user details to ensure avatar is up-to-date
-    // Instead of using the snapshot in game_scores, we grab current user profile
     if (sortedEntries.length > 0) {
         const { data: userData, error: userError } = await supabase
             .from('users')
@@ -367,7 +368,6 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
             .in('student_id', Array.from(studentIds));
             
         if (!userError && userData) {
-            // Merge latest avatar data into sorted entries
             sortedEntries.forEach((entry: any) => {
                 const userProfile = userData.find((u: any) => u.student_id === entry.student_id);
                 if (userProfile) {
