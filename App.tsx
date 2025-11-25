@@ -19,7 +19,6 @@ import { PlaygroundScreen } from './screens/PlaygroundScreen';
 import { NotificationScreen } from './screens/NotificationScreen';
 import { CheckInModal } from './components/CheckInModal';
 import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
-import { OhmsLawScreen } from './screens/OhmsLawScreen'; 
 import { BlockBlastScreen } from './screens/BlockBlastScreen'; // New
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification } from './types';
@@ -123,7 +122,6 @@ const App = () => {
   const [showLuckyWheel, setShowLuckyWheel] = useState(false);
   const [showBlockBlast, setShowBlockBlast] = useState(false); // New
   
-  const [showOhmsLaw, setShowOhmsLaw] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showNotificationScreen, setShowNotificationScreen] = useState(false);
   
@@ -137,7 +135,6 @@ const App = () => {
       setShowResistorGame(false);
       setShowLuckyWheel(false);
       setShowBlockBlast(false);
-      setShowOhmsLaw(false);
       setShowLeaderboardOverlay(false);
       setSelectedQuestion(null);
       setSelectedResource(null);
@@ -156,7 +153,6 @@ const App = () => {
           if (showNotificationScreen) { setShowNotificationScreen(false); return; }
           if (showLuckyWheel) { setShowLuckyWheel(false); return; }
           if (showBlockBlast) { setShowBlockBlast(false); return; }
-          if (showOhmsLaw) { setShowOhmsLaw(false); return; }
           if (showWordChallenge) { setShowWordChallenge(false); return; }
           if (showResistorGame) { setShowResistorGame(false); return; }
           if (selectedQuestion) { setSelectedQuestion(null); return; }
@@ -168,7 +164,7 @@ const App = () => {
 
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
-  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showOhmsLaw, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
+  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
 
   const pushHistory = () => {
       window.history.pushState({ overlay: true }, '');
@@ -444,10 +440,6 @@ const App = () => {
           />
       )}
 
-      {showOhmsLaw && (
-          <OhmsLawScreen onBack={() => setShowOhmsLaw(false)} />
-      )}
-      
       {/* Overlays */}
       {selectedQuestion && (
         <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-y-auto">
@@ -539,7 +531,6 @@ const App = () => {
                         onResourceClick={(r) => { pushHistory(); setSelectedResource(r); }}
                         onRefresh={loadData}
                         onImageClick={(url) => { pushHistory(); setLightboxImage(url); }}
-                        onOpenOhmsLaw={() => { pushHistory(); setShowOhmsLaw(true); }}
                     />
                 )}
                 
@@ -582,3 +573,4 @@ const App = () => {
 };
 
 export default App;
+ 

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Tag, Heart, Plus, Image as ImageIcon, X, Search, XCircle, Layers, RefreshCw, Loader2, Calculator } from 'lucide-react';
+import { Tag, Heart, Plus, Image as ImageIcon, X, Search, XCircle, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { Resource, User } from '../types';
 
 interface ResourceScreenProps {
@@ -11,8 +11,6 @@ interface ResourceScreenProps {
   onResourceClick: (resource: Resource) => void;
   onRefresh?: () => Promise<void>;
   onImageClick?: (url: string) => void;
-  // Optional prop for new feature compatibility without breaking types immediately in other places if they were strict
-  onOpenOhmsLaw?: () => void;
 }
 
 const RESOURCE_TAGS = ['全部', '筆記', '考古題', '教學影片', '好用工具', '其他'];
@@ -29,7 +27,7 @@ const getFrameStyle = (frameId?: string) => {
     }
   };
 
-export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, currentUser, onAddResource, onLikeResource, onResourceClick, onRefresh, onImageClick, onOpenOhmsLaw }) => {
+export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, currentUser, onAddResource, onLikeResource, onResourceClick, onRefresh, onImageClick }) => {
   const [activeTag, setActiveTag] = useState('全部');
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -184,7 +182,7 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
 
         {/* Header - Aligned with Home Screen Style */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 sticky top-0 pt-safe z-10 shadow-sm transition-colors">
-             {/* Search Bar & Tools Button */}
+             {/* Search Bar */}
             <div className="px-4 pt-1 pb-1 flex gap-2 items-center">
                 <div className="relative flex-1">
                     <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -201,14 +199,6 @@ export const ResourceScreen: React.FC<ResourceScreenProps> = ({ resources, curre
                         </button>
                     )}
                 </div>
-                {/* OHM'S LAW CALCULATOR BUTTON */}
-                <button 
-                    onClick={onOpenOhmsLaw}
-                    className="bg-blue-600 text-white p-2.5 rounded-xl shadow-lg shadow-blue-500/30 hover:bg-blue-700 active:scale-95 transition-all"
-                    title="電學計算機"
-                >
-                    <Calculator size={20} />
-                </button>
             </div>
 
             {/* Filter Chips */}

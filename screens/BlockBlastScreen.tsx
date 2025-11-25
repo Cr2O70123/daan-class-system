@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, RefreshCw, Trophy, Crown, Grid3X3, Zap } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ArrowLeft, Trophy, Crown, Grid3X3, Zap } from 'lucide-react';
 import { User, GameResult } from '../types';
 import { submitGameScore } from '../services/dataService';
 
@@ -116,7 +116,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     );
     const [score, setScore] = useState(0);
     const [dockShapes, setDockShapes] = useState<(Shape | null)[]>([null, null, null]);
-    const [selectedShapeIndex, setSelectedShapeIndex] = useState<number | null>(null);
     const [gameOver, setGameOver] = useState(false);
     const [gameStarted, setGameStarted] = useState(false);
     
@@ -124,6 +123,20 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const [clearingRows, setClearingRows] = useState<number[]>([]);
     const [clearingCols, setClearingCols] = useState<number[]>([]);
     const [comboCount, setComboCount] = useState(0);
+
+    // --- Drag & Drop State ---
+    const [draggingShape, setDraggingShape] = useState<{
+        index: number;
+        shape: Shape;
+        x: number;
+        y: number;
+        // Offset from mouse pointer to shape center/top-left
+        offsetX: number; 
+        offsetY: number;
+    } | null>(null);
+
+    // Refs for coordinate calculation
+    const gridRef = useRef<HTMLDivElement>(null);
 
     // --- Helpers ---
     
@@ -154,11 +167,9 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         setGameOver(false);
         setGameStarted(true);
         setDockShapes(generateNewShapes());
-        setSelectedShapeIndex(null);
     };
 
     const checkGameOver = useCallback((currentGrid: (string | null)[][], currentDock: (Shape | null)[]) => {
-        // If all shapes used, not game over (will regenerate)
         const availableShapes = currentDock.filter(s => s !== null);
         if (availableShapes.length === 0) return false;
 
@@ -168,12 +179,12 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
             for (let r = 0; r < BOARD_SIZE; r++) {
                 for (let c = 0; c < BOARD_SIZE; c++) {
                     if (canPlace(currentGrid, shape.matrix, r, c)) {
-                        return false; // Found a valid move
+                        return false; 
                     }
                 }
             }
         }
-        return true; // No moves left
+        return true; 
     }, []);
 
     const canPlace = (currentGrid: (string | null)[][], matrix: number[][], r: number, c: number) => {
@@ -182,9 +193,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                 if (matrix[i][j] === 1) {
                     const newR = r + i;
                     const newC = c + j;
-                    // Check bounds
                     if (newR >= BOARD_SIZE || newC >= BOARD_SIZE) return false;
-                    // Check overlap
                     if (currentGrid[newR][newC] !== null) return false;
                 }
             }
@@ -192,111 +201,176 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         return true;
     };
 
-    const handleGridClick = async (r: number, c: number) => {
-        if (selectedShapeIndex === null || gameOver) return;
+    // --- Drag Logic ---
+
+    const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
+        if (gameOver) return;
+        e.preventDefault(); // Prevent scroll on touch
         
-        const shape = dockShapes[selectedShapeIndex];
+        const shape = dockShapes[index];
         if (!shape) return;
 
-        if (canPlace(grid, shape.matrix, r, c)) {
-            // 1. Place logic
-            playSound('place');
-            const newGrid = grid.map(row => [...row]);
-            let blocksPlaced = 0;
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
 
-            for (let i = 0; i < shape.matrix.length; i++) {
-                for (let j = 0; j < shape.matrix[i].length; j++) {
-                    if (shape.matrix[i][j] === 1) {
-                        newGrid[r + i][c + j] = shape.color;
-                        blocksPlaced++;
-                    }
+        playSound('select');
+
+        setDraggingShape({
+            index,
+            shape,
+            x: clientX,
+            y: clientY,
+            offsetX: 0, // Simplified: Center on finger later or use drag logic
+            offsetY: -50 // Shift up slightly so finger doesn't cover block
+        });
+    };
+
+    useEffect(() => {
+        const handleMove = (e: MouseEvent | TouchEvent) => {
+            if (!draggingShape) return;
+            // e.preventDefault(); // Aggressive scroll prevention if needed
+
+            const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+            const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+
+            setDraggingShape(prev => prev ? { ...prev, x: clientX, y: clientY } : null);
+        };
+
+        const handleEnd = (e: MouseEvent | TouchEvent) => {
+            if (!draggingShape) return;
+
+            // Attempt to drop
+            const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : (e as MouseEvent).clientX;
+            const clientY = 'changedTouches' in e ? e.changedTouches[0].clientY : (e as MouseEvent).clientY;
+
+            attemptDrop(clientX, clientY, draggingShape);
+            setDraggingShape(null);
+        };
+
+        if (draggingShape) {
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleEnd);
+            window.addEventListener('touchmove', handleMove, { passive: false });
+            window.addEventListener('touchend', handleEnd);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleEnd);
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleEnd);
+        };
+    }, [draggingShape, grid]);
+
+    const attemptDrop = (x: number, y: number, dragInfo: NonNullable<typeof draggingShape>) => {
+        if (!gridRef.current) return;
+        const rect = gridRef.current.getBoundingClientRect();
+        
+        // Calculate cell size
+        const cellSize = rect.width / BOARD_SIZE;
+
+        // Calculate drag shape offset (we dragged from center/top, adjust for drop)
+        // Adjust for the offset we added visually (-50)
+        const adjustedY = y + 50; 
+
+        // Check if inside grid
+        if (x < rect.left || x > rect.right || adjustedY < rect.top || adjustedY > rect.bottom) {
+            return; // Dropped outside
+        }
+
+        // Calculate approximate Row/Col
+        // We want to align the top-left block of the shape to the cell under the pointer
+        // But usually it feels better if we center the shape under the pointer. 
+        // Let's stick to Top-Left logic relative to the pointer for consistency with grid logic,
+        // or refine: The pointer is roughly at the center of the dragged shape.
+        
+        // Approximate the top-left of the shape relative to the pointer
+        const shapeWidth = dragInfo.shape.matrix[0].length * cellSize;
+        const shapeHeight = dragInfo.shape.matrix.length * cellSize;
+        
+        const relativeX = (x - rect.left) - (shapeWidth / 2); // Center horizontally
+        const relativeY = (adjustedY - rect.top) - (shapeHeight / 2); // Center vertically
+
+        const c = Math.round(relativeX / cellSize);
+        const r = Math.round(relativeY / cellSize);
+
+        // Bounds check handled in canPlace
+        if (canPlace(grid, dragInfo.shape.matrix, r, c)) {
+            placeShape(r, c, dragInfo.shape, dragInfo.index);
+        }
+    };
+
+    const placeShape = (r: number, c: number, shape: Shape, dockIndex: number) => {
+        playSound('place');
+        
+        // 1. Place blocks
+        const newGrid = grid.map(row => [...row]);
+        let blocksPlaced = 0;
+
+        for (let i = 0; i < shape.matrix.length; i++) {
+            for (let j = 0; j < shape.matrix[i].length; j++) {
+                if (shape.matrix[i][j] === 1) {
+                    newGrid[r + i][c + j] = shape.color;
+                    blocksPlaced++;
                 }
             }
+        }
 
-            // Update dock
-            const newDock = [...dockShapes];
-            newDock[selectedShapeIndex] = null;
-            setDockShapes(newDock);
-            setSelectedShapeIndex(null);
+        // 2. Clear from Dock
+        const newDock = [...dockShapes];
+        newDock[dockIndex] = null;
+        setDockShapes(newDock);
 
-            // 2. Check Lines
-            const rowsToClear: number[] = [];
-            const colsToClear: number[] = [];
+        // 3. Check Lines
+        const rowsToClear: number[] = [];
+        const colsToClear: number[] = [];
+        for (let i = 0; i < BOARD_SIZE; i++) {
+            if (newGrid[i].every(cell => cell !== null)) rowsToClear.push(i);
+        }
+        for (let j = 0; j < BOARD_SIZE; j++) {
+            if (newGrid.every(row => row[j] !== null)) colsToClear.push(j);
+        }
 
-            // Check Rows
-            for (let i = 0; i < BOARD_SIZE; i++) {
-                if (newGrid[i].every(cell => cell !== null)) rowsToClear.push(i);
-            }
-            // Check Cols
-            for (let j = 0; j < BOARD_SIZE; j++) {
-                if (newGrid.every(row => row[j] !== null)) colsToClear.push(j);
-            }
+        const linesCleared = rowsToClear.length + colsToClear.length;
+        let moveScore = blocksPlaced;
 
-            const linesCleared = rowsToClear.length + colsToClear.length;
+        if (linesCleared > 0) {
+            const newCombo = comboCount + 1;
+            setComboCount(newCombo);
+            moveScore += (linesCleared * 10) * newCombo;
             
-            // Score Calculation
-            let moveScore = blocksPlaced; // +1 per block placed
-            if (linesCleared > 0) {
-                // Combo logic
-                const newCombo = comboCount + 1;
-                setComboCount(newCombo);
-                moveScore += (linesCleared * 10) * newCombo; // 10 points per line * combo
+            setClearingRows(rowsToClear);
+            setClearingCols(colsToClear);
+            playSound(linesCleared > 1 || newCombo > 1 ? 'combo' : 'clear');
+
+            setTimeout(() => {
+                const finalGrid = newGrid.map(row => [...row]);
+                rowsToClear.forEach(ri => finalGrid[ri].fill(null));
+                colsToClear.forEach(ci => { for(let row=0; row<BOARD_SIZE; row++) finalGrid[row][ci] = null; });
+
+                setGrid(finalGrid);
+                setClearingRows([]);
+                setClearingCols([]);
                 
-                // Trigger animation
-                setClearingRows(rowsToClear);
-                setClearingCols(colsToClear);
-                playSound(linesCleared > 1 || newCombo > 1 ? 'combo' : 'clear');
-
-                // Wait for animation then clear
-                setTimeout(() => {
-                    const finalGrid = newGrid.map(row => [...row]);
-                    
-                    rowsToClear.forEach(rowIndex => {
-                        for(let c=0; c<BOARD_SIZE; c++) finalGrid[rowIndex][c] = null;
-                    });
-                    colsToClear.forEach(colIndex => {
-                        for(let r=0; r<BOARD_SIZE; r++) finalGrid[r][colIndex] = null;
-                    });
-
-                    setGrid(finalGrid);
-                    setClearingRows([]);
-                    setClearingCols([]);
-                    
-                    // Regenerate shapes if empty
-                    let nextDock = newDock;
-                    if (newDock.every(s => s === null)) {
-                        nextDock = generateNewShapes();
-                        setDockShapes(nextDock);
-                    }
-                    
-                    // Check Game Over after clearing
-                    if (checkGameOver(finalGrid, nextDock)) {
-                        handleGameOver(score + moveScore);
-                    } else {
-                        setScore(prev => prev + moveScore);
-                    }
-
-                }, 400); // Animation duration
-            } else {
-                setComboCount(0);
-                setGrid(newGrid);
-                
-                // Regenerate shapes if empty
-                let nextDock = newDock;
-                if (newDock.every(s => s === null)) {
-                    nextDock = generateNewShapes();
-                    setDockShapes(nextDock);
-                }
-
-                // Check Game Over without clearing
-                if (checkGameOver(newGrid, nextDock)) {
-                    handleGameOver(score + moveScore);
-                } else {
-                    setScore(prev => prev + moveScore);
-                }
-            }
+                checkRegenAndGameOver(finalGrid, newDock, score + moveScore);
+            }, 300);
         } else {
-            // Invalid placement visual feedback could go here
+            setComboCount(0);
+            setGrid(newGrid);
+            checkRegenAndGameOver(newGrid, newDock, score + moveScore);
+        }
+    };
+
+    const checkRegenAndGameOver = (currentGrid: (string|null)[][], currentDock: (Shape|null)[], newScore: number) => {
+        let nextDock = currentDock;
+        if (currentDock.every(s => s === null)) {
+            nextDock = generateNewShapes();
+            setDockShapes(nextDock);
+        }
+        setScore(newScore);
+        
+        if (checkGameOver(currentGrid, nextDock)) {
+            handleGameOver(newScore);
         }
     };
 
@@ -309,7 +383,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const handleSubmitScore = async () => {
         try {
             await submitGameScore(user, score);
-            await onFinish({ score, maxCombo: 0, correctCount: 0 }); // Reuse types loosely
+            await onFinish({ score, maxCombo: 0, correctCount: 0 }); 
             onBack();
         } catch(e) {
             alert("上傳失敗");
@@ -319,7 +393,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     // --- Render Helpers ---
 
-    // Render a preview of a shape (for dock)
     const renderShapePreview = (shape: Shape, size = 16) => {
         const rows = shape.matrix.length;
         const cols = shape.matrix[0].length;
@@ -329,7 +402,8 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     display: 'grid', 
                     gridTemplateRows: `repeat(${rows}, ${size}px)`,
                     gridTemplateColumns: `repeat(${cols}, ${size}px)`,
-                    gap: '2px'
+                    gap: '2px',
+                    pointerEvents: 'none'
                 }}
             >
                 {shape.matrix.map((row, r) => 
@@ -344,9 +418,53 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         );
     };
 
+    // Calculate Grid Shadows for Dragging
+    const renderDropPreview = () => {
+        if (!draggingShape || !gridRef.current) return null;
+        
+        const rect = gridRef.current.getBoundingClientRect();
+        const cellSize = rect.width / BOARD_SIZE;
+        const adjustedY = draggingShape.y + 50;
+        
+        // Match drop logic calculation
+        const shapeWidth = draggingShape.shape.matrix[0].length * cellSize;
+        const shapeHeight = draggingShape.shape.matrix.length * cellSize;
+        const relativeX = (draggingShape.x - rect.left) - (shapeWidth / 2); 
+        const relativeY = (adjustedY - rect.top) - (shapeHeight / 2);
+        
+        const c = Math.round(relativeX / cellSize);
+        const r = Math.round(relativeY / cellSize);
+        
+        // Validate
+        if (!canPlace(grid, draggingShape.shape.matrix, r, c)) return null;
+
+        // Render "Ghost" blocks
+        const ghosts = [];
+        for (let i = 0; i < draggingShape.shape.matrix.length; i++) {
+            for (let j = 0; j < draggingShape.shape.matrix[i].length; j++) {
+                if (draggingShape.shape.matrix[i][j] === 1) {
+                    ghosts.push(
+                        <div 
+                            key={`ghost-${i}-${j}`}
+                            className="absolute bg-gray-500/30 rounded-md border-2 border-white/30"
+                            style={{
+                                width: `${cellSize - 4}px`,
+                                height: `${cellSize - 4}px`,
+                                left: `${(c + j) * (cellSize)}px`, // approximate gap adjust if grid has gap
+                                top: `${(r + i) * (cellSize)}px`,
+                                margin: '2px' // to match grid gap
+                            }}
+                        />
+                    );
+                }
+            }
+        }
+        return <div className="absolute inset-0 pointer-events-none">{ghosts}</div>;
+    };
+
     // --- Main UI ---
     return (
-        <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col items-center">
+        <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col items-center select-none overflow-hidden touch-none">
             {/* Header */}
             <div className="w-full bg-gray-800 p-4 pt-safe flex justify-between items-center shadow-lg z-10">
                 <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-700 text-gray-300">
@@ -356,9 +474,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">SCORE</span>
                     <span className="text-2xl font-black text-white font-mono leading-none">{score}</span>
                 </div>
-                <div className="w-8">
-                     {/* Placeholder for balance */}
-                </div>
+                <div className="w-8"></div>
             </div>
 
             {!gameStarted ? (
@@ -378,7 +494,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                             <span className="font-bold text-gray-200">規則說明</span>
                         </div>
                         <ul className="text-sm text-gray-400 space-y-2 list-disc list-inside">
-                            <li>點選下方圖形，再點擊棋盤空格放置。</li>
+                            <li>拖曳下方圖形至棋盤空格放置。</li>
                             <li>填滿整行或整列即可消除得分。</li>
                             <li>一次消除多行可獲得連擊加分！</li>
                             <li>無法放置任何圖形時遊戲結束。</li>
@@ -404,11 +520,11 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     
                     {/* The Grid */}
                     <div 
-                        className="bg-gray-800 p-3 rounded-xl shadow-2xl relative"
+                        ref={gridRef}
+                        className="bg-gray-800 p-1 rounded-xl shadow-2xl relative"
                         style={{
                             display: 'grid',
                             gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
-                            gap: '4px',
                             width: 'min(90vw, 360px)',
                             aspectRatio: '1/1'
                         }}
@@ -419,18 +535,19 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                                 return (
                                     <div 
                                         key={`${r}-${c}`}
-                                        onClick={() => handleGridClick(r, c)}
                                         className={`
-                                            rounded-md transition-all duration-300
+                                            m-[2px] rounded-md transition-all duration-300
                                             ${cellColor ? cellColor : 'bg-gray-700/50'}
                                             ${isClearing ? 'scale-0 opacity-0 bg-white' : 'scale-100 opacity-100'}
-                                            ${selectedShapeIndex !== null && !cellColor ? 'cursor-pointer hover:bg-gray-600' : ''}
                                         `}
                                     ></div>
                                 );
                             })
                         )}
                         
+                        {/* Drag Preview Overlay */}
+                        {renderDropPreview()}
+
                         {/* Combo Text Popup */}
                         {comboCount > 1 && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
@@ -442,32 +559,40 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     </div>
 
                     {/* Dock (Shapes) */}
-                    <div className="mt-8 w-full flex justify-between items-center px-2 min-h-[100px]">
+                    <div className="mt-8 w-full flex justify-between items-center px-4 h-32">
                         {dockShapes.map((shape, idx) => (
                             <div 
                                 key={idx} 
                                 className={`
                                     w-[30%] aspect-square flex items-center justify-center rounded-2xl transition-all duration-200
-                                    ${shape ? 'bg-gray-800 border-2 shadow-lg cursor-pointer' : 'opacity-0 pointer-events-none'}
-                                    ${selectedShapeIndex === idx 
-                                        ? 'border-blue-500 bg-gray-700 -translate-y-2 shadow-blue-500/20' 
-                                        : 'border-gray-700 hover:bg-gray-700/50'}
+                                    ${shape ? 'bg-gray-800 border-2 border-gray-700 shadow-lg cursor-grab active:cursor-grabbing' : 'opacity-0 pointer-events-none'}
+                                    ${draggingShape?.index === idx ? 'opacity-0' : 'opacity-100'}
                                 `}
-                                onClick={() => {
-                                    if (shape) {
-                                        playSound('select');
-                                        setSelectedShapeIndex(selectedShapeIndex === idx ? null : idx);
-                                    }
-                                }}
+                                onMouseDown={(e) => handleDragStart(e, idx)}
+                                onTouchStart={(e) => handleDragStart(e, idx)}
                             >
-                                {shape && renderShapePreview(shape, 12)}
+                                {shape && renderShapePreview(shape, 10)}
                             </div>
                         ))}
                     </div>
 
-                    <p className="mt-4 text-xs text-gray-500 animate-pulse">
-                        {selectedShapeIndex !== null ? '請點擊棋盤空格放置' : '請選擇下方圖形'}
+                    <p className="mt-2 text-xs text-gray-500 animate-pulse">
+                        拖曳圖形至棋盤
                     </p>
+
+                    {/* Dragging Portal/Overlay */}
+                    {draggingShape && (
+                         <div 
+                            className="fixed pointer-events-none z-[100]"
+                            style={{
+                                left: draggingShape.x,
+                                top: draggingShape.y,
+                                transform: `translate(-50%, calc(-50% - 50px)) scale(1.2)`, // Offset to match touch visually
+                            }}
+                         >
+                             {renderShapePreview(draggingShape.shape, 20)}
+                         </div>
+                    )}
 
                     {/* Game Over Overlay */}
                     {gameOver && (

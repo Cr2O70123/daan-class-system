@@ -1,6 +1,6 @@
 
-import React, { useState, useRef } from 'react';
-import { ArrowLeft, Coins, Sparkles, Gift, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { ArrowLeft, Coins, Sparkles, AlertCircle } from 'lucide-react';
 import { User } from '../types';
 
 interface LuckyWheelScreenProps {
@@ -9,15 +9,17 @@ interface LuckyWheelScreenProps {
   onSpinEnd: (prize: number, cost: number) => void;
 }
 
+// Added 'weight' property. Lower weight = lower chance.
+// Total weight doesn't need to be 100, logic handles the sum.
 const PRIZES = [
-  { label: '50 PT', value: 50, color: '#3B82F6', text: '#fff' },
-  { label: '再接再厲', value: 0, color: '#E5E7EB', text: '#6B7280' },
-  { label: '10 PT', value: 10, color: '#10B981', text: '#fff' },
-  { label: '20 PT', value: 20, color: '#F59E0B', text: '#fff' },
-  { label: '銘謝惠顧', value: 0, color: '#E5E7EB', text: '#6B7280' },
-  { label: '100 PT', value: 100, color: '#8B5CF6', text: '#fff' },
-  { label: '5 PT', value: 5, color: '#EC4899', text: '#fff' },
-  { label: '大獎 500', value: 500, color: '#EF4444', text: '#fff' },
+  { label: '50 PT', value: 50, color: '#3B82F6', text: '#fff', weight: 5 },
+  { label: '再接再厲', value: 0, color: '#E5E7EB', text: '#6B7280', weight: 20 },
+  { label: '10 PT', value: 10, color: '#10B981', text: '#fff', weight: 30 },
+  { label: '20 PT', value: 20, color: '#F59E0B', text: '#fff', weight: 15 },
+  { label: '銘謝惠顧', value: 0, color: '#E5E7EB', text: '#6B7280', weight: 20 },
+  { label: '100 PT', value: 100, color: '#8B5CF6', text: '#fff', weight: 3 },
+  { label: '5 PT', value: 5, color: '#EC4899', text: '#fff', weight: 30 },
+  { label: '大獎 500', value: 500, color: '#EF4444', text: '#fff', weight: 1 },
 ];
 
 const SPIN_COST = 20;
@@ -37,43 +39,48 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
     setIsSpinning(true);
     setLastPrize(null);
 
-    // Logic to determine result
-    // Random index
-    const randomIndex = Math.floor(Math.random() * PRIZES.length);
-    const selectedPrize = PRIZES[randomIndex];
+    // --- Weighted Random Selection Logic ---
+    const totalWeight = PRIZES.reduce((sum, item) => sum + item.weight, 0);
+    let randomNum = Math.random() * totalWeight;
+    let selectedIndex = 0;
 
-    // Calculate rotation
+    for (let i = 0; i < PRIZES.length; i++) {
+        if (randomNum < PRIZES[i].weight) {
+            selectedIndex = i;
+            break;
+        }
+        randomNum -= PRIZES[i].weight;
+    }
+
+    const selectedPrize = PRIZES[selectedIndex];
+    // ---------------------------------------
+
+    // Calculate rotation to land on the specific index
     // Each slice is 360 / 8 = 45 deg
-    // We want to land on the slice. 
-    // The pointer is usually at top (0deg) or right (90deg).
-    // Let's assume pointer is at Top (0deg).
-    // The wheel rotates clockwise.
-    // Index 0 is at 0-45? No.
-    // Let's simplify: 
-    // Rotate at least 5 full circles (1800 deg)
-    // Plus the offset for the specific index.
-    // Offset = 360 - (index * 45 + 22.5) -> Centers the slice at top
-    
     const sliceAngle = 360 / PRIZES.length;
-    // Add random noise within the slice to make it realistic
-    const randomOffset = Math.random() * (sliceAngle - 4) + 2; 
     
-    // Target rotation to land index at Top (0 deg)
-    // If index 0 is at 0deg initially.
-    // We want index `randomIndex` to be at 0deg after rotation.
-    // So we rotate backwards by `randomIndex * sliceAngle`?
-    // Visual rotation is usually additive.
-    // Target = 360 * 5 + (360 - (randomIndex * sliceAngle)) 
+    // Add random noise within the slice (keep away from edges)
+    const randomOffset = Math.random() * (sliceAngle - 10) + 5; 
     
-    const newRotation = rotation + 1800 + (360 - (randomIndex * sliceAngle)) - (rotation % 360);
+    // We rotate backwards to simulate the wheel spinning clockwise.
+    // Base rotation (5 full spins) + adjustment to align index 0 to top + index offset
+    // Visual correction: If we want index N to be at top (0 deg), we need to rotate - (N * angle).
+    const extraSpins = 360 * 5; 
+    const targetAngle = selectedIndex * sliceAngle;
+    
+    // Calculate final rotation value
+    // Current rotation + extra spins + (amount to get back to 0) - (target index position)
+    // We add randomness to make it stop naturally inside the slice
+    const newRotation = rotation + extraSpins + (360 - (rotation % 360)) - targetAngle - randomOffset;
 
     setRotation(newRotation);
 
     setTimeout(() => {
         setIsSpinning(false);
         setLastPrize(selectedPrize);
+        // Important: This calls the App.tsx handler which updates the DB
         onSpinEnd(selectedPrize.value, SPIN_COST);
-    }, 4000); // 4s animation
+    }, 4000); // 4s animation matches CSS transition
   };
 
   return (
