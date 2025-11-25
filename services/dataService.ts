@@ -1,4 +1,5 @@
 
+
 import { supabase } from './supabaseClient';
 import { Question, Resource, Exam, User, GameLeaderboardEntry, LeaderboardEntry } from '../types';
 import { calculateLevel } from './levelService';
@@ -35,6 +36,7 @@ export const fetchQuestions = async (): Promise<Question[]> => {
         authorAvatarImage: q.author_avatar_data?.image,
         authorAvatarFrame: q.author_avatar_data?.frame,
         authorNameColor: q.author_avatar_data?.nameColor,
+        isAnonymous: q.author_name === '匿名同學', // Simple check or add flag in DB if needed
         replies: (q.replies || []).map((r: any) => ({
             id: r.id,
             author: r.author_name,
@@ -50,12 +52,19 @@ export const fetchQuestions = async (): Promise<Question[]> => {
     }));
 };
 
-export const createQuestion = async (user: User, title: string, content: string, tags: string[], image?: string) => {
+export const createQuestion = async (user: User, title: string, content: string, tags: string[], image?: string, isAnonymous: boolean = false) => {
     // Data Sanitization
     const sanitizedImage = image || null; // Convert undefined to null for SQL
     const sanitizedTags = Array.isArray(tags) ? tags : []; // Ensure tags is array
     
-    const avatarData = {
+    // Determine Author Details (Mask if anonymous)
+    const authorName = isAnonymous ? '匿名同學' : user.name;
+    const avatarData = isAnonymous ? {
+        color: 'bg-gray-400',
+        image: null,
+        frame: null,
+        nameColor: null
+    } : {
         color: user.avatarColor || 'bg-gray-400',
         image: user.avatarImage || null,
         frame: user.avatarFrame || null,
@@ -66,8 +75,8 @@ export const createQuestion = async (user: User, title: string, content: string,
         title,
         content,
         image: sanitizedImage,
-        author_name: user.name,
-        author_student_id: user.studentId,
+        author_name: authorName,
+        author_student_id: user.studentId, // Keep real ID for moderation/ownership
         author_avatar_data: avatarData,
         tags: sanitizedTags,
         status: 'open',

@@ -378,13 +378,29 @@ const App = () => {
     }
   };
 
-  const handlePostQuestion = async (q: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => {
+  const handlePostQuestion = async (q: Omit<Question, 'id' | 'replies' | 'views' | 'date'>, isAnonymous: boolean) => {
       if (!user) return;
       try {
-        await createQuestion(user, q.title, q.content, q.tags, q.image);
+        // If Anonymous, consume one 'card_anon'
+        if (isAnonymous) {
+            const cardIndex = user.inventory.indexOf('card_anon');
+            if (cardIndex === -1) {
+                alert("錯誤：您沒有匿名卡！");
+                return;
+            }
+            const newInventory = [...user.inventory];
+            newInventory.splice(cardIndex, 1);
+            
+            const updatedUser = { ...user, inventory: newInventory };
+            setUser(updatedUser);
+            await updateUserInDb(updatedUser);
+        }
+
+        await createQuestion(user, q.title, q.content, q.tags, q.image, isAnonymous);
         await loadData();
         setCurrentTab(Tab.HOME);
       } catch (e) {
+          console.error(e);
           alert("發布失敗，請稍後再試");
       }
   };
@@ -451,7 +467,12 @@ const App = () => {
           }
       }
 
-      if (user.inventory.includes(product.id) && product.category !== 'frame') {
+      // Check duplicate for non-consumable, non-stackable items if needed.
+      // Assuming 'tool' items like card_anon can be stacked or just one at a time logic.
+      // Logic for stacking tools (e.g. card_anon)
+      if (product.category === 'tool' && product.id === 'card_anon') {
+           // allow stacking
+      } else if (user.inventory.includes(product.id) && product.category !== 'frame') {
           alert("您已擁有此商品");
           return;
       }
@@ -460,9 +481,9 @@ const App = () => {
       const newPoints = user.points - product.price;
       
       const newInventory = [...user.inventory];
-      if (!newInventory.includes(product.id)) {
-          newInventory.push(product.id);
-      }
+      // For tools like anon card, we might want multiples, but simple implementation: just add to array.
+      // Our DB handles inventory as an array of strings.
+      newInventory.push(product.id);
       
       let newAvatarFrame = user.avatarFrame;
       if (product.category === 'frame') {
@@ -962,6 +983,7 @@ const App = () => {
                 )}
                 {currentTab === Tab.ASK && (
                     <AskScreen 
+                        user={user}
                         onPostQuestion={handlePostQuestion} 
                         onImageClick={(url) => {
                             pushHistory();

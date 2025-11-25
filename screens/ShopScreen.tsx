@@ -240,14 +240,14 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
               
               <div className="mt-auto w-full relative z-10">
                   <button
-                    disabled={(!isConsumable && isOwned && product.category !== 'frame') || isBetaFrame} 
+                    disabled={(!isConsumable && isOwned && product.category !== 'frame' && product.category !== 'tool') || isBetaFrame} 
                     onClick={() => onBuy(product)}
                     className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1 ${
                       isBetaFrame 
                         ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-500 cursor-not-allowed border border-amber-200 dark:border-amber-800'
                         : isEquipped 
                             ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 cursor-default'
-                            : (isOwned && !isConsumable)
+                            : (isOwned && !isConsumable && product.category !== 'tool')
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200' 
                                 : canAfford 
                                   ? isRare 
@@ -260,7 +260,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                         <span>限定商品</span>
                     ) : isEquipped ? (
                         <span>使用中</span>
-                    ) : (isOwned && !isConsumable) ? (
+                    ) : (isOwned && !isConsumable && product.category !== 'tool') ? (
                         <span>{product.category === 'frame' ? '裝備' : '已擁有'}</span>
                     ) : (
                         <>

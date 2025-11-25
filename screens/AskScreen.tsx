@@ -1,20 +1,28 @@
+
+
 import React, { useState, useRef } from 'react';
-import { AlertTriangle, Image as ImageIcon, Send, X } from 'lucide-react';
-import { Question } from '../types';
+import { AlertTriangle, Image as ImageIcon, Send, X, Ghost } from 'lucide-react';
+import { Question, User } from '../types';
 
 interface AskScreenProps {
-  onPostQuestion: (question: Omit<Question, 'id' | 'replies' | 'views' | 'date'>) => void;
+  user: User;
+  onPostQuestion: (question: Omit<Question, 'id' | 'replies' | 'views' | 'date'>, isAnonymous: boolean) => void;
   onImageClick?: (url: string) => void;
 }
 
 const SUBJECTS = ['電子學', '基本電學', '數位邏輯', '微處理機', '程式設計', '國文', '英文', '數學', '其他'];
 
-export const AskScreen: React.FC<AskScreenProps> = ({ onPostQuestion, onImageClick }) => {
+export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onImageClick }) => {
   const [selectedSubject, setSelectedSubject] = useState('電子學');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [image, setImage] = useState<string | null>(null);
+  const [useAnonymous, setUseAnonymous] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check inventory for Anonymous Card
+  const anonCardCount = user.inventory.filter(item => item === 'card_anon').length;
+  const canUseAnonymous = anonCardCount > 0;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -58,18 +66,27 @@ export const AskScreen: React.FC<AskScreenProps> = ({ onPostQuestion, onImageCli
       title,
       content,
       image: image || undefined,
-      author: '我', // In a real app, this would be the current user
+      author: user.name, // Will be overridden in App.tsx/dataService if anonymous
       tags: [selectedSubject],
       status: 'open',
       replyCount: 0,
-      authorAvatarColor: 'bg-purple-500'
-    });
+      authorAvatarColor: user.avatarColor
+    }, useAnonymous);
     
     // Reset form
     setTitle('');
     setContent('');
     setImage(null);
     setSelectedSubject('電子學');
+    setUseAnonymous(false);
+  };
+
+  const handleToggleAnonymous = () => {
+      if (canUseAnonymous) {
+          setUseAnonymous(!useAnonymous);
+      } else {
+          alert("您沒有「匿名發問卡」，請前往商店購買。");
+      }
   };
 
   return (
@@ -163,6 +180,34 @@ export const AskScreen: React.FC<AskScreenProps> = ({ onPostQuestion, onImageCli
             accept="image/*"
             onChange={handleImageUpload}
         />
+      </div>
+      
+      {/* Anonymous Toggle Card */}
+      <div 
+        onClick={handleToggleAnonymous}
+        className={`rounded-xl p-4 border transition-all cursor-pointer flex items-center justify-between ${
+            useAnonymous 
+            ? 'bg-gray-800 border-gray-700 text-white shadow-lg shadow-gray-400/50' 
+            : canUseAnonymous
+                ? 'bg-white border-gray-200 hover:border-gray-300'
+                : 'bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed'
+        }`}
+      >
+          <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${useAnonymous ? 'bg-gray-700' : 'bg-gray-100 text-gray-500'}`}>
+                  <Ghost size={20} />
+              </div>
+              <div>
+                  <div className={`font-bold text-sm ${useAnonymous ? 'text-white' : 'text-gray-700'}`}>使用匿名發問卡</div>
+                  <div className={`text-xs ${useAnonymous ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {canUseAnonymous ? `剩餘數量: ${anonCardCount}` : '您尚未擁有此道具'}
+                  </div>
+              </div>
+          </div>
+          
+          <div className={`w-12 h-6 rounded-full p-1 transition-colors ${useAnonymous ? 'bg-green-500' : 'bg-gray-300'}`}>
+              <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useAnonymous ? 'translate-x-6' : 'translate-x-0'}`}></div>
+          </div>
       </div>
 
       {/* Submit Button */}

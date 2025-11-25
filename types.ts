@@ -98,6 +98,7 @@ export interface Question {
   authorAvatarImage?: string;
   authorAvatarFrame?: string;
   authorNameColor?: string;
+  isAnonymous?: boolean; // New: Anonymous flag
 }
 
 export interface Resource {
