@@ -1,18 +1,26 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, Trophy, Crown, Grid3X3, Zap } from 'lucide-react';
+import { createPortal } from 'react-dom'; // For dragging overlay
+import { ArrowLeft, Trophy, Crown, Grid3X3, Zap, XCircle } from 'lucide-react';
 import { User, GameResult } from '../types';
 import { submitGameScore } from '../services/dataService';
 
 // --- Constants & Types ---
 const BOARD_SIZE = 8;
 
-// Different colors for different visual flair
+// Neon/Vibrant Colors
 const BLOCK_COLORS = [
-    'bg-red-500', 'bg-orange-500', 'bg-amber-400', 
-    'bg-green-500', 'bg-emerald-400', 'bg-teal-500', 
-    'bg-cyan-500', 'bg-blue-500', 'bg-indigo-500', 
-    'bg-violet-500', 'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500'
+    'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)]', 
+    'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.6)]', 
+    'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]', 
+    'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)]', 
+    'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]', 
+    'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.6)]', 
+    'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]', 
+    'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)]', 
+    'bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]', 
+    'bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.6)]', 
+    'bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]'
 ];
 
 type Shape = {
@@ -88,13 +96,12 @@ const playSound = (type: 'place' | 'clear' | 'gameover' | 'select' | 'combo') =>
             case 'combo':
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(600, now);
-                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.3);
-                osc.frequency.setValueAtTime(1200, now + 0.1); // Arpeggio effect
-                osc.frequency.exponentialRampToValueAtTime(1800, now + 0.4);
+                osc.frequency.setValueAtTime(800, now + 0.1); 
+                osc.frequency.setValueAtTime(1200, now + 0.2);
                 gain.gain.setValueAtTime(0.1, now);
-                gain.gain.linearRampToValueAtTime(0, now + 0.5);
+                gain.gain.linearRampToValueAtTime(0, now + 0.4);
                 osc.start(now);
-                osc.stop(now + 0.5);
+                osc.stop(now + 0.4);
                 break;
             case 'gameover':
                 osc.type = 'sawtooth';
@@ -128,11 +135,8 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const [draggingShape, setDraggingShape] = useState<{
         index: number;
         shape: Shape;
-        x: number;
-        y: number;
-        // Offset from mouse pointer to shape center/top-left
-        offsetX: number; 
-        offsetY: number;
+        x: number; // Viewport X
+        y: number; // Viewport Y
     } | null>(null);
 
     // Refs for coordinate calculation
@@ -193,7 +197,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                 if (matrix[i][j] === 1) {
                     const newR = r + i;
                     const newC = c + j;
-                    if (newR >= BOARD_SIZE || newC >= BOARD_SIZE) return false;
+                    if (newR < 0 || newR >= BOARD_SIZE || newC < 0 || newC >= BOARD_SIZE) return false;
                     if (currentGrid[newR][newC] !== null) return false;
                 }
             }
@@ -205,7 +209,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
         if (gameOver) return;
-        e.preventDefault(); // Prevent scroll on touch
+        // e.preventDefault(); // Might block click, handled in CSS touch-action
         
         const shape = dockShapes[index];
         if (!shape) return;
@@ -220,81 +224,68 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
             shape,
             x: clientX,
             y: clientY,
-            offsetX: 0, // Simplified: Center on finger later or use drag logic
-            offsetY: -50 // Shift up slightly so finger doesn't cover block
         });
     };
 
-    useEffect(() => {
-        const handleMove = (e: MouseEvent | TouchEvent) => {
-            if (!draggingShape) return;
-            // e.preventDefault(); // Aggressive scroll prevention if needed
+    const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
+        if (!draggingShape) return;
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+        
+        setDraggingShape(prev => prev ? { ...prev, x: clientX, y: clientY } : null);
+    }, [draggingShape]);
 
-            const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-            const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
+    const handleDragEnd = useCallback((e: MouseEvent | TouchEvent) => {
+        if (!draggingShape) return;
 
-            setDraggingShape(prev => prev ? { ...prev, x: clientX, y: clientY } : null);
-        };
+        // Get final position
+        const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : (e as MouseEvent).clientX;
+        const clientY = 'changedTouches' in e ? e.changedTouches[0].clientY : (e as MouseEvent).clientY;
 
-        const handleEnd = (e: MouseEvent | TouchEvent) => {
-            if (!draggingShape) return;
-
-            // Attempt to drop
-            const clientX = 'changedTouches' in e ? e.changedTouches[0].clientX : (e as MouseEvent).clientX;
-            const clientY = 'changedTouches' in e ? e.changedTouches[0].clientY : (e as MouseEvent).clientY;
-
-            attemptDrop(clientX, clientY, draggingShape);
-            setDraggingShape(null);
-        };
-
-        if (draggingShape) {
-            window.addEventListener('mousemove', handleMove);
-            window.addEventListener('mouseup', handleEnd);
-            window.addEventListener('touchmove', handleMove, { passive: false });
-            window.addEventListener('touchend', handleEnd);
-        }
-
-        return () => {
-            window.removeEventListener('mousemove', handleMove);
-            window.removeEventListener('mouseup', handleEnd);
-            window.removeEventListener('touchmove', handleMove);
-            window.removeEventListener('touchend', handleEnd);
-        };
+        attemptDrop(clientX, clientY, draggingShape);
+        setDraggingShape(null);
     }, [draggingShape, grid]);
+
+    useEffect(() => {
+        if (draggingShape) {
+            window.addEventListener('mousemove', handleDragMove);
+            window.addEventListener('mouseup', handleDragEnd);
+            window.addEventListener('touchmove', handleDragMove, { passive: false });
+            window.addEventListener('touchend', handleDragEnd);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleDragMove);
+            window.removeEventListener('mouseup', handleDragEnd);
+            window.removeEventListener('touchmove', handleDragMove);
+            window.removeEventListener('touchend', handleDragEnd);
+        };
+    }, [draggingShape, handleDragMove, handleDragEnd]);
 
     const attemptDrop = (x: number, y: number, dragInfo: NonNullable<typeof draggingShape>) => {
         if (!gridRef.current) return;
         const rect = gridRef.current.getBoundingClientRect();
-        
-        // Calculate cell size
         const cellSize = rect.width / BOARD_SIZE;
 
-        // Calculate drag shape offset (we dragged from center/top, adjust for drop)
-        // Adjust for the offset we added visually (-50)
-        const adjustedY = y + 50; 
+        // Visual offset adjustment: 
+        // We render the drag preview slightly above the finger so it's visible.
+        // We need to calculate the drop based on where the "block" effectively is.
+        // In renderDragPreview, we translate( -50%, -100px ).
+        // So the center of the shape is at (x, y - 100).
+        const shapeVisualY = y - 80; // Match the offset used in portal
 
-        // Check if inside grid
-        if (x < rect.left || x > rect.right || adjustedY < rect.top || adjustedY > rect.bottom) {
-            return; // Dropped outside
-        }
-
-        // Calculate approximate Row/Col
-        // We want to align the top-left block of the shape to the cell under the pointer
-        // But usually it feels better if we center the shape under the pointer. 
-        // Let's stick to Top-Left logic relative to the pointer for consistency with grid logic,
-        // or refine: The pointer is roughly at the center of the dragged shape.
+        // We want to align the shape such that its blocks match the grid cells.
+        // Calculate the top-left of the shape's bounding box relative to the grid.
         
-        // Approximate the top-left of the shape relative to the pointer
         const shapeWidth = dragInfo.shape.matrix[0].length * cellSize;
         const shapeHeight = dragInfo.shape.matrix.length * cellSize;
         
-        const relativeX = (x - rect.left) - (shapeWidth / 2); // Center horizontally
-        const relativeY = (adjustedY - rect.top) - (shapeHeight / 2); // Center vertically
+        // Assume dragging by "center" of shape
+        const relativeX = (x - rect.left) - (shapeWidth / 2);
+        const relativeY = (shapeVisualY - rect.top) - (shapeHeight / 2);
 
         const c = Math.round(relativeX / cellSize);
         const r = Math.round(relativeY / cellSize);
 
-        // Bounds check handled in canPlace
         if (canPlace(grid, dragInfo.shape.matrix, r, c)) {
             placeShape(r, c, dragInfo.shape, dragInfo.index);
         }
@@ -303,7 +294,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const placeShape = (r: number, c: number, shape: Shape, dockIndex: number) => {
         playSound('place');
         
-        // 1. Place blocks
         const newGrid = grid.map(row => [...row]);
         let blocksPlaced = 0;
 
@@ -316,12 +306,11 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
             }
         }
 
-        // 2. Clear from Dock
         const newDock = [...dockShapes];
         newDock[dockIndex] = null;
         setDockShapes(newDock);
 
-        // 3. Check Lines
+        // Check Lines
         const rowsToClear: number[] = [];
         const colsToClear: number[] = [];
         for (let i = 0; i < BOARD_SIZE; i++) {
@@ -337,7 +326,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         if (linesCleared > 0) {
             const newCombo = comboCount + 1;
             setComboCount(newCombo);
-            moveScore += (linesCleared * 10) * newCombo;
+            moveScore += (linesCleared * 10) * newCombo; // Bonus
             
             setClearingRows(rowsToClear);
             setClearingCols(colsToClear);
@@ -351,7 +340,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                 setGrid(finalGrid);
                 setClearingRows([]);
                 setClearingCols([]);
-                
                 checkRegenAndGameOver(finalGrid, newDock, score + moveScore);
             }, 300);
         } else {
@@ -393,24 +381,26 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     // --- Render Helpers ---
 
-    const renderShapePreview = (shape: Shape, size = 16) => {
+    const renderShapePreview = (shape: Shape, blockSize: number = 20) => {
         const rows = shape.matrix.length;
         const cols = shape.matrix[0].length;
         return (
             <div 
                 style={{ 
                     display: 'grid', 
-                    gridTemplateRows: `repeat(${rows}, ${size}px)`,
-                    gridTemplateColumns: `repeat(${cols}, ${size}px)`,
-                    gap: '2px',
-                    pointerEvents: 'none'
+                    gridTemplateRows: `repeat(${rows}, ${blockSize}px)`,
+                    gridTemplateColumns: `repeat(${cols}, ${blockSize}px)`,
+                    gap: '4px',
                 }}
             >
                 {shape.matrix.map((row, r) => 
                     row.map((cell, c) => (
                         <div 
                             key={`${r}-${c}`} 
-                            className={`rounded-sm ${cell ? shape.color : 'bg-transparent'}`}
+                            className={`rounded-sm transition-all ${cell ? shape.color : 'bg-transparent'}`}
+                            style={{ 
+                                boxShadow: cell ? 'inset 0 0 5px rgba(255,255,255,0.4)' : 'none'
+                            }}
                         ></div>
                     ))
                 )}
@@ -418,27 +408,24 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         );
     };
 
-    // Calculate Grid Shadows for Dragging
-    const renderDropPreview = () => {
+    const renderGhost = () => {
         if (!draggingShape || !gridRef.current) return null;
         
         const rect = gridRef.current.getBoundingClientRect();
         const cellSize = rect.width / BOARD_SIZE;
-        const adjustedY = draggingShape.y + 50;
-        
-        // Match drop logic calculation
+        const adjustedY = draggingShape.y - 80; // Match portal offset
+
         const shapeWidth = draggingShape.shape.matrix[0].length * cellSize;
         const shapeHeight = draggingShape.shape.matrix.length * cellSize;
-        const relativeX = (draggingShape.x - rect.left) - (shapeWidth / 2); 
-        const relativeY = (adjustedY - rect.top) - (shapeHeight / 2);
         
+        const relativeX = (draggingShape.x - rect.left) - (shapeWidth / 2);
+        const relativeY = (adjustedY - rect.top) - (shapeHeight / 2);
+
         const c = Math.round(relativeX / cellSize);
         const r = Math.round(relativeY / cellSize);
-        
-        // Validate
+
         if (!canPlace(grid, draggingShape.shape.matrix, r, c)) return null;
 
-        // Render "Ghost" blocks
         const ghosts = [];
         for (let i = 0; i < draggingShape.shape.matrix.length; i++) {
             for (let j = 0; j < draggingShape.shape.matrix[i].length; j++) {
@@ -446,70 +433,56 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     ghosts.push(
                         <div 
                             key={`ghost-${i}-${j}`}
-                            className="absolute bg-gray-500/30 rounded-md border-2 border-white/30"
+                            className="absolute bg-white/30 rounded-md border border-white/50"
                             style={{
                                 width: `${cellSize - 4}px`,
                                 height: `${cellSize - 4}px`,
-                                left: `${(c + j) * (cellSize)}px`, // approximate gap adjust if grid has gap
-                                top: `${(r + i) * (cellSize)}px`,
-                                margin: '2px' // to match grid gap
+                                left: `${(c + j) * cellSize + 2}px`,
+                                top: `${(r + i) * cellSize + 2}px`,
                             }}
                         />
                     );
                 }
             }
         }
-        return <div className="absolute inset-0 pointer-events-none">{ghosts}</div>;
+        return <>{ghosts}</>;
     };
 
     // --- Main UI ---
     return (
-        <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col items-center select-none overflow-hidden touch-none">
+        <div className="fixed inset-0 z-50 bg-[#1e1e2e] flex flex-col items-center select-none overflow-hidden" style={{ touchAction: 'none' }}>
             {/* Header */}
-            <div className="w-full bg-gray-800 p-4 pt-safe flex justify-between items-center shadow-lg z-10">
-                <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-700 text-gray-300">
+            <div className="w-full bg-[#181825] p-4 pt-safe flex justify-between items-center shadow-lg z-10 border-b border-gray-800">
+                <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-700 text-gray-400">
                     <ArrowLeft size={24} />
                 </button>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">SCORE</span>
-                    <span className="text-2xl font-black text-white font-mono leading-none">{score}</span>
+                    <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">SCORE</span>
+                    <span className="text-3xl font-black text-white font-mono leading-none">{score}</span>
                 </div>
                 <div className="w-8"></div>
             </div>
 
             {!gameStarted ? (
                 // --- Start Menu ---
-                <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8 w-full max-w-sm">
-                    <div className="text-center space-y-2 animate-in zoom-in duration-500">
-                        <div className="w-24 h-24 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-lg shadow-cyan-500/20 mb-6 rotate-3 hover:rotate-6 transition-transform">
-                            <Grid3X3 size={48} className="text-white" />
+                <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8 w-full max-w-sm animate-in fade-in zoom-in duration-300">
+                    <div className="text-center space-y-2">
+                        <div className="w-24 h-24 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.5)] mb-6 rotate-3 hover:rotate-6 transition-transform">
+                            <Grid3X3 size={48} className="text-white drop-shadow-md" />
                         </div>
-                        <h1 className="text-3xl font-black text-white">Block Blast</h1>
-                        <p className="text-gray-400">方塊爆破：無盡消除</p>
-                    </div>
-
-                    <div className="bg-gray-800/50 p-6 rounded-2xl w-full border border-gray-700/50 backdrop-blur-sm">
-                        <div className="flex items-center gap-3 mb-4">
-                            <Trophy className="text-yellow-500" size={20} />
-                            <span className="font-bold text-gray-200">規則說明</span>
-                        </div>
-                        <ul className="text-sm text-gray-400 space-y-2 list-disc list-inside">
-                            <li>拖曳下方圖形至棋盤空格放置。</li>
-                            <li>填滿整行或整列即可消除得分。</li>
-                            <li>一次消除多行可獲得連擊加分！</li>
-                            <li>無法放置任何圖形時遊戲結束。</li>
-                        </ul>
+                        <h1 className="text-4xl font-black text-white tracking-tight">BLOCK BLAST</h1>
+                        <p className="text-gray-400 font-medium">拖曳 • 填滿 • 消除</p>
                     </div>
 
                     <div className="w-full space-y-3">
                          <button 
                             onClick={startGame}
-                            className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold text-lg shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                            className="w-full py-5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-2xl font-black text-xl shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-transform active:scale-95 border-b-4 border-blue-800"
                          >
-                            <Zap size={20} className="fill-white" />
+                            <Zap size={24} className="fill-white" />
                             開始遊戲
                         </button>
-                        <p className="text-center text-xs text-gray-500 font-medium">
+                        <p className="text-center text-xs text-gray-500 font-medium bg-gray-800/50 py-2 rounded-full">
                             消耗 1 愛心 • 剩餘: {user.hearts}
                         </p>
                     </div>
@@ -518,15 +491,16 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                 // --- Game Board ---
                 <div className="flex-1 w-full max-w-md flex flex-col items-center justify-center p-4 relative">
                     
-                    {/* The Grid */}
+                    {/* The Grid Container */}
                     <div 
                         ref={gridRef}
-                        className="bg-gray-800 p-1 rounded-xl shadow-2xl relative"
+                        className="bg-[#11111b] p-2 rounded-xl shadow-2xl relative border-2 border-[#313244]"
                         style={{
                             display: 'grid',
                             gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
                             width: 'min(90vw, 360px)',
-                            aspectRatio: '1/1'
+                            aspectRatio: '1/1',
+                            gap: '2px' // Gap between cells
                         }}
                     >
                         {grid.map((row, r) => 
@@ -536,70 +510,80 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                                     <div 
                                         key={`${r}-${c}`}
                                         className={`
-                                            m-[2px] rounded-md transition-all duration-300
-                                            ${cellColor ? cellColor : 'bg-gray-700/50'}
-                                            ${isClearing ? 'scale-0 opacity-0 bg-white' : 'scale-100 opacity-100'}
+                                            rounded-md transition-all duration-300
+                                            ${cellColor ? cellColor : 'bg-[#313244]'}
+                                            ${isClearing ? 'scale-0 opacity-0 bg-white brightness-200' : 'scale-100 opacity-100'}
                                         `}
+                                        style={{
+                                            boxShadow: cellColor ? 'inset 0 0 10px rgba(0,0,0,0.2)' : 'inset 0 0 5px rgba(0,0,0,0.2)'
+                                        }}
                                     ></div>
                                 );
                             })
                         )}
                         
-                        {/* Drag Preview Overlay */}
-                        {renderDropPreview()}
+                        {/* Ghost Preview */}
+                        {renderGhost()}
 
-                        {/* Combo Text Popup */}
+                        {/* Combo Popup */}
                         {comboCount > 1 && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                                <div className="text-4xl font-black text-yellow-400 drop-shadow-lg animate-bounce">
-                                    {comboCount}x COMBO!
+                                <div className="text-5xl font-black text-yellow-400 drop-shadow-[0_4px_0_rgba(0,0,0,0.5)] animate-bounce stroke-black">
+                                    {comboCount}x
                                 </div>
                             </div>
                         )}
                     </div>
 
                     {/* Dock (Shapes) */}
-                    <div className="mt-8 w-full flex justify-between items-center px-4 h-32">
-                        {dockShapes.map((shape, idx) => (
-                            <div 
-                                key={idx} 
-                                className={`
-                                    w-[30%] aspect-square flex items-center justify-center rounded-2xl transition-all duration-200
-                                    ${shape ? 'bg-gray-800 border-2 border-gray-700 shadow-lg cursor-grab active:cursor-grabbing' : 'opacity-0 pointer-events-none'}
-                                    ${draggingShape?.index === idx ? 'opacity-0' : 'opacity-100'}
-                                `}
-                                onMouseDown={(e) => handleDragStart(e, idx)}
-                                onTouchStart={(e) => handleDragStart(e, idx)}
-                            >
-                                {shape && renderShapePreview(shape, 10)}
-                            </div>
-                        ))}
+                    <div className="mt-8 w-full flex justify-between items-center px-2 h-32">
+                        {dockShapes.map((shape, idx) => {
+                            // Only render shape if not being dragged
+                            const isBeingDragged = draggingShape?.index === idx;
+                            return (
+                                <div 
+                                    key={idx} 
+                                    className={`
+                                        w-[30%] aspect-square flex items-center justify-center rounded-2xl transition-all duration-150
+                                        ${shape && !isBeingDragged ? 'bg-[#313244] border-2 border-[#45475a] shadow-lg active:scale-95' : ''}
+                                        ${!shape ? 'opacity-0 pointer-events-none' : ''}
+                                    `}
+                                    onMouseDown={(e) => handleDragStart(e, idx)}
+                                    onTouchStart={(e) => handleDragStart(e, idx)}
+                                >
+                                    {shape && !isBeingDragged && renderShapePreview(shape, 12)}
+                                </div>
+                            );
+                        })}
                     </div>
 
-                    <p className="mt-2 text-xs text-gray-500 animate-pulse">
-                        拖曳圖形至棋盤
-                    </p>
-
-                    {/* Dragging Portal/Overlay */}
-                    {draggingShape && (
-                         <div 
+                    {/* Drag Portal */}
+                    {draggingShape && createPortal(
+                        <div 
                             className="fixed pointer-events-none z-[100]"
                             style={{
                                 left: draggingShape.x,
                                 top: draggingShape.y,
-                                transform: `translate(-50%, calc(-50% - 50px)) scale(1.2)`, // Offset to match touch visually
+                                transform: `translate(-50%, -80px)`, // Offset upwards so finger doesn't cover
                             }}
-                         >
-                             {renderShapePreview(draggingShape.shape, 20)}
-                         </div>
+                        >
+                            {/* Make dragged shape match grid size roughly */}
+                            <div className="scale-150 drop-shadow-2xl opacity-90">
+                                {renderShapePreview(draggingShape.shape, 20)}
+                            </div>
+                        </div>,
+                        document.body
                     )}
 
                     {/* Game Over Overlay */}
                     {gameOver && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center bg-gray-900/90 backdrop-blur-sm rounded-xl">
                             <div className="bg-gray-800 p-8 rounded-3xl text-center shadow-2xl border border-gray-700 w-4/5 animate-in zoom-in">
+                                <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <XCircle size={32} className="text-red-500" />
+                                </div>
                                 <h2 className="text-2xl font-black text-white mb-2">無法移動!</h2>
-                                <div className="text-5xl font-mono font-black text-blue-400 mb-6">{score}</div>
+                                <div className="text-5xl font-mono font-black text-blue-400 mb-6 drop-shadow-lg">{score}</div>
                                 
                                 <button 
                                     onClick={handleSubmitScore}

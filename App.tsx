@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { LoginScreen } from './screens/LoginScreen';
@@ -19,7 +18,7 @@ import { PlaygroundScreen } from './screens/PlaygroundScreen';
 import { NotificationScreen } from './screens/NotificationScreen';
 import { CheckInModal } from './components/CheckInModal';
 import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
-import { BlockBlastScreen } from './screens/BlockBlastScreen'; // New
+import { BlockBlastScreen } from './screens/BlockBlastScreen'; 
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification } from './types';
 import { RefreshCw, X, Bell } from 'lucide-react';
@@ -49,6 +48,7 @@ const getFrameStyle = (frameId?: string) => {
 };
 
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
+    // IMPORTANT: lifetimePoints is the source of truth for Level. Fallback to points only if undefined.
     const xp = user.lifetimePoints ?? user.points;
     const progress = (xp % 500) / 5; // 500 XP per level
 
@@ -190,8 +190,6 @@ const App = () => {
     loadData();
   }, []);
 
-  // ... (Supabase Listeners and Data Logic same as before)
-  // Re-pasting standard logic to ensure context integration
     useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -308,10 +306,23 @@ const App = () => {
   const handleBuyProduct = async (product: Product) => {
       if (!user) return;
       if (user.points < product.price) { alert("積分不足！"); return; }
+      
+      // IMPORTANT: Fix for "Points dropped so Level dropped". 
+      // Ensure lifetimePoints is locked in before deducting current points.
+      // If lifetimePoints is undefined, initialize it with current points BEFORE deduction.
+      const currentLifetimePoints = user.lifetimePoints ?? user.points;
+      
+      let updatedUser: User = { 
+          ...user, 
+          points: user.points - product.price,
+          lifetimePoints: currentLifetimePoints // Lock in XP
+      };
+
       if (product.category === 'consumable' && product.id === 'item_heart_refill') {
-          const updatedUser = { ...user, points: user.points - product.price, hearts: (user.hearts || 0) + 1 };
+          updatedUser = { ...updatedUser, hearts: (user.hearts || 0) + 1 };
           await updateUserInDb(updatedUser); setUser(updatedUser); alert("購買成功！"); return;
       }
+      
       const isStackable = product.category === 'tool';
       if (!isStackable && user.inventory.includes(product.id) && product.category !== 'frame') { alert("已擁有"); return; }
       
@@ -320,16 +331,27 @@ const App = () => {
       let newFrame = user.avatarFrame;
       if (product.category === 'frame') newFrame = product.id;
 
-      const updatedUser = { ...user, points: user.points - product.price, inventory: newInv, avatarFrame: newFrame };
+      updatedUser = { ...updatedUser, inventory: newInv, avatarFrame: newFrame };
       await updateUserInDb(updatedUser); setUser(updatedUser); alert("購買成功！");
   };
 
   // --- Wheel Logic ---
   const handleWheelSpin = async (prize: number, cost: number) => {
       if (!user) return;
-      // Deduct cost and add prize
+      
+      // Ensure lifetimePoints is preserved
+      const currentLifetimePoints = user.lifetimePoints ?? user.points;
+      const netGain = prize > cost ? prize - cost : 0; // Only count winnings as "XP" if we want, or just add prize
+      // Usually gambling doesn't reduce "Career XP", so we keep lifetimePoints static or increase it if they win big
+      const newLifetime = currentLifetimePoints + (netGain > 0 ? netGain : 0);
+      
       const netPoints = user.points - cost + prize;
-      const updatedUser = { ...user, points: netPoints };
+      
+      const updatedUser = { 
+          ...user, 
+          points: netPoints,
+          lifetimePoints: newLifetime
+      };
       
       try {
           await updateUserInDb(updatedUser);
@@ -573,4 +595,3 @@ const App = () => {
 };
 
 export default App;
- 
