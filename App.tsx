@@ -212,7 +212,7 @@ const App = () => {
     loadData();
   }, []);
 
-  // Supabase Realtime Listener for Notifications
+  // Supabase Realtime Listener for Notifications (Pure Web)
   useEffect(() => {
     if (!user) return;
 
@@ -229,30 +229,8 @@ const App = () => {
         },
         (payload) => {
             console.log('Realtime notification received:', payload);
-            const newNotif = payload.new as Notification;
-            
-            // 1. Update Unread Count locally
+            // Update Unread Count locally (Badge only, no native bridge)
             setUnreadNotifications(prev => prev + 1);
-
-            // 2. Trigger HBuilderX Native Bridge (Vibrate + Modal)
-            // @ts-ignore
-            if (window.uni) {
-                // Add a small delay to ensure bridge is stable and use try-catch
-                setTimeout(() => {
-                    try {
-                        // @ts-ignore
-                        window.uni.postMessage({
-                            data: {
-                                action: 'notify',
-                                title: newNotif.title,
-                                content: newNotif.content
-                            }
-                        });
-                    } catch (err) {
-                        console.error("Bridge Error:", err);
-                    }
-                }, 100);
-            }
         }
       )
       .subscribe();
