@@ -84,8 +84,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               type="text"
               value={passcode}
               onChange={(e) => setPasscode(e.target.value)}
-              placeholder="請輸入今日驗證碼"
-              className="w-full bg-gray-600 text-white placeholder-gray-400 border-none rounded-md px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none"
+              placeholder="DAAN-XXXX"
+              className="w-full bg-gray-600 text-white placeholder-gray-400 border-none rounded-md px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-center font-bold tracking-widest uppercase"
             />
           </div>
 

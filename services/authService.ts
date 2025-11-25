@@ -2,12 +2,22 @@ import { User } from '../types';
 import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
 
-// Generate Daily Passcode: DAAN-MMDD (e.g., DAAN-1105)
+// Generate Daily Passcode: DAAN-XXXX (Random 4 digits seeded by date)
 export const getDailyPasscode = () => {
-    const now = new Date();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    return `DAAN-${month}${day}`;
+    const today = new Date().toDateString(); // e.g., "Mon Nov 06 2023"
+    
+    // Simple hash function to generate a seed from the date string
+    let hash = 0;
+    for (let i = 0; i < today.length; i++) {
+        const char = today.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    // Map hash to a 4-digit number (1000 - 9999)
+    const randomCode = (Math.abs(hash) % 9000) + 1000;
+    
+    return `DAAN-${randomCode}`;
 };
 
 export const login = async (name: string, studentId: string): Promise<User> => {

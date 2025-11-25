@@ -750,16 +750,4 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                     <button 
                         onClick={handleClaim}
                         disabled={!allReviewed}
-                        className={`w-full font-bold py-4 rounded-2xl shadow-lg transition-all flex-shrink-0 ${
-                            allReviewed 
-                            ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:scale-[1.02] active:scale-95' 
-                            : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
-                        }`}
-                    >
-                        {allReviewed ? "領取獎勵並返回" : `請先複習所有單字 (${reviewedIds.length}/${wrongWords.length})`}
-                    </button>
-                </div>
-           </div>
-      </div>
-  );
-};
+                        className={`w-full font-bold py-4 rounded-
