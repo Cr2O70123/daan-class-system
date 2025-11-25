@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export enum Tab {
@@ -31,7 +32,8 @@ export interface User {
   avatarColor: string;
   avatarImage?: string; 
   avatarFrame?: string;
-  points: number;
+  points: number; // Current Currency
+  lifetimePoints?: number; // Total XP for Leveling (Never decreases)
   level: number;
   isAdmin?: boolean;
   inventory: string[];
@@ -49,6 +51,20 @@ export interface User {
   // Moderation
   isBanned?: boolean;
   banExpiresAt?: string;
+
+  // Notifications (HBuilderX)
+  pushClientId?: string;
+}
+
+export interface Notification {
+  id: number;
+  userId: string;
+  type: 'reply' | 'system' | 'rank' | 'checkin';
+  title: string;
+  content: string;
+  link?: string; // Optional: ID to navigate to (e.g., Question ID)
+  isRead: boolean;
+  createdAt: string;
 }
 
 export interface Reply {

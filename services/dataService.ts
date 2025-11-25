@@ -2,6 +2,7 @@
 import { supabase } from './supabaseClient';
 import { Question, Resource, Exam, User, GameLeaderboardEntry, LeaderboardEntry } from '../types';
 import { calculateLevel } from './levelService';
+import { createNotification } from './notificationService';
 
 // --- Questions ---
 
@@ -103,6 +104,29 @@ export const createReply = async (user: User, questionId: number, content: strin
     }]);
 
     if (error) throw error;
+
+    // --- Auto Notification Logic ---
+    try {
+        // 1. Get Question Author
+        const { data: qData } = await supabase
+            .from('questions')
+            .select('author_student_id, title')
+            .eq('id', questionId)
+            .single();
+        
+        if (qData && qData.author_student_id && qData.author_student_id !== user.studentId) {
+            // 2. Create Notification
+            await createNotification(
+                qData.author_student_id,
+                'reply',
+                '您的問題有新回覆',
+                `${user.name} 回覆了您的問題：${qData.title.substring(0, 15)}...`,
+                questionId.toString()
+            );
+        }
+    } catch (notifError) {
+        console.error("Notification creation failed (non-critical)", notifError);
+    }
 };
 
 export const deleteReply = async (id: number) => {
@@ -240,9 +264,11 @@ export const unbanUser = async (studentId: string) => {
 // --- Class Leaderboard (Real Data) ---
 
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
+    // Note: We don't fetch 'level' from DB because it's calculated.
+    // We fetch lifetime_points to calculate level accurately.
     const { data, error } = await supabase
         .from('users')
-        .select('name, student_id, points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
+        .select('name, student_id, points, lifetime_points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
         .eq('is_banned', false)
         .order('points', { ascending: false })
         .limit(100);
@@ -257,7 +283,8 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         name: u.name,
         studentId: u.student_id,
         points: u.points,
-        level: calculateLevel(u.points), // Recalculate just in case
+        // Calculate level from lifetime_points (fallback to points for legacy data)
+        level: calculateLevel(u.lifetime_points ?? u.points), 
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
         avatarFrame: u.avatar_frame,
@@ -290,47 +317,66 @@ export const submitGameScore = async (user: User, score: number) => {
 export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> => {
     // Calculate start of the current week (Monday)
     const now = new Date();
-    const day = now.getDay(); // 0 (Sun) to 6 (Sat)
-    // If Sunday (0), subtract 6 days to get previous Monday. 
-    // If Monday (1) to Saturday (6), subtract (day - 1).
+    const day = now.getDay(); 
     const diff = now.getDate() - (day === 0 ? 6 : day - 1);
     
     const startOfWeek = new Date(now);
     startOfWeek.setDate(diff);
     startOfWeek.setHours(0, 0, 0, 0);
 
+    // 1. Fetch raw scores
     const { data, error } = await supabase
         .from('game_scores')
         .select('*')
-        .gte('created_at', startOfWeek.toISOString()) // Re-enabled weekly filter
-        .order('score', { ascending: false })
-        .limit(100);
+        .gte('created_at', startOfWeek.toISOString()) 
+        .order('score', { ascending: false });
 
     if (error) {
         console.error("Error fetching game leaderboard:", error);
         return [];
     }
 
-    // Deduplication: Keep only highest score per student
-    const uniqueEntries: Record<string, GameLeaderboardEntry> = {};
+    // 2. Deduplication: Keep only highest score per student
+    const uniqueEntries: Record<string, any> = {};
+    const studentIds = new Set<string>();
     
     data.forEach((entry: any) => {
         if (!uniqueEntries[entry.student_id] || entry.score > uniqueEntries[entry.student_id].score) {
-            uniqueEntries[entry.student_id] = {
-                rank: 0,
-                name: entry.name,
-                score: entry.score,
-                avatarColor: entry.avatar_data?.color || 'bg-gray-400',
-                avatarFrame: entry.avatar_data?.frame
-            };
+            uniqueEntries[entry.student_id] = entry;
+            studentIds.add(entry.student_id);
         }
     });
 
-    // Sort and take top 10
-    const sorted = Object.values(uniqueEntries).sort((a, b) => b.score - a.score).slice(0, 10);
+    const sortedEntries = Object.values(uniqueEntries).sort((a: any, b: any) => b.score - a.score).slice(0, 10);
     
-    return sorted.map((entry, index) => ({
-        ...entry,
-        rank: index + 1
+    // 3. Fetch LATEST user details to ensure avatar is up-to-date
+    // Instead of using the snapshot in game_scores, we grab current user profile
+    if (sortedEntries.length > 0) {
+        const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('student_id, avatar_color, avatar_image, avatar_frame')
+            .in('student_id', Array.from(studentIds));
+            
+        if (!userError && userData) {
+            // Merge latest avatar data into sorted entries
+            sortedEntries.forEach((entry: any) => {
+                const userProfile = userData.find((u: any) => u.student_id === entry.student_id);
+                if (userProfile) {
+                    entry.avatar_data = {
+                        color: userProfile.avatar_color,
+                        image: userProfile.avatar_image,
+                        frame: userProfile.avatar_frame
+                    };
+                }
+            });
+        }
+    }
+
+    return sortedEntries.map((entry: any, index: number) => ({
+        rank: index + 1,
+        name: entry.name,
+        score: entry.score,
+        avatarColor: entry.avatar_data?.color || 'bg-gray-400',
+        avatarFrame: entry.avatar_data?.frame
     }));
 };

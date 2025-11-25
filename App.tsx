@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { LoginScreen } from './screens/LoginScreen';
@@ -14,9 +15,10 @@ import { ExamScreen } from './screens/ExamScreen';
 import { WordChallengeScreen } from './screens/WordChallengeScreen';
 import { ResistorGameScreen } from './screens/ResistorGameScreen';
 import { PlaygroundScreen } from './screens/PlaygroundScreen';
+import { NotificationScreen } from './screens/NotificationScreen';
 import { CheckInModal } from './components/CheckInModal';
-import { Tab, User, Question, Report, Product, Resource, Exam, GameResult } from './types';
-import { RefreshCw, X } from 'lucide-react';
+import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification } from './types';
+import { RefreshCw, X, Bell } from 'lucide-react';
 
 // Services
 import { WORD_DATABASE } from './services/mockData'; 
@@ -27,6 +29,7 @@ import {
     fetchResources, createResource, deleteResource, updateResourceLikes,
     fetchExams, createExam, deleteExam, banUser, unbanUser
 } from './services/dataService';
+import { fetchNotifications, registerPushClientId } from './services/notificationService';
 
 // Helper to get frame styles (Used in Header)
 const getFrameStyle = (frameId?: string) => {
@@ -41,37 +44,55 @@ const getFrameStyle = (frameId?: string) => {
     }
 };
 
-const Header = ({ user }: { user: User }) => (
-  <div className="bg-white dark:bg-gray-800 px-4 pb-2 pt-safe sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
-    <div className="flex flex-col">
-        <h1 className="text-lg font-bold text-gray-800 dark:text-white tracking-wide">電子三乙功課系統</h1>
-        <div className="flex items-center gap-2 mt-0.5">
-            <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] px-1.5 py-0.5 rounded font-bold">
-                Lv.{user.level}
-            </span>
-            <div className="h-1.5 w-20 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div 
-                    className="h-full bg-blue-500 rounded-full" 
-                    style={{ width: `${(user.points % 500) / 5}%` }}
-                ></div>
+const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
+    const xp = user.lifetimePoints ?? user.points;
+    const progress = (xp % 500) / 5; // 500 XP per level, so %500 / 500 * 100 = %500 / 5
+
+    return (
+        <div className="bg-white dark:bg-gray-800 px-4 pb-2 pt-safe sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
+            <div className="flex flex-col">
+                <h1 className="text-lg font-bold text-gray-800 dark:text-white tracking-wide">電子三乙功課系統</h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                    <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] px-1.5 py-0.5 rounded font-bold">
+                        Lv.{user.level}
+                    </span>
+                    <div className="h-1.5 w-20 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-blue-500 rounded-full" 
+                            style={{ width: `${progress}%` }}
+                        ></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div className="flex items-center space-x-3">
+                {/* Notification Bell */}
+                <button 
+                    onClick={onOpenNotifications}
+                    className="relative p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                    <Bell size={20} className="text-gray-600 dark:text-gray-300" />
+                    {unreadCount > 0 && (
+                        <div className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white dark:border-gray-800"></div>
+                    )}
+                </button>
+
+                <div className="flex items-center space-x-2">
+                    <span className="bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-800 text-xs font-bold px-2.5 py-1 rounded-full">
+                        {user.points} PT
+                    </span>
+                    <div className={`w-9 h-9 rounded-full ${user.avatarColor} flex items-center justify-center text-white font-bold shadow-sm overflow-hidden ${getFrameStyle(user.avatarFrame)}`}>
+                        {user.avatarImage ? (
+                            <img src={user.avatarImage} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                            user.name.charAt(0) || 'U'
+                        )}
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <div className="flex items-center space-x-2">
-      <span className="bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 border border-yellow-100 dark:border-yellow-800 text-xs font-bold px-2.5 py-1 rounded-full">
-        {user.points} PT
-      </span>
-      <div className={`w-9 h-9 rounded-full ${user.avatarColor} flex items-center justify-center text-white font-bold shadow-sm overflow-hidden ${getFrameStyle(user.avatarFrame)}`}>
-         {user.avatarImage ? (
-             <img src={user.avatarImage} alt="avatar" className="w-full h-full object-cover" />
-         ) : (
-             user.name.charAt(0) || 'U'
-         )}
-      </div>
-    </div>
-  </div>
-);
+    );
+};
 
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -83,6 +104,7 @@ const App = () => {
   const [resources, setResources] = useState<Resource[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   // UI States - Modal/Overlay Management for Back Button
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
@@ -92,9 +114,25 @@ const App = () => {
   const [showWordChallenge, setShowWordChallenge] = useState(false);
   const [showResistorGame, setShowResistorGame] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [showNotificationScreen, setShowNotificationScreen] = useState(false);
   
   // Global Lightbox
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // --- NAVIGATION HANDLER ---
+  const handleTabChange = (newTab: Tab) => {
+      // Force close all overlays when switching main tabs to prevent "stuck" states
+      setShowWordChallenge(false);
+      setShowResistorGame(false);
+      setShowLeaderboardOverlay(false);
+      setSelectedQuestion(null);
+      setSelectedResource(null);
+      setShowModeration(false);
+      setShowCheckInModal(false);
+      setShowNotificationScreen(false);
+      
+      setCurrentTab(newTab);
+  };
 
   // --- BACK BUTTON HANDLING ---
   useEffect(() => {
@@ -106,6 +144,10 @@ const App = () => {
           }
           if (showCheckInModal) {
               setShowCheckInModal(false);
+              return;
+          }
+          if (showNotificationScreen) {
+              setShowNotificationScreen(false);
               return;
           }
           if (showWordChallenge) {
@@ -136,12 +178,11 @@ const App = () => {
               setCurrentTab(Tab.HOME);
               return;
           }
-          // If none of above, default browser back behavior (exit)
       };
 
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
-  }, [lightboxImage, showCheckInModal, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
+  }, [lightboxImage, showCheckInModal, showNotificationScreen, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
 
   // Helper to push state when opening overlay
   const pushHistory = () => {
@@ -157,6 +198,10 @@ const App = () => {
                 setUser(sessionUser);
                 // Check for daily reset when session loads
                 checkDailyReset(sessionUser);
+                // HBuilderX Push Registration
+                await registerPush(sessionUser);
+                // Fetch Notifications
+                refreshNotifications(sessionUser.studentId);
             }
         } catch (e) {
             console.error("Session check failed", e);
@@ -166,7 +211,37 @@ const App = () => {
     };
     initSession();
     loadData();
+
+    // HBuilderX Event Listener for Push
+    const handlePlusReady = () => {
+        if (user) registerPush(user);
+    };
+    document.addEventListener('plusready', handlePlusReady);
+    return () => document.removeEventListener('plusready', handlePlusReady);
   }, []);
+
+  // Polling for new notifications (every 60s)
+  useEffect(() => {
+      if (!user) return;
+      const interval = setInterval(() => {
+          refreshNotifications(user.studentId);
+      }, 60000);
+      return () => clearInterval(interval);
+  }, [user]);
+
+  const registerPush = async (currentUser: User) => {
+      const updatedUser = await registerPushClientId(currentUser);
+      if (updatedUser.pushClientId !== currentUser.pushClientId) {
+          setUser(updatedUser);
+      }
+  };
+
+  const refreshNotifications = async (studentId: string) => {
+      try {
+          const notifs = await fetchNotifications(studentId);
+          setUnreadNotifications(notifs.filter(n => !n.isRead).length);
+      } catch (e) {}
+  };
 
   // Dark Mode Effect
   useEffect(() => {
@@ -230,9 +305,14 @@ const App = () => {
         reward = 100;
     }
 
-    const updatedUser = {
+    const newPoints = user.points + reward;
+    const newLifetime = (user.lifetimePoints ?? user.points) + reward; // XP Gain
+
+    const updatedUser: User = {
         ...user,
-        points: user.points + reward,
+        points: newPoints,
+        lifetimePoints: newLifetime,
+        level: calculateLevel(newLifetime),
         lastCheckInDate: today,
         checkInStreak: newStreak
     };
@@ -250,6 +330,7 @@ const App = () => {
       const handleVisibilityChange = () => {
           if (document.visibilityState === 'visible' && user) {
               checkDailyReset(user);
+              refreshNotifications(user.studentId);
           }
       };
       document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -278,6 +359,7 @@ const App = () => {
         const loggedUser = await login(name, studentId);
         setUser(loggedUser);
         checkDailyReset(loggedUser);
+        registerPush(loggedUser); // Register Push on Login
     } catch (error: any) {
         alert("登入失敗: " + error.message);
     }
@@ -300,8 +382,17 @@ const App = () => {
           await createReply(user, qid, content, image);
           await loadData(); 
           
-          const newPoints = user.points + 5;
-          const updatedUser = { ...user, points: newPoints };
+          const reward = 5;
+          const newPoints = user.points + reward;
+          const newLifetime = (user.lifetimePoints ?? user.points) + reward; // XP Gain
+
+          const updatedUser: User = { 
+              ...user, 
+              points: newPoints,
+              lifetimePoints: newLifetime,
+              level: calculateLevel(newLifetime)
+           };
+
           await updateUserInDb(updatedUser);
           setUser(updatedUser);
           
@@ -326,7 +417,9 @@ const App = () => {
           return;
       }
 
+      // SPENDING: Only reduce points, do NOT reduce lifetimePoints (XP)
       const newPoints = user.points - product.price;
+      
       const newInventory = [...user.inventory];
       if (!newInventory.includes(product.id)) {
           newInventory.push(product.id);
@@ -337,9 +430,10 @@ const App = () => {
           newAvatarFrame = product.id;
       }
 
-      const updatedUser = { 
+      const updatedUser: User = { 
           ...user, 
           points: newPoints, 
+          // lifetimePoints remains unchanged, so Level is protected!
           inventory: newInventory,
           avatarFrame: newAvatarFrame
       };
@@ -371,8 +465,16 @@ const App = () => {
   const handleFinishChallenge = async (result: GameResult) => {
       if (!user) return;
       const earnedPt = Math.floor(result.score / 50);
+      
       const newPoints = user.points + earnedPt;
-      const updatedUser = { ...user, points: newPoints };
+      const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt; // XP Gain
+
+      const updatedUser: User = { 
+          ...user, 
+          points: newPoints,
+          lifetimePoints: newLifetime,
+          level: calculateLevel(newLifetime)
+      };
       
       try {
           await updateUserInDb(updatedUser);
@@ -400,6 +502,21 @@ const App = () => {
       if (!user) return;
       try {
           await createResource(user, title, description, tags, images);
+          
+          // Reward for sharing resource
+          const reward = 20;
+          const newPoints = user.points + reward;
+          const newLifetime = (user.lifetimePoints ?? user.points) + reward;
+
+          const updatedUser: User = {
+              ...user,
+              points: newPoints,
+              lifetimePoints: newLifetime,
+              level: calculateLevel(newLifetime)
+          };
+          await updateUserInDb(updatedUser);
+          setUser(updatedUser);
+
           await loadData();
           setCurrentTab(Tab.RESOURCE);
       } catch (e) {
@@ -523,6 +640,29 @@ const App = () => {
       }
   };
 
+  // Handle clicking a notification
+  const handleNotificationClick = async (notif: Notification) => {
+      setShowNotificationScreen(false); // Close list
+      if (notif.type === 'reply' && notif.link) {
+          // Navigate to Question
+          const qId = parseInt(notif.link);
+          const question = questions.find(q => q.id === qId);
+          if (question) {
+              setSelectedQuestion(question);
+              pushHistory();
+          } else {
+              // Might need to refetch if it's new
+              const updatedQuestions = await fetchQuestions();
+              const freshQ = updatedQuestions.find(q => q.id === qId);
+              if (freshQ) {
+                setQuestions(updatedQuestions);
+                setSelectedQuestion(freshQ);
+                pushHistory();
+              }
+          }
+      }
+  };
+
   if (isLoading) {
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center space-y-4">
@@ -564,6 +704,14 @@ const App = () => {
         streak={user.checkInStreak || 0}
         isCheckedInToday={user.lastCheckInDate === new Date().toDateString()}
       />
+
+      {showNotificationScreen && (
+          <NotificationScreen 
+              user={user}
+              onBack={() => setShowNotificationScreen(false)}
+              onNotificationClick={handleNotificationClick}
+          />
+      )}
 
       {showWordChallenge && (
         <WordChallengeScreen 
@@ -655,7 +803,14 @@ const App = () => {
           </div>
       ) : (
           <>
-            <Header user={user} />
+            <Header 
+                user={user} 
+                onOpenNotifications={() => {
+                    pushHistory();
+                    setShowNotificationScreen(true);
+                }}
+                unreadCount={unreadNotifications}
+            />
 
             <div className="pb-20">
                 {currentTab === Tab.HOME && (
@@ -670,7 +825,8 @@ const App = () => {
                             setCurrentTab(Tab.ASK);
                         }}
                         onNavigateToPlayground={() => {
-                            setCurrentTab(Tab.PLAYGROUND);
+                            // Correct navigation with reset
+                            handleTabChange(Tab.PLAYGROUND);
                         }}
                         onOpenLeaderboard={() => {
                             pushHistory();
@@ -776,7 +932,7 @@ const App = () => {
                 )}
             </div>
 
-            <BottomNav currentTab={currentTab} setTab={setCurrentTab} />
+            <BottomNav currentTab={currentTab} setTab={handleTabChange} />
           </>
       )}
     </div>

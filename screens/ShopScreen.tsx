@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { ShoppingBag, Star, Zap, Crown, Palette, Ghost, MessageCircle, LayoutGrid, Brush, ArrowDownNarrowWide, ArrowUpNarrowWide, Pin, Sparkles, Tag } from 'lucide-react';
 import { User, Product } from '../types';
@@ -168,10 +169,10 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                     ${isEquipped ? 'ring-2 ring-blue-500 border-blue-500' : ''}
                 `}
             >
-              {/* Shimmer Effect for Beta Frame */}
+              {/* Shimmer Effect for Beta Frame - Enhanced visibility for Light Mode */}
               {isBetaFrame && (
                   <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent w-full h-full -skew-x-12 animate-shimmer"></div>
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-200/50 dark:via-white/30 to-transparent w-full h-full -skew-x-12 animate-shimmer"></div>
                   </div>
               )}
 

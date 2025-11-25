@@ -1,3 +1,4 @@
+
 import { User } from '../types';
 import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
@@ -44,6 +45,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             student_id: studentId,
             name: name,
             points: initialPoints,
+            lifetime_points: initialPoints, // Initialize XP same as starting points
             hearts: 3,
             last_heart_reset: new Date().toDateString(),
             inventory: [],
@@ -81,6 +83,9 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         }
     }
 
+    // Use lifetime_points for level calculation if available, otherwise fallback to points
+    const xp = user.lifetime_points ?? user.points;
+
     const appUser: User = {
         name: user.name,
         studentId: user.student_id,
@@ -88,7 +93,8 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         avatarImage: user.avatar_image || undefined,
         avatarFrame: user.avatar_frame || undefined,
         points: user.points,
-        level: calculateLevel(user.points),
+        lifetimePoints: xp, // Store XP
+        level: calculateLevel(xp), // Calculate level based on XP
         isAdmin: isAdmin, 
         inventory: inventory,
         settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
@@ -101,7 +107,10 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         checkInStreak: user.consecutive_check_in_days || 0,
 
         isBanned: user.is_banned,
-        banExpiresAt: user.ban_expires_at
+        banExpiresAt: user.ban_expires_at,
+
+        // Push
+        pushClientId: user.push_client_id
     };
 
     // Persist session
@@ -141,6 +150,9 @@ export const checkSession = async (): Promise<User | null> => {
     }
     
     const isAdmin = user.name === 'admin1204';
+    
+    // Use lifetime_points for level calculation if available, otherwise fallback to points
+    const xp = user.lifetime_points ?? user.points;
 
     return {
         name: user.name,
@@ -149,7 +161,8 @@ export const checkSession = async (): Promise<User | null> => {
         avatarImage: user.avatar_image || undefined,
         avatarFrame: user.avatar_frame || undefined,
         points: user.points,
-        level: calculateLevel(user.points),
+        lifetimePoints: xp,
+        level: calculateLevel(xp),
         isAdmin: isAdmin,
         inventory: inventory,
         settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
@@ -162,7 +175,9 @@ export const checkSession = async (): Promise<User | null> => {
         checkInStreak: user.consecutive_check_in_days || 0,
 
         isBanned: user.is_banned,
-        banExpiresAt: user.ban_expires_at
+        banExpiresAt: user.ban_expires_at,
+
+        pushClientId: user.push_client_id
     };
 };
 
@@ -177,6 +192,7 @@ export const updateUserInDb = async (user: User) => {
 
     const updatePayload = {
         points: user.points,
+        lifetime_points: user.lifetimePoints, // Ensure XP is saved
         hearts: user.hearts,
         last_heart_reset: user.lastHeartReset,
         avatar_image: user.avatarImage,
@@ -188,7 +204,10 @@ export const updateUserInDb = async (user: User) => {
         
         // Check-in
         last_check_in_date: user.lastCheckInDate,
-        consecutive_check_in_days: user.checkInStreak
+        consecutive_check_in_days: user.checkInStreak,
+
+        // Push
+        push_client_id: user.pushClientId
     };
 
     const { error } = await supabase
