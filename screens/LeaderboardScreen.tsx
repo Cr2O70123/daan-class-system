@@ -153,10 +153,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
                                 </div>
                             </div>
                             
-                            {/* Score */}
+                            {/* Score (Now displays Lifetime Points / EXP) */}
                             <div className="text-right pl-2">
                                 <div className="font-black font-mono text-lg text-blue-600 dark:text-blue-400 leading-none">{entry.points}</div>
-                                <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">PT</div>
+                                <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">EXP</div>
                             </div>
                         </div>
                     );
@@ -200,13 +200,15 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
             <div className="flex-grow">
                 <div className="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                     {currentUser.name}
+                    <span className="text-[10px] text-gray-400 px-1.5 rounded bg-gray-100 dark:bg-gray-700">ME</span>
                     <span className="text-[10px] bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 px-1.5 rounded font-bold">Lv.{currentUser.level}</span>
                 </div>
                 <div className="text-xs text-gray-400">我的目前排名</div>
             </div>
+            {/* Show XP (Lifetime Points) here to match the leaderboard sorting metric */}
             <div className="text-right">
-                <div className="font-black font-mono text-blue-600 dark:text-blue-400 text-lg">{currentUser.points}</div>
-                <div className="text-[10px] text-gray-400 uppercase">PT</div>
+                <div className="font-black font-mono text-blue-600 dark:text-blue-400 text-lg">{currentUser.lifetimePoints ?? currentUser.points}</div>
+                <div className="text-[10px] text-gray-400 uppercase">EXP</div>
             </div>
           </div>
       )}

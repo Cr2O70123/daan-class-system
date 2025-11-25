@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom'; // For dragging overlay
-import { ArrowLeft, Trophy, Crown, Grid3X3, Zap, XCircle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ArrowLeft, Trophy, Crown, Grid3X3, Zap, XCircle, RefreshCw } from 'lucide-react';
 import { User, GameResult } from '../types';
 import { submitGameScore } from '../services/dataService';
 
@@ -10,17 +10,17 @@ const BOARD_SIZE = 8;
 
 // Neon/Vibrant Colors
 const BLOCK_COLORS = [
-    'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)]', 
-    'bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.6)]', 
-    'bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.6)]', 
-    'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)]', 
-    'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)]', 
-    'bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.6)]', 
-    'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]', 
-    'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)]', 
-    'bg-violet-500 shadow-[0_0_10px_rgba(139,92,246,0.6)]', 
-    'bg-fuchsia-500 shadow-[0_0_10px_rgba(217,70,239,0.6)]', 
-    'bg-pink-500 shadow-[0_0_10px_rgba(236,72,153,0.6)]'
+    'bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.6)]', 
+    'bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)]', 
+    'bg-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.6)]', 
+    'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.6)]', 
+    'bg-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.6)]', 
+    'bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)]', 
+    'bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.6)]', 
+    'bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.6)]', 
+    'bg-violet-500 shadow-[0_0_15px_rgba(139,92,246,0.6)]', 
+    'bg-fuchsia-500 shadow-[0_0_15px_rgba(217,70,239,0.6)]', 
+    'bg-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.6)]'
 ];
 
 type Shape = {
@@ -46,6 +46,7 @@ const SHAPE_DEFINITIONS: number[][][] = [
     [[1, 0], [1, 0], [1, 1]], // L
     [[0, 1], [0, 1], [1, 1]], // J
     [[1, 1], [1, 0]], // Small L
+    [[1, 0, 0], [1, 0, 0], [1, 1, 1]], // Big L
 ];
 
 interface BlockBlastScreenProps {
@@ -88,7 +89,7 @@ const playSound = (type: 'place' | 'clear' | 'gameover' | 'select' | 'combo') =>
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(400, now);
                 osc.frequency.exponentialRampToValueAtTime(800, now + 0.2);
-                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.setValueAtTime(0.2, now);
                 gain.gain.linearRampToValueAtTime(0, now + 0.3);
                 osc.start(now);
                 osc.stop(now + 0.3);
@@ -98,7 +99,7 @@ const playSound = (type: 'place' | 'clear' | 'gameover' | 'select' | 'combo') =>
                 osc.frequency.setValueAtTime(600, now);
                 osc.frequency.setValueAtTime(800, now + 0.1); 
                 osc.frequency.setValueAtTime(1200, now + 0.2);
-                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.setValueAtTime(0.2, now);
                 gain.gain.linearRampToValueAtTime(0, now + 0.4);
                 osc.start(now);
                 osc.stop(now + 0.4);
@@ -116,6 +117,13 @@ const playSound = (type: 'place' | 'clear' | 'gameover' | 'select' | 'combo') =>
     } catch(e) {}
 };
 
+// Haptic Feedback Helper
+const vibrate = (pattern: number | number[] = 10) => {
+    if (navigator.vibrate) {
+        navigator.vibrate(pattern);
+    }
+};
+
 export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack, onFinish, onUpdateHearts }) => {
     // --- State ---
     const [grid, setGrid] = useState<(string | null)[][]>(
@@ -130,6 +138,10 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const [clearingRows, setClearingRows] = useState<number[]>([]);
     const [clearingCols, setClearingCols] = useState<number[]>([]);
     const [comboCount, setComboCount] = useState(0);
+    const [screenShake, setScreenShake] = useState(false);
+
+    // Dynamic sizing for drag logic
+    const [boardCellSize, setBoardCellSize] = useState(0);
 
     // --- Drag & Drop State ---
     const [draggingShape, setDraggingShape] = useState<{
@@ -141,6 +153,20 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     // Refs for coordinate calculation
     const gridRef = useRef<HTMLDivElement>(null);
+
+    // Update cell size on resize/init
+    useEffect(() => {
+        if (!gridRef.current) return;
+        const updateSize = () => {
+            if (gridRef.current) {
+                const rect = gridRef.current.getBoundingClientRect();
+                setBoardCellSize(rect.width / BOARD_SIZE);
+            }
+        };
+        updateSize();
+        window.addEventListener('resize', updateSize);
+        return () => window.removeEventListener('resize', updateSize);
+    }, [gameStarted]);
 
     // --- Helpers ---
     
@@ -171,6 +197,14 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         setGameOver(false);
         setGameStarted(true);
         setDockShapes(generateNewShapes());
+        
+        // Short delay to ensure DOM is ready for sizing
+        setTimeout(() => {
+             if (gridRef.current) {
+                const rect = gridRef.current.getBoundingClientRect();
+                setBoardCellSize(rect.width / BOARD_SIZE);
+            }
+        }, 100);
     };
 
     const checkGameOver = useCallback((currentGrid: (string | null)[][], currentDock: (Shape | null)[]) => {
@@ -209,7 +243,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
         if (gameOver) return;
-        // e.preventDefault(); // Might block click, handled in CSS touch-action
         
         const shape = dockShapes[index];
         if (!shape) return;
@@ -218,6 +251,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
 
         playSound('select');
+        vibrate(20);
 
         setDraggingShape({
             index,
@@ -229,9 +263,12 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
         if (!draggingShape) return;
+        e.preventDefault(); // Prevent scrolling on mobile while dragging
+
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
         
+        // Direct state update can be heavy, but necessary for the portal position
         setDraggingShape(prev => prev ? { ...prev, x: clientX, y: clientY } : null);
     }, [draggingShape]);
 
@@ -244,7 +281,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
         attemptDrop(clientX, clientY, draggingShape);
         setDraggingShape(null);
-    }, [draggingShape, grid]);
+    }, [draggingShape, grid, boardCellSize]); // Include boardCellSize dependency
 
     useEffect(() => {
         if (draggingShape) {
@@ -262,29 +299,26 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     }, [draggingShape, handleDragMove, handleDragEnd]);
 
     const attemptDrop = (x: number, y: number, dragInfo: NonNullable<typeof draggingShape>) => {
-        if (!gridRef.current) return;
+        if (!gridRef.current || boardCellSize === 0) return;
         const rect = gridRef.current.getBoundingClientRect();
-        const cellSize = rect.width / BOARD_SIZE;
-
-        // Visual offset adjustment: 
-        // We render the drag preview slightly above the finger so it's visible.
-        // We need to calculate the drop based on where the "block" effectively is.
-        // In renderDragPreview, we translate( -50%, -100px ).
-        // So the center of the shape is at (x, y - 100).
-        const shapeVisualY = y - 80; // Match the offset used in portal
-
-        // We want to align the shape such that its blocks match the grid cells.
-        // Calculate the top-left of the shape's bounding box relative to the grid.
         
-        const shapeWidth = dragInfo.shape.matrix[0].length * cellSize;
-        const shapeHeight = dragInfo.shape.matrix.length * cellSize;
+        // This MUST match the render portal's transform.
+        // We offset Y by -100px so the finger doesn't cover the block.
+        // x is center, y is offset center.
+        const shapeVisualY = y - 100; 
+
+        // We assume dragging by center of the whole shape bounding box
+        const shapeWidth = dragInfo.shape.matrix[0].length * boardCellSize;
+        const shapeHeight = dragInfo.shape.matrix.length * boardCellSize;
         
-        // Assume dragging by "center" of shape
+        // Calculate Top-Left of the shape in Grid Coordinates
         const relativeX = (x - rect.left) - (shapeWidth / 2);
         const relativeY = (shapeVisualY - rect.top) - (shapeHeight / 2);
 
-        const c = Math.round(relativeX / cellSize);
-        const r = Math.round(relativeY / cellSize);
+        // Calculate Row/Col
+        // Use Math.round to snap to nearest cell
+        const c = Math.round(relativeX / boardCellSize);
+        const r = Math.round(relativeY / boardCellSize);
 
         if (canPlace(grid, dragInfo.shape.matrix, r, c)) {
             placeShape(r, c, dragInfo.shape, dragInfo.index);
@@ -293,6 +327,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const placeShape = (r: number, c: number, shape: Shape, dockIndex: number) => {
         playSound('place');
+        vibrate(30);
         
         const newGrid = grid.map(row => [...row]);
         let blocksPlaced = 0;
@@ -331,6 +366,11 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
             setClearingRows(rowsToClear);
             setClearingCols(colsToClear);
             playSound(linesCleared > 1 || newCombo > 1 ? 'combo' : 'clear');
+            vibrate(linesCleared * 50); // Stronger vibrate for clears
+            
+            // Trigger Shake
+            setScreenShake(true);
+            setTimeout(() => setScreenShake(false), 300);
 
             setTimeout(() => {
                 const finalGrid = newGrid.map(row => [...row]);
@@ -364,6 +404,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const handleGameOver = (finalScore: number) => {
         playSound('gameover');
+        vibrate([100, 50, 100]);
         setGameOver(true);
         setScore(finalScore);
     };
@@ -381,7 +422,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     // --- Render Helpers ---
 
-    const renderShapePreview = (shape: Shape, blockSize: number = 20) => {
+    const renderShapePreview = (shape: Shape, blockSize: number) => {
         const rows = shape.matrix.length;
         const cols = shape.matrix[0].length;
         return (
@@ -390,16 +431,17 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     display: 'grid', 
                     gridTemplateRows: `repeat(${rows}, ${blockSize}px)`,
                     gridTemplateColumns: `repeat(${cols}, ${blockSize}px)`,
-                    gap: '4px',
+                    gap: '2px', // Needs to match gap in main grid if possible, or scaled
                 }}
             >
                 {shape.matrix.map((row, r) => 
                     row.map((cell, c) => (
                         <div 
                             key={`${r}-${c}`} 
-                            className={`rounded-sm transition-all ${cell ? shape.color : 'bg-transparent'}`}
+                            className={`rounded-[2px] ${cell ? shape.color : 'bg-transparent'}`}
                             style={{ 
-                                boxShadow: cell ? 'inset 0 0 5px rgba(255,255,255,0.4)' : 'none'
+                                boxShadow: cell ? 'inset 0 0 5px rgba(255,255,255,0.5)' : 'none',
+                                opacity: cell ? 1 : 0
                             }}
                         ></div>
                     ))
@@ -409,20 +451,19 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     };
 
     const renderGhost = () => {
-        if (!draggingShape || !gridRef.current) return null;
+        if (!draggingShape || !gridRef.current || boardCellSize === 0) return null;
         
         const rect = gridRef.current.getBoundingClientRect();
-        const cellSize = rect.width / BOARD_SIZE;
-        const adjustedY = draggingShape.y - 80; // Match portal offset
+        const adjustedY = draggingShape.y - 100; // Match portal offset
 
-        const shapeWidth = draggingShape.shape.matrix[0].length * cellSize;
-        const shapeHeight = draggingShape.shape.matrix.length * cellSize;
+        const shapeWidth = draggingShape.shape.matrix[0].length * boardCellSize;
+        const shapeHeight = draggingShape.shape.matrix.length * boardCellSize;
         
         const relativeX = (draggingShape.x - rect.left) - (shapeWidth / 2);
         const relativeY = (adjustedY - rect.top) - (shapeHeight / 2);
 
-        const c = Math.round(relativeX / cellSize);
-        const r = Math.round(relativeY / cellSize);
+        const c = Math.round(relativeX / boardCellSize);
+        const r = Math.round(relativeY / boardCellSize);
 
         if (!canPlace(grid, draggingShape.shape.matrix, r, c)) return null;
 
@@ -433,12 +474,13 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     ghosts.push(
                         <div 
                             key={`ghost-${i}-${j}`}
-                            className="absolute bg-white/30 rounded-md border border-white/50"
+                            className="absolute bg-white/30 rounded-md border-2 border-dashed border-white/60 box-border z-0"
                             style={{
-                                width: `${cellSize - 4}px`,
-                                height: `${cellSize - 4}px`,
-                                left: `${(c + j) * cellSize + 2}px`,
-                                top: `${(r + i) * cellSize + 2}px`,
+                                width: `${boardCellSize}px`,
+                                height: `${boardCellSize}px`,
+                                left: `${(c + j) * boardCellSize}px`,
+                                top: `${(r + i) * boardCellSize}px`,
+                                padding: '2px' // offset margin if needed
                             }}
                         />
                     );
@@ -450,7 +492,19 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     // --- Main UI ---
     return (
-        <div className="fixed inset-0 z-50 bg-[#1e1e2e] flex flex-col items-center select-none overflow-hidden" style={{ touchAction: 'none' }}>
+        <div 
+            className={`fixed inset-0 z-50 bg-[#1e1e2e] flex flex-col items-center select-none overflow-hidden transition-transform ${screenShake ? 'animate-[shake_0.3s_ease-in-out]' : ''}`} 
+            style={{ touchAction: 'none' }}
+        >
+            <style>{`
+                @keyframes shake {
+                    0%, 100% { transform: translate(0, 0); }
+                    25% { transform: translate(-5px, 5px); }
+                    50% { transform: translate(5px, -5px); }
+                    75% { transform: translate(-5px, -5px); }
+                }
+            `}</style>
+            
             {/* Header */}
             <div className="w-full bg-[#181825] p-4 pt-safe flex justify-between items-center shadow-lg z-10 border-b border-gray-800">
                 <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-gray-700 text-gray-400">
@@ -460,7 +514,9 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     <span className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">SCORE</span>
                     <span className="text-3xl font-black text-white font-mono leading-none">{score}</span>
                 </div>
-                <div className="w-8"></div>
+                <div className="w-8">
+                     <button onClick={startGame} className="text-gray-500 hover:text-white"><RefreshCw size={20}/></button>
+                </div>
             </div>
 
             {!gameStarted ? (
@@ -494,13 +550,13 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     {/* The Grid Container */}
                     <div 
                         ref={gridRef}
-                        className="bg-[#11111b] p-2 rounded-xl shadow-2xl relative border-2 border-[#313244]"
+                        className="bg-[#11111b] p-1 rounded-xl shadow-2xl relative border-2 border-[#313244]"
                         style={{
                             display: 'grid',
                             gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
                             width: 'min(90vw, 360px)',
                             aspectRatio: '1/1',
-                            gap: '2px' // Gap between cells
+                            gap: '2px' 
                         }}
                     >
                         {grid.map((row, r) => 
@@ -510,12 +566,12 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                                     <div 
                                         key={`${r}-${c}`}
                                         className={`
-                                            rounded-md transition-all duration-300
+                                            rounded-[4px] transition-all duration-300
                                             ${cellColor ? cellColor : 'bg-[#313244]'}
                                             ${isClearing ? 'scale-0 opacity-0 bg-white brightness-200' : 'scale-100 opacity-100'}
                                         `}
                                         style={{
-                                            boxShadow: cellColor ? 'inset 0 0 10px rgba(0,0,0,0.2)' : 'inset 0 0 5px rgba(0,0,0,0.2)'
+                                            boxShadow: cellColor ? 'inset 0 0 10px rgba(0,0,0,0.2)' : 'none'
                                         }}
                                     ></div>
                                 );
@@ -528,7 +584,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                         {/* Combo Popup */}
                         {comboCount > 1 && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-                                <div className="text-5xl font-black text-yellow-400 drop-shadow-[0_4px_0_rgba(0,0,0,0.5)] animate-bounce stroke-black">
+                                <div className="text-6xl font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] animate-bounce stroke-black italic">
                                     {comboCount}x
                                 </div>
                             </div>
@@ -536,7 +592,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     </div>
 
                     {/* Dock (Shapes) */}
-                    <div className="mt-8 w-full flex justify-between items-center px-2 h-32">
+                    <div className="mt-8 w-full flex justify-between items-center px-4 h-32 gap-2">
                         {dockShapes.map((shape, idx) => {
                             // Only render shape if not being dragged
                             const isBeingDragged = draggingShape?.index === idx;
@@ -544,33 +600,33 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                                 <div 
                                     key={idx} 
                                     className={`
-                                        w-[30%] aspect-square flex items-center justify-center rounded-2xl transition-all duration-150
+                                        flex-1 aspect-square flex items-center justify-center rounded-2xl transition-all duration-150
                                         ${shape && !isBeingDragged ? 'bg-[#313244] border-2 border-[#45475a] shadow-lg active:scale-95' : ''}
                                         ${!shape ? 'opacity-0 pointer-events-none' : ''}
                                     `}
                                     onMouseDown={(e) => handleDragStart(e, idx)}
                                     onTouchStart={(e) => handleDragStart(e, idx)}
                                 >
-                                    {shape && !isBeingDragged && renderShapePreview(shape, 12)}
+                                    {shape && !isBeingDragged && renderShapePreview(shape, 16)} 
                                 </div>
                             );
                         })}
                     </div>
 
-                    {/* Drag Portal */}
+                    {/* Drag Portal - Fixed size matching grid cells */}
                     {draggingShape && createPortal(
                         <div 
                             className="fixed pointer-events-none z-[100]"
                             style={{
                                 left: draggingShape.x,
                                 top: draggingShape.y,
-                                transform: `translate(-50%, -80px)`, // Offset upwards so finger doesn't cover
+                                // Offset the touch point so finger doesn't cover the block.
+                                // We shift it up by 100px.
+                                transform: `translate(-50%, -100px)`, 
                             }}
                         >
-                            {/* Make dragged shape match grid size roughly */}
-                            <div className="scale-150 drop-shadow-2xl opacity-90">
-                                {renderShapePreview(draggingShape.shape, 20)}
-                            </div>
+                            {/* Render exact size as board cells */}
+                            {renderShapePreview(draggingShape.shape, boardCellSize)}
                         </div>,
                         document.body
                     )}

@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Coins, Sparkles, AlertCircle, Info, X } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ArrowLeft, Coins, Sparkles, AlertCircle, Info, X, AlertTriangle } from 'lucide-react';
 import { User } from '../types';
 
 interface LuckyWheelScreenProps {
@@ -26,7 +26,7 @@ const WHEEL_SIZE = 320;
 const RADIUS = WHEEL_SIZE / 2;
 
 // Sound Effect Helper
-const playTickSound = () => {
+const playSound = (type: 'tick' | 'win') => {
     try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContext) return;
@@ -36,20 +36,55 @@ const playTickSound = () => {
         osc.connect(gain);
         gain.connect(ctx.destination);
         
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, ctx.currentTime);
-        gain.gain.setValueAtTime(0.05, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.05);
+        if (type === 'tick') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(800, ctx.currentTime);
+            gain.gain.setValueAtTime(0.05, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.05);
+        } else {
+            // Win sound
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(400, ctx.currentTime);
+            osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.1);
+            osc.frequency.linearRampToValueAtTime(1200, ctx.currentTime + 0.3);
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.5);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.5);
+        }
     } catch(e) {}
 };
+
+const DisclaimerModal = ({ onClose }: { onClose: () => void }) => (
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border-2 border-red-500">
+            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                <AlertTriangle size={32} />
+            </div>
+            <h2 className="text-xl font-black text-gray-800 dark:text-white mb-2">理性娛樂警語</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-6">
+                本遊戲包含機率性中獎機制。<br/>
+                <span className="font-bold text-red-500">過度沉迷賭博遊戲有害身心健康。</span><br/>
+                請妥善管理您的積分與時間。
+            </p>
+            <button 
+                onClick={onClose}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
+            >
+                我已了解，進入遊戲
+            </button>
+        </div>
+    </div>
+);
 
 export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack, onSpinEnd }) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [lastPrize, setLastPrize] = useState<{label: string, value: number} | null>(null);
   const [showProbabilities, setShowProbabilities] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
 
   const totalWeight = PRIZES.reduce((sum, item) => sum + item.weight, 0);
 
@@ -116,32 +151,15 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
     // Calculate final rotation
     const sliceAngle = 360 / PRIZES.length;
     // We need the pointer (at 270deg / -90deg top) to land on the slice
-    // Slice 0 starts at 0deg (3 o'clock). 
-    // To land Slice 0 at Top (270deg), we need to rotate -90deg or 270deg.
-    // The pointer is static at top. 
-    
-    // Calculate the CENTER angle of the target slice
     const targetSliceCenterAngle = (selectedIndex * sliceAngle) + (sliceAngle / 2);
     
-    // We want this angle to be at 270 degrees (Top) after rotation
-    // Current Position + Delta = Final Position
-    // We want Final Position % 360 such that the slice aligns with 270.
-    // Actually easier: We rotate the WHEEL counter-clockwise to bring the slice to top.
-    // Or clockwise. Let's spin huge clockwise.
-    
+    // Spin Logic
     const extraSpins = 360 * 5; // 5 full spins
-    // Random jitter +/- 40% of slice width
     const jitter = (Math.random() - 0.5) * (sliceAngle * 0.8);
-    
-    // To align `targetSliceCenterAngle` with 270deg:
-    // rotation = 270 - targetSliceCenterAngle + 360*N
     const finalRotation = 270 - targetSliceCenterAngle + extraSpins + jitter;
     
-    // Adjust from current rotation to ensure smooth forward spin
-    // Current rotation might be e.g. 1080. We want to go to a value > 1080.
     const currentRotMod = rotation % 360;
     const diff = finalRotation - currentRotMod;
-    // Ensure we always spin forward at least a few times
     const realFinalRotation = rotation + diff + (360 * 5);
 
     setRotation(realFinalRotation);
@@ -150,20 +168,24 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
     let tickCount = 0;
     const interval = setInterval(() => {
         tickCount++;
-        if (tickCount < 20) playTickSound(); // Play some ticks
+        if (tickCount < 25) playSound('tick'); 
         else clearInterval(interval);
-    }, 200);
+    }, 150);
 
     setTimeout(() => {
         setIsSpinning(false);
         setLastPrize(selectedPrize);
         onSpinEnd(selectedPrize.value, SPIN_COST);
+        playSound('win');
         clearInterval(interval);
-    }, 4500); // slightly longer than CSS transition to be safe
+    }, 4500); 
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-[#1a1a2e] flex flex-col items-center justify-center overflow-hidden">
+        
+        {showDisclaimer && <DisclaimerModal onClose={() => setShowDisclaimer(false)} />}
+
         {/* Animated Background */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-indigo-900/50 via-[#1a1a2e] to-black"></div>
         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
@@ -190,14 +212,20 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
                         <X size={20} />
                     </button>
                     <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 text-center border-b border-gray-700 pb-2">獎項機率一覽</h3>
-                    <div className="space-y-2 text-sm max-h-[60vh] overflow-y-auto">
-                        {PRIZES.map((prize, idx) => (
-                            <div key={idx} className="flex justify-between items-center py-2 px-2 hover:bg-gray-700 rounded transition-colors">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-3 h-3 rounded-full" style={{background: prize.color}}></div>
-                                    <span className="font-medium text-gray-700 dark:text-gray-200">{prize.label}</span>
+                    <div className="space-y-2 text-sm max-h-[60vh] overflow-y-auto pr-1">
+                        {/* Sort by value descending for display */}
+                        {[...PRIZES].sort((a,b) => b.value - a.value).map((prize, idx) => (
+                            <div key={idx} className="flex justify-between items-center py-3 px-3 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors border-b border-gray-100 dark:border-gray-700/50 last:border-0">
+                                <div className="flex flex-col">
+                                    <span className={`font-black text-base ${prize.value > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500'}`}>
+                                        {prize.value > 0 ? `${prize.value} PT` : '無獎項'}
+                                    </span>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="w-2 h-2 rounded-full" style={{background: prize.color}}></div>
+                                        <span className="text-xs text-gray-500 dark:text-gray-400">{prize.label}</span>
+                                    </div>
                                 </div>
-                                <span className="font-mono text-gray-500 dark:text-gray-400 font-bold">
+                                <span className="font-mono text-gray-600 dark:text-gray-300 font-bold text-sm bg-gray-100 dark:bg-gray-900 px-2 py-1 rounded">
                                     {((prize.weight / totalWeight) * 100).toFixed(1)}%
                                 </span>
                             </div>
