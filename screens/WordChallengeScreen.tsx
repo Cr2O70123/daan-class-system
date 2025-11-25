@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, HelpCircle, X, Check, AlertCircle, CheckCircle, BookOpen, Coins, ChevronRight, Clock } from 'lucide-react';
+import { ArrowLeft, Timer, Zap, Trophy, Crown, Play, Lock, BarChart, BookOpen, Coins, ChevronRight, Clock, AlertCircle, CheckCircle, Check, X } from 'lucide-react';
 import { User, Word, GameResult, GameLeaderboardEntry } from '../types';
 import { fetchGameLeaderboard, submitGameScore } from '../services/dataService';
 
@@ -329,7 +329,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
       case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
       case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
-      case 'frame_beta': return 'ring-2 ring-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)] border border-white/50';
+      case 'frame_beta': return 'ring-2 ring-amber-500 border-2 border-dashed border-yellow-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]';
       default: return 'ring-2 ring-white dark:ring-gray-700';
     }
   };
@@ -750,4 +750,17 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                     <button 
                         onClick={handleClaim}
                         disabled={!allReviewed}
-                        className={`w-full font-bold py-4 rounded-
+                        className={`w-full font-bold py-4 rounded-xl shadow-lg transition-transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 ${
+                            allReviewed 
+                            ? 'bg-blue-600 text-white shadow-blue-500/30' 
+                            : 'bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed'
+                        }`}
+                    >
+                        {allReviewed ? '領取獎勵並結束' : '請先複習所有錯誤單字'}
+                        {allReviewed && <ChevronRight size={20} />}
+                    </button>
+                </div>
+           </div>
+      </div>
+  );
+};
