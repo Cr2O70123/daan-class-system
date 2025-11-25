@@ -339,18 +339,23 @@ const App = () => {
   const handleWheelSpin = async (prize: number, cost: number) => {
       if (!user) return;
       
-      // Ensure lifetimePoints is preserved
+      // CRITICAL: Prevent lifetime points from dropping
       const currentLifetimePoints = user.lifetimePoints ?? user.points;
-      const netGain = prize > cost ? prize - cost : 0; // Only count winnings as "XP" if we want, or just add prize
-      // Usually gambling doesn't reduce "Career XP", so we keep lifetimePoints static or increase it if they win big
-      const newLifetime = currentLifetimePoints + (netGain > 0 ? netGain : 0);
+      
+      // Only count winnings as XP if desired, but NEVER subtract cost from lifetime
+      // Here we assume wheel prizes are bonuses, so we add the prize to lifetime if > 0
+      const newLifetime = currentLifetimePoints + (prize > 0 ? prize : 0);
+      
+      // Safety check: ensure lifetime never drops
+      const safeLifetime = Math.max(currentLifetimePoints, newLifetime);
       
       const netPoints = user.points - cost + prize;
       
       const updatedUser = { 
           ...user, 
           points: netPoints,
-          lifetimePoints: newLifetime
+          lifetimePoints: safeLifetime,
+          level: calculateLevel(safeLifetime) // Recalculate level in case they won big
       };
       
       try {
