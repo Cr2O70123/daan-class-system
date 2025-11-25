@@ -273,7 +273,6 @@ export const unbanUser = async (studentId: string) => {
 // --- Class Leaderboard ---
 
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
-    // We explicitly fetch distinct rows to avoid any duplication issues
     const { data, error } = await supabase
         .from('users')
         .select('name, student_id, points, lifetime_points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
@@ -286,7 +285,7 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         return [];
     }
 
-    // Ensure uniqueness by student_id just in case DB returns weird data
+    // Ensure strict uniqueness by student_id to prevent "same person" bugs
     const uniqueMap = new Map();
     data.forEach((u: any) => {
         if (!uniqueMap.has(u.student_id)) {
@@ -294,7 +293,9 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         }
     });
 
-    return Array.from(uniqueMap.values()).map((u: any, index: number) => ({
+    const uniqueData = Array.from(uniqueMap.values());
+
+    return uniqueData.map((u: any, index: number) => ({
         rank: index + 1,
         name: u.name,
         studentId: u.student_id,

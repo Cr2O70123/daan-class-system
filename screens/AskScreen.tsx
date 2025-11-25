@@ -1,7 +1,7 @@
 
 
 import React, { useState, useRef } from 'react';
-import { AlertTriangle, Image as ImageIcon, Send, X, Ghost } from 'lucide-react';
+import { AlertTriangle, Image as ImageIcon, Send, X, Ghost, Lock } from 'lucide-react';
 import { Question, User } from '../types';
 
 interface AskScreenProps {
@@ -85,6 +85,8 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
       if (canUseAnonymous) {
           setUseAnonymous(!useAnonymous);
       } else {
+          // If they click on it and can't use it, show alert or feedback could be nice,
+          // but visually it looks disabled.
           alert("您沒有「匿名發問卡」，請前往商店購買。");
       }
   };
@@ -182,7 +184,7 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
         />
       </div>
       
-      {/* Anonymous Toggle Card */}
+      {/* Anonymous Toggle Card - Always Visible */}
       <div 
         onClick={handleToggleAnonymous}
         className={`rounded-xl p-4 border transition-all cursor-pointer flex items-center justify-between ${
@@ -190,24 +192,28 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
             ? 'bg-gray-800 border-gray-700 text-white shadow-lg shadow-gray-400/50' 
             : canUseAnonymous
                 ? 'bg-white border-gray-200 hover:border-gray-300'
-                : 'bg-gray-100 border-gray-200 opacity-60 cursor-not-allowed'
+                : 'bg-gray-100 border-gray-200 opacity-60' // Disabled look
         }`}
       >
           <div className="flex items-center gap-3">
               <div className={`p-2 rounded-lg ${useAnonymous ? 'bg-gray-700' : 'bg-gray-100 text-gray-500'}`}>
-                  <Ghost size={20} />
+                  {canUseAnonymous ? <Ghost size={20} /> : <Lock size={20} />}
               </div>
               <div>
-                  <div className={`font-bold text-sm ${useAnonymous ? 'text-white' : 'text-gray-700'}`}>使用匿名發問卡</div>
+                  <div className={`font-bold text-sm ${useAnonymous ? 'text-white' : 'text-gray-700'}`}>
+                      {canUseAnonymous ? '使用匿名發問卡' : '匿名發問卡 (未擁有)'}
+                  </div>
                   <div className={`text-xs ${useAnonymous ? 'text-gray-400' : 'text-gray-500'}`}>
-                      {canUseAnonymous ? `剩餘數量: ${anonCardCount}` : '您尚未擁有此道具'}
+                      {canUseAnonymous ? `剩餘數量: ${anonCardCount}` : '請前往商店購買道具'}
                   </div>
               </div>
           </div>
           
-          <div className={`w-12 h-6 rounded-full p-1 transition-colors ${useAnonymous ? 'bg-green-500' : 'bg-gray-300'}`}>
-              <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useAnonymous ? 'translate-x-6' : 'translate-x-0'}`}></div>
-          </div>
+          {canUseAnonymous && (
+            <div className={`w-12 h-6 rounded-full p-1 transition-colors ${useAnonymous ? 'bg-green-500' : 'bg-gray-300'}`}>
+                <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${useAnonymous ? 'translate-x-6' : 'translate-x-0'}`}></div>
+            </div>
+          )}
       </div>
       
       {/* Hint Prompt */}
@@ -224,7 +230,7 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
         className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-600/20 flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
       >
         <Send size={18} />
-        <span>發布問題</span>
+        <span>發布問題 {useAnonymous && '(匿名)'}</span>
       </button>
 
     </div>

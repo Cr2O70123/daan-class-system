@@ -33,7 +33,7 @@ const PRODUCTS: Product[] = [
       icon: <Zap size={20} className="fill-red-600" />, 
       description: '立即恢復 1 次遊玩次數', 
       category: 'consumable',
-      tag: '熱銷'
+      tag: '補給'
   },
 
   // --- Avatar Frames (New) ---
@@ -52,7 +52,7 @@ const PRODUCTS: Product[] = [
   { 
       id: 'card_anon', 
       name: '匿名發問卡', 
-      price: 10, 
+      price: 50, 
       color: 'bg-gray-100 text-gray-600', 
       icon: <Ghost size={20} />, 
       description: '這一次發問不會顯示你的名字', 
@@ -183,6 +183,41 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
           const isRare = product.isRare;
           const isBetaFrame = product.id === 'frame_beta';
 
+          // Determine button state
+          let buttonText = '';
+          let buttonStyle = '';
+          let isDisabled = false;
+
+          if (isBetaFrame) {
+             buttonText = '限定商品';
+             buttonStyle = 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-500 cursor-not-allowed border border-amber-200 dark:border-amber-800';
+             isDisabled = true;
+          } else if (isEquipped) {
+              buttonText = '使用中';
+              buttonStyle = 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 cursor-default';
+              isDisabled = true; // Cannot buy again if equipped
+          } else if (isOwned && !isConsumable && !isStackable) {
+              // Frame or Cosmetic that is owned but not equipped
+              buttonText = product.category === 'frame' ? '裝備' : '已擁有';
+              buttonStyle = 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200';
+              // Allowed to click to "Equip" (logic handled in onBuy but usually profile handles equip. Here we just show owned)
+              // Since Shop onBuy logic for frames usually just sets it, we allow click.
+          } else {
+              // Can Buy (Consumable, Tool, or New Item)
+              if (canAfford) {
+                  if (isRare) {
+                      buttonStyle = 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/30';
+                  } else {
+                      buttonStyle = 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20';
+                  }
+                  buttonText = ''; // Will render price
+              } else {
+                  buttonStyle = 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed';
+                  buttonText = ''; // Will render price
+                  isDisabled = true;
+              }
+          }
+
           return (
             <div 
                 key={product.id} 
@@ -197,7 +232,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                     ${isEquipped ? 'ring-2 ring-blue-500 border-blue-500' : ''}
                 `}
             >
-              {/* Shimmer Effect for Beta Frame - Enhanced visibility for Light Mode */}
+              {/* Shimmer Effect for Beta Frame */}
               {isBetaFrame && (
                   <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-amber-200/50 dark:via-white/30 to-transparent w-full h-full -skew-x-12 animate-shimmer"></div>
@@ -217,6 +252,7 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
                   <div className={`absolute top-0 left-0 text-[10px] font-bold px-2 py-1 rounded-br-lg z-10 shadow-sm
                       ${product.tag === '特價' ? 'bg-red-500 text-white' : 
                         product.tag === '熱銷' ? 'bg-orange-500 text-white' :
+                        product.tag === '補給' ? 'bg-green-500 text-white' :
                         isBetaFrame ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white'}
                   `}>
                       {product.tag}
@@ -241,28 +277,12 @@ export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {
               
               <div className="mt-auto w-full relative z-10">
                   <button
-                    disabled={(!isConsumable && !isStackable && isOwned && product.category !== 'frame') || isBetaFrame} 
+                    disabled={isDisabled} 
                     onClick={() => onBuy(product)}
-                    className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1 ${
-                      isBetaFrame 
-                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-500 cursor-not-allowed border border-amber-200 dark:border-amber-800'
-                        : isEquipped 
-                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 cursor-default'
-                            : (isOwned && !isConsumable && !isStackable)
-                                ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200' 
-                                : canAfford 
-                                  ? isRare 
-                                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/30'
-                                      : 'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20'
-                                  : 'bg-gray-200 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
-                    }`}
+                    className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-1 ${buttonStyle}`}
                   >
-                    {isBetaFrame ? (
-                        <span>限定商品</span>
-                    ) : isEquipped ? (
-                        <span>使用中</span>
-                    ) : (isOwned && !isConsumable && !isStackable) ? (
-                        <span>{product.category === 'frame' ? '裝備' : '已擁有'}</span>
+                    {buttonText ? (
+                        <span>{buttonText}</span>
                     ) : (
                         <>
                             <span>{product.price}</span>

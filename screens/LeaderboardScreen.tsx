@@ -29,14 +29,18 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
     setIsLoading(true);
     try {
         const data = await fetchClassLeaderboard();
-        // Ensure strictly no duplicates in state just in case
-        const seen = new Set();
-        const uniqueData = data.filter(entry => {
-            if (seen.has(entry.studentId)) return false;
-            seen.add(entry.studentId);
-            return true;
+        // Force unique filter based on studentId again here to double-ensure safety
+        const uniqueEntries: LeaderboardEntry[] = [];
+        const seenIds = new Set();
+        
+        data.forEach(entry => {
+            if (!seenIds.has(entry.studentId)) {
+                seenIds.add(entry.studentId);
+                uniqueEntries.push(entry);
+            }
         });
-        setLeaderboard(uniqueData);
+
+        setLeaderboard(uniqueEntries);
     } catch (e) {
         console.error("Failed to load leaderboard", e);
     }
@@ -77,8 +81,8 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
   // Calculate empty slots to fill visuals
   const MIN_DISPLAY_ROWS = 8;
   const emptyRowsCount = Math.max(0, MIN_DISPLAY_ROWS - leaderboard.length);
-  // Ensure we create a valid array for mapping even if count is 0 (though map handles empty array fine)
-  const emptyRows = emptyRowsCount > 0 ? Array.from({ length: emptyRowsCount }) : [];
+  // Create safe empty rows array
+  const emptyRows = Array.from({ length: emptyRowsCount });
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900 transition-colors">
