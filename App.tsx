@@ -237,14 +237,21 @@ const App = () => {
             // 2. Trigger HBuilderX Native Bridge (Vibrate + Modal)
             // @ts-ignore
             if (window.uni) {
-                // @ts-ignore
-                window.uni.postMessage({
-                    data: {
-                        action: 'notify',
-                        title: newNotif.title,
-                        content: newNotif.content
+                // Add a small delay to ensure bridge is stable and use try-catch
+                setTimeout(() => {
+                    try {
+                        // @ts-ignore
+                        window.uni.postMessage({
+                            data: {
+                                action: 'notify',
+                                title: newNotif.title,
+                                content: newNotif.content
+                            }
+                        });
+                    } catch (err) {
+                        console.error("Bridge Error:", err);
                     }
-                });
+                }, 100);
             }
         }
       )
