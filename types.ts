@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 
 export enum Tab {
@@ -196,15 +195,17 @@ export interface PkPlayerState {
 }
 
 export interface PkGamePayload {
-    type: 'START_GAME' | 'ATTACK' | 'ROUND_SYNC' | 'GAME_OVER' | 'EMOTE';
+    type: 'START_GAME' | 'SEND_WORD' | 'REPORT_DAMAGE' | 'GAME_OVER';
     // START_GAME
-    words?: Word[];
-    optionsList?: string[][]; // Correct + Wrong options for each round
-    // ATTACK
-    damage?: number;
+    // No initial words needed, we generate per round
+    
+    // SEND_WORD (Attack Phase)
+    wordId?: number;
     attackerId?: string;
-    // ROUND_SYNC
-    roundIndex?: number;
+
+    // REPORT_DAMAGE (Defense Phase Result)
+    damageTaken?: number; // How much damage I took from your word
+    defenderId?: string;
 }
 
 export interface GameLeaderboardEntry {

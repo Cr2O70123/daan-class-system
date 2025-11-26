@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { LoginScreen } from './screens/LoginScreen';
@@ -22,6 +20,8 @@ import { CheckInModal } from './components/CheckInModal';
 import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
 import { BlockBlastScreen } from './screens/BlockBlastScreen'; 
 import { PkGameScreen } from './screens/PkGameScreen';
+import { BaseConverterScreen } from './screens/BaseConverterScreen'; // New Tool
+import { LogicGateScreen } from './screens/LogicGateScreen'; // New Tool
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult } from './types';
 import { RefreshCw, X, Bell } from 'lucide-react';
@@ -124,7 +124,11 @@ const App = () => {
   const [showResistorGame, setShowResistorGame] = useState(false);
   const [showLuckyWheel, setShowLuckyWheel] = useState(false);
   const [showBlockBlast, setShowBlockBlast] = useState(false); 
-  const [showPkGame, setShowPkGame] = useState(false); // New: PK Mode
+  const [showPkGame, setShowPkGame] = useState(false);
+  
+  // Tools States
+  const [showBaseConverter, setShowBaseConverter] = useState(false);
+  const [showLogicGate, setShowLogicGate] = useState(false);
   
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showNotificationScreen, setShowNotificationScreen] = useState(false);
@@ -140,6 +144,8 @@ const App = () => {
       setShowLuckyWheel(false);
       setShowBlockBlast(false);
       setShowPkGame(false);
+      setShowBaseConverter(false);
+      setShowLogicGate(false);
       setShowLeaderboardOverlay(false);
       setSelectedQuestion(null);
       setSelectedResource(null);
@@ -161,6 +167,8 @@ const App = () => {
           if (showPkGame) { setShowPkGame(false); return; }
           if (showWordChallenge) { setShowWordChallenge(false); return; }
           if (showResistorGame) { setShowResistorGame(false); return; }
+          if (showBaseConverter) { setShowBaseConverter(false); return; }
+          if (showLogicGate) { setShowLogicGate(false); return; }
           if (selectedQuestion) { setSelectedQuestion(null); return; }
           if (selectedResource) { setSelectedResource(null); return; }
           if (showLeaderboardOverlay) { setShowLeaderboardOverlay(false); return; }
@@ -170,7 +178,7 @@ const App = () => {
 
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
-  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showPkGame, showWordChallenge, showResistorGame, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
+  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showPkGame, showWordChallenge, showResistorGame, showBaseConverter, showLogicGate, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
 
   const pushHistory = () => {
       window.history.pushState({ overlay: true }, '');
@@ -480,6 +488,15 @@ const App = () => {
           />
       )}
 
+      {/* --- TOOLS SCREENS --- */}
+      {showBaseConverter && (
+          <BaseConverterScreen onBack={() => setShowBaseConverter(false)} />
+      )}
+
+      {showLogicGate && (
+          <LogicGateScreen onBack={() => setShowLogicGate(false)} />
+      )}
+
       {showLuckyWheel && (
           <LuckyWheelScreen 
             user={user}
@@ -590,6 +607,11 @@ const App = () => {
                         onOpenLuckyWheel={() => { pushHistory(); setShowLuckyWheel(true); }}
                         onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }}
                         onOpenPkGame={() => { pushHistory(); setShowPkGame(true); }}
+                        onOpenOhmsLaw={() => { pushHistory(); setShowBaseConverter(true); }} // Mapped
+                        // Pass the new prop explicitly if type allows, or via spread if we updated interface
+                        // Since I updated the interface above but casting `props as any` inside PlaygroundScreen, 
+                        // I need to pass it here for it to be received.
+                        onOpenLogicGate={() => { pushHistory(); setShowLogicGate(true); }}
                     />
                 )}
                 {currentTab === Tab.EXAM && <ExamScreen exams={exams} onAddExam={handleAddExam} onDeleteExam={()=>{}} />}
