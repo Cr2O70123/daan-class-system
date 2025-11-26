@@ -176,10 +176,35 @@ export interface GameResult {
   correctCount: number;
 }
 
+// --- PK Game Types (Realtime) ---
 export interface PkResult {
   isWin: boolean;
   score: number;
   opponentName: string;
+}
+
+export interface PkPlayerState {
+    studentId: string;
+    name: string;
+    avatarColor: string;
+    avatarImage?: string;
+    avatarFrame?: string;
+    level: number;
+    status: 'idle' | 'matched' | 'playing';
+    roomId?: string;
+    joinedAt: number; // Timestamp for FIFO queue
+}
+
+export interface PkGamePayload {
+    type: 'START_GAME' | 'ATTACK' | 'ROUND_SYNC' | 'GAME_OVER' | 'EMOTE';
+    // START_GAME
+    words?: Word[];
+    optionsList?: string[][]; // Correct + Wrong options for each round
+    // ATTACK
+    damage?: number;
+    attackerId?: string;
+    // ROUND_SYNC
+    roundIndex?: number;
 }
 
 export interface GameLeaderboardEntry {
