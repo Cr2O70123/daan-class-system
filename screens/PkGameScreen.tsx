@@ -169,18 +169,18 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                   playSound('match');
                   leaveMatchmaking();
                   
-                  // Join Game Room & Wait for Connection
+                  // Join Game Room & Wait for Presence Sync
                   setPhase('connecting');
                   joinGameRoom(
                       roomId, 
+                      user.studentId, // Pass userId
                       handleGameEvent,
-                      () => { // On Opponent Left (Presence)
+                      () => { // On Opponent Left (Detected via Presence Drop)
                           console.log("Opponent Left via Presence");
                           handleOpponentLeft();
                       },
-                      () => { // On Connected (Subscribed)
-                          console.log("Room Connected!");
-                          // Start the game flow
+                      () => { // On Room Ready (Sync count >= 2)
+                          console.log("Room Ready - 2 Players Present!");
                           setPhase('ready');
                           setTimeout(startRound, 2000);
                       }
@@ -219,7 +219,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const handleSurrender = async () => {
       if (confirm("確定要投降嗎？將會扣除積分。")) {
           // Send event first
-          await sendGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
+          try {
+            await sendGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
+          } catch(e) { console.error(e); }
+          
           setEndReason('surrender');
           setMyHp(0);
           setPhase('result');

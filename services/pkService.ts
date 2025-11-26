@@ -97,42 +97,58 @@ export const leaveMatchmaking = () => {
 
 /**
  * Join a private game room.
+ * REFACTORED: Now waits for 2 people to be present (synced) before calling onRoomReady.
  */
 export const joinGameRoom = (
     roomId: string,
+    userId: string,
     onGameEvent: (payload: PkGamePayload) => void,
     onOpponentLeft: () => void,
-    onConnected: () => void
+    onRoomReady: () => void
 ) => {
-    if (gameChannel) leaveGameRoom();
+    if (gameChannel) {
+        gameChannel.unsubscribe();
+        gameChannel = null;
+    }
 
     console.log(`Joining Game Room: ${roomId}`);
 
     gameChannel = supabase.channel(roomId, {
         config: {
             presence: {
-                key: 'player'
+                key: userId // Use unique user ID for presence key
             }
         }
     });
     
+    let isReadyTriggered = false;
+
     gameChannel
         .on('broadcast', { event: 'GAME_EVENT' }, ({ payload }) => {
             // console.log("Received Game Event:", payload);
             onGameEvent(payload as PkGamePayload);
         })
-        .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-            // If anyone leaves, notify game over
-            // console.log("Presence Left:", leftPresences);
-            if (leftPresences.length > 0) {
+        .on('presence', { event: 'sync' }, () => {
+            const state = gameChannel?.presenceState();
+            const count = state ? Object.keys(state).length : 0;
+            console.log(`Room Sync: ${count} users present`);
+
+            // Trigger start only when BOTH players are connected and tracked
+            if (count >= 2 && !isReadyTriggered) {
+                isReadyTriggered = true;
+                onRoomReady();
+            }
+
+            // If game was ready but count drops, opponent disconnected
+            if (isReadyTriggered && count < 2) {
+                console.warn("Opponent disconnected (Presence drop)");
                 onOpponentLeft();
             }
         })
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                console.log("Game Channel Subscribed!");
-                await gameChannel?.track({ online: true });
-                onConnected();
+                console.log("Channel Subscribed, tracking presence...");
+                await gameChannel?.track({ online: true, userId });
             } else if (status === 'CHANNEL_ERROR') {
                 console.error("Game Channel Error");
             }
@@ -144,11 +160,15 @@ export const sendGameEvent = async (payload: PkGamePayload) => {
         console.warn("Attempted to send event without active channel");
         return;
     }
-    await gameChannel.send({
-        type: 'broadcast',
-        event: 'GAME_EVENT',
-        payload
-    });
+    try {
+        await gameChannel.send({
+            type: 'broadcast',
+            event: 'GAME_EVENT',
+            payload
+        });
+    } catch (e) {
+        console.error("Send Event Error", e);
+    }
 };
 
 export const leaveGameRoom = () => {
