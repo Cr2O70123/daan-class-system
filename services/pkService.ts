@@ -52,9 +52,12 @@ export const joinMatchmaking = (
             const myIndex = sortedUsers.findIndex(u => u.studentId === user.studentId);
 
             if (myIndex !== -1 && sortedUsers.length > 1) {
+                // Match with the next person
                 if (myIndex % 2 === 0 && myIndex + 1 < sortedUsers.length) {
                     const opponent = sortedUsers[myIndex + 1];
-                    const roomId = `room_${user.studentId}_${opponent.studentId}`;
+                    // Deterministic Room ID: Always sort IDs to ensure consistency
+                    const ids = [user.studentId, opponent.studentId].sort();
+                    const roomId = `room_${ids[0]}_${ids[1]}`;
                     
                     matchmakingChannel?.send({
                         type: 'broadcast',
@@ -98,37 +101,49 @@ export const leaveMatchmaking = () => {
 export const joinGameRoom = (
     roomId: string,
     onGameEvent: (payload: PkGamePayload) => void,
-    onOpponentLeft?: () => void
+    onOpponentLeft: () => void,
+    onConnected: () => void
 ) => {
     if (gameChannel) leaveGameRoom();
+
+    console.log(`Joining Game Room: ${roomId}`);
 
     gameChannel = supabase.channel(roomId, {
         config: {
             presence: {
-                key: 'game-session'
+                key: 'player'
             }
         }
     });
     
     gameChannel
         .on('broadcast', { event: 'GAME_EVENT' }, ({ payload }) => {
+            // console.log("Received Game Event:", payload);
             onGameEvent(payload as PkGamePayload);
         })
         .on('presence', { event: 'leave' }, ({ leftPresences }) => {
             // If anyone leaves, notify game over
-            if (onOpponentLeft && leftPresences.length > 0) {
+            // console.log("Presence Left:", leftPresences);
+            if (leftPresences.length > 0) {
                 onOpponentLeft();
             }
         })
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
+                console.log("Game Channel Subscribed!");
                 await gameChannel?.track({ online: true });
+                onConnected();
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error("Game Channel Error");
             }
         });
 };
 
 export const sendGameEvent = async (payload: PkGamePayload) => {
-    if (!gameChannel) return;
+    if (!gameChannel) {
+        console.warn("Attempted to send event without active channel");
+        return;
+    }
     await gameChannel.send({
         type: 'broadcast',
         event: 'GAME_EVENT',

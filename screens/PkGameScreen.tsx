@@ -79,7 +79,7 @@ const DAMAGE_PER_HIT = 150;
 const TOTAL_ROUNDS = 10;
 const TURN_TIME_LIMIT = 15; // Seconds
 
-type BattlePhase = 'menu' | 'matching' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
+type BattlePhase = 'menu' | 'matching' | 'connecting' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
 
 const RankOverviewModal = ({ onClose }: { onClose: () => void }) => (
     <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
@@ -157,7 +157,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   }, [phase, menuTab]);
 
-  // --- 1. Matchmaking ---
+  // --- 1. Matchmaking & Connection ---
   useEffect(() => {
       if (phase === 'matching') {
           setMatchStatus("正在掃描對手訊號...");
@@ -165,25 +165,26 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               user,
               (op, roomId, host) => {
                   setOpponent(op);
-                  setMatchStatus("配對成功！連線建立中...");
+                  setMatchStatus("配對成功！連線中...");
                   playSound('match');
                   leaveMatchmaking();
                   
-                  // Handle Opponent Left / Disconnect
+                  // Join Game Room & Wait for Connection
+                  setPhase('connecting');
                   joinGameRoom(
                       roomId, 
                       handleGameEvent,
-                      () => { // On Opponent Left
-                          setEndReason('opponent_left');
-                          setOpHp(0); // Force win
-                          setPhase('result');
+                      () => { // On Opponent Left (Presence)
+                          console.log("Opponent Left via Presence");
+                          handleOpponentLeft();
+                      },
+                      () => { // On Connected (Subscribed)
+                          console.log("Room Connected!");
+                          // Start the game flow
+                          setPhase('ready');
+                          setTimeout(startRound, 2000);
                       }
                   );
-
-                  setTimeout(() => {
-                      setPhase('ready');
-                      setTimeout(startRound, 2500);
-                  }, 1500);
               },
               (status) => setMatchStatus(status)
           );
@@ -196,7 +197,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
 
       return () => {
-          if (phase === 'matching') {
+          if (phase === 'matching' || phase === 'menu') {
               leaveMatchmaking();
               leaveGameRoom();
               if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
@@ -208,9 +209,17 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setPhase('matching');
   };
 
-  const handleSurrender = () => {
+  const handleOpponentLeft = () => {
+      if (phase === 'result') return; // Already ended
+      setEndReason('opponent_left');
+      setOpHp(0);
+      setPhase('result');
+  };
+
+  const handleSurrender = async () => {
       if (confirm("確定要投降嗎？將會扣除積分。")) {
-          sendGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
+          // Send event first
+          await sendGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
           setEndReason('surrender');
           setMyHp(0);
           setPhase('result');
@@ -244,7 +253,9 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       
       if (phase === 'selecting_attack') {
           // Auto play first card
-          handleSelectCard(battleCards[0]);
+          if (battleCards.length > 0) {
+              handleSelectCard(battleCards[0]);
+          }
       } else if (phase === 'defending') {
           // Auto fail
           if (incomingWord) {
@@ -330,13 +341,20 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       } else {
           setBattleLog(`發送攻擊：${card.word?.en}`);
           playSound('attack');
-          sendGameEvent({
-              type: 'SEND_ACTION',
-              attackerId: user.studentId,
-              wordId: card.word?.id
-          });
+          
+          // Ensure wordId is defined
+          if (card.word && card.word.id) {
+              sendGameEvent({
+                  type: 'SEND_ACTION',
+                  attackerId: user.studentId,
+                  wordId: card.word.id
+              });
+          } else {
+              console.error("Error: Selected card has no word ID");
+          }
       }
 
+      // State Transition Logic
       if (opActionReceived) {
           if (incomingWord) {
               setPhase('defending');
@@ -369,7 +387,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           setBattleLog("防禦失敗！");
           setMyDefenseResult('fail');
           
-          // Record Mistake
           setMistakes(prev => [...prev, {
               word: incomingWord!,
               correctAnswer: incomingWord!.zh,
@@ -389,9 +406,11 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   // --- 3. Event Handling ---
   const handleGameEvent = (payload: PkGamePayload) => {
+      console.log("Game Event Received:", payload);
+
       if (payload.type === 'SURRENDER') {
           if (payload.winnerId === user.studentId) {
-              setEndReason('opponent_left'); // Treat surrender as opponent yield
+              setEndReason('opponent_left');
               setOpHp(0);
               setPhase('result');
           }
@@ -399,9 +418,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
 
       if (payload.type === 'OPPONENT_LEFT') {
-          setEndReason('opponent_left');
-          setOpHp(0);
-          setPhase('result');
+          handleOpponentLeft();
           return;
       }
 
@@ -419,21 +436,18 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                       setOpHp(prev => Math.min(MAX_HP, prev + 150));
                   }
                   
-                  // Force Check: If I already sent my action, check if we need to proceed
-                  // This fixes the "stuck" issue if both use skills
                   setPhase(prev => {
                       if (prev === 'waiting_opponent') {
-                          // I acted, Opponent acted (Skill) -> Round Over
                           setTimeout(() => setPhase('round_summary'), 1500);
                           return prev; 
                       }
-                      // I haven't acted, wait for my action
                       return prev;
                   });
 
               } else if (payload.wordId) {
                   const word = WORD_DATABASE.find(w => w.id === payload.wordId);
                   if (word) {
+                      console.log("Opponent attacked with:", word.en);
                       setIncomingWord(word);
                       const wrongs = WORD_DATABASE
                         .filter(w => w.id !== word.id)
@@ -447,6 +461,8 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                           if (prev === 'waiting_opponent') return 'defending';
                           return prev;
                       });
+                  } else {
+                      console.error("Unknown word ID received:", payload.wordId);
                   }
               }
           }
@@ -648,8 +664,8 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       );
   }
 
-  // --- RENDER: Matching Phase ---
-  if (phase === 'matching') {
+  // --- RENDER: Matching/Connecting Phase ---
+  if (phase === 'matching' || phase === 'connecting') {
       return (
         <div className="fixed inset-0 z-[60] bg-gray-900 flex flex-col items-center justify-center">
             <div className="relative w-64 h-64 flex items-center justify-center">
@@ -661,13 +677,17 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
             </div>
             
             <div className="mt-8 text-center">
-                 <h2 className="text-xl font-bold text-white animate-pulse tracking-widest mb-2">{matchStatus}</h2>
-                 <div className="text-xs text-gray-500 font-mono">Matching Protocol v2.0</div>
+                 <h2 className="text-xl font-bold text-white animate-pulse tracking-widest mb-2">
+                     {phase === 'connecting' ? '建立戰場連線中...' : matchStatus}
+                 </h2>
+                 <div className="text-xs text-gray-500 font-mono">Matching Protocol v2.1</div>
             </div>
             
-            <button onClick={onBack} className="absolute top-safe left-4 p-3 bg-gray-800 rounded-full text-gray-400 hover:text-white mt-4">
-                <ArrowLeft size={20}/>
-            </button>
+            {phase === 'matching' && (
+                <button onClick={onBack} className="absolute top-safe left-4 p-3 bg-gray-800 rounded-full text-gray-400 hover:text-white mt-4">
+                    <ArrowLeft size={20}/>
+                </button>
+            )}
         </div>
       );
   }
