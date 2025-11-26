@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle } from 'lucide-react';
-import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry } from '../types';
+import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle } from 'lucide-react';
+import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry, PkMistake } from '../types';
 import { WORD_DATABASE } from '../services/mockData';
 import { joinMatchmaking, leaveMatchmaking, joinGameRoom, leaveGameRoom, sendGameEvent } from '../services/pkService';
 import { fetchPkLeaderboard } from '../services/dataService';
@@ -38,8 +38,7 @@ const getFrameStyle = (frameId?: string) => {
     }
 };
 
-// --- Sound Logic (Simplified) ---
-const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill' | 'block' | 'card_flip') => {
+const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill' | 'block' | 'card_flip' | 'tick') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -65,20 +64,23 @@ const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill
         osc.frequency.setValueAtTime(100, now);
         gain.gain.setValueAtTime(0.2, now);
         gain.gain.linearRampToValueAtTime(0, now + 0.2);
+    } else if (type === 'tick') {
+        osc.frequency.setValueAtTime(800, now);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
     }
     osc.start(now);
     osc.stop(now + 0.3);
   } catch(e) {}
 };
 
-// --- Constants ---
 const MAX_HP = 1000;
 const DAMAGE_PER_HIT = 150; 
 const TOTAL_ROUNDS = 10;
+const TURN_TIME_LIMIT = 15; // Seconds
 
 type BattlePhase = 'menu' | 'matching' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
 
-// --- Component: Rank Overview Modal ---
 const RankOverviewModal = ({ onClose }: { onClose: () => void }) => (
     <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
         <div className="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-700 overflow-hidden shadow-2xl">
@@ -105,38 +107,38 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [matchStatus, setMatchStatus] = useState("正在掃描對手訊號...");
   const [showRankModal, setShowRankModal] = useState(false);
   
-  // Players
   const [opponent, setOpponent] = useState<PkPlayerState | null>(null);
   
-  // Stats
   const [myHp, setMyHp] = useState(MAX_HP);
   const [opHp, setOpHp] = useState(MAX_HP);
   const [round, setRound] = useState(1);
   const myRating = user.pkRating || 0;
   const myRank = getRank(myRating);
   
-  // Round Data
   const [battleCards, setBattleCards] = useState<BattleCard[]>([]); 
   const [incomingWord, setIncomingWord] = useState<Word | null>(null); 
   const [incomingSkill, setIncomingSkill] = useState<SkillType>('NONE'); 
   const [defenseOptions, setDefenseOptions] = useState<string[]>([]); 
   const [blindEffect, setBlindEffect] = useState(false); 
   
-  // Round State
   const [myActionSent, setMyActionSent] = useState(false);
   const [opActionReceived, setOpActionReceived] = useState(false);
   const [myDefenseResult, setMyDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
   const [opDefenseResult, setOpDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
   
   const [battleLog, setBattleLog] = useState<string>("");
-  const timeoutFallbackRef = useRef<number | null>(null);
+  const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME_LIMIT);
+  const [mistakes, setMistakes] = useState<PkMistake[]>([]);
+  const [endReason, setEndReason] = useState<'normal' | 'surrender' | 'opponent_left' | 'timeout'>('normal');
 
-  // --- 0. Data Loading (Leaderboard) ---
+  const timeoutFallbackRef = useRef<number | null>(null);
+  const turnTimerRef = useRef<number | null>(null);
+
+  // --- 0. Data Loading ---
   useEffect(() => {
       if (phase === 'menu' && menuTab === 'rank') {
           const loadLeaderboard = async () => {
               const data = await fetchPkLeaderboard();
-              // Pad with empty slots if less than 10
               const padded = [...data];
               while(padded.length < 10) {
                   padded.push({
@@ -155,7 +157,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   }, [phase, menuTab]);
 
-  // --- 1. Matchmaking Lifecycle ---
+  // --- 1. Matchmaking ---
   useEffect(() => {
       if (phase === 'matching') {
           setMatchStatus("正在掃描對手訊號...");
@@ -166,7 +168,17 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                   setMatchStatus("配對成功！連線建立中...");
                   playSound('match');
                   leaveMatchmaking();
-                  joinGameRoom(roomId, handleGameEvent);
+                  
+                  // Handle Opponent Left / Disconnect
+                  joinGameRoom(
+                      roomId, 
+                      handleGameEvent,
+                      () => { // On Opponent Left
+                          setEndReason('opponent_left');
+                          setOpHp(0); // Force win
+                          setPhase('result');
+                      }
+                  );
 
                   setTimeout(() => {
                       setPhase('ready');
@@ -196,6 +208,60 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setPhase('matching');
   };
 
+  const handleSurrender = () => {
+      if (confirm("確定要投降嗎？將會扣除積分。")) {
+          sendGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
+          setEndReason('surrender');
+          setMyHp(0);
+          setPhase('result');
+      }
+  };
+
+  // --- Timer Logic ---
+  useEffect(() => {
+      if (phase === 'selecting_attack' || phase === 'defending') {
+          setTurnTimeLeft(TURN_TIME_LIMIT);
+          if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+          
+          turnTimerRef.current = window.setInterval(() => {
+              setTurnTimeLeft(prev => {
+                  if (prev <= 5 && prev > 0) playSound('tick');
+                  if (prev <= 1) {
+                      handleTurnTimeout();
+                      return 0;
+                  }
+                  return prev - 1;
+              });
+          }, 1000);
+      } else {
+          if (turnTimerRef.current) clearInterval(turnTimerRef.current);
+      }
+      return () => { if (turnTimerRef.current) clearInterval(turnTimerRef.current); };
+  }, [phase]);
+
+  const handleTurnTimeout = () => {
+      setBattleLog("時間到！");
+      
+      if (phase === 'selecting_attack') {
+          // Auto play first card
+          handleSelectCard(battleCards[0]);
+      } else if (phase === 'defending') {
+          // Auto fail
+          if (incomingWord) {
+              const damageTaken = DAMAGE_PER_HIT;
+              setMyHp(prev => Math.max(0, prev - damageTaken));
+              setMyDefenseResult('fail');
+              sendGameEvent({
+                  type: 'REPORT_RESULT',
+                  defenderId: user.studentId,
+                  damageTaken: damageTaken,
+                  isCorrect: false
+              });
+              setTimeout(() => setPhase('round_summary'), 1000);
+          }
+      }
+  };
+
   // --- 2. Game Logic ---
 
   const generateCards = (roundNum: number): BattleCard[] => {
@@ -205,7 +271,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       if (roundNum >= 9) minLevel = 6;
 
       const wordPool = WORD_DATABASE.filter(w => w.level >= minLevel);
-      // Always give 3 Words + 1 Skill
       const selectedWords = wordPool.sort(() => 0.5 - Math.random()).slice(0, 3);
       
       const cards: BattleCard[] = selectedWords.map(w => ({
@@ -240,6 +305,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   };
 
   const handleSelectCard = (card: BattleCard) => {
+      if (myActionSent) return;
       playSound('card_flip');
       setMyActionSent(true);
       
@@ -271,16 +337,13 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           });
       }
 
-      // Transition logic handled in event effect
       if (opActionReceived) {
-          // If opponent already sent an action, check what it was
           if (incomingWord) {
               setPhase('defending');
           } else if (incomingSkill !== 'NONE') {
-              // Both used skills (or opp used skill first), go to summary
               setTimeout(() => setPhase('round_summary'), 1500);
           } else {
-              setPhase('waiting_opponent'); // Should not happen usually
+              setPhase('waiting_opponent');
           }
       } else {
           setPhase('waiting_opponent');
@@ -305,6 +368,13 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           playSound('damage');
           setBattleLog("防禦失敗！");
           setMyDefenseResult('fail');
+          
+          // Record Mistake
+          setMistakes(prev => [...prev, {
+              word: incomingWord!,
+              correctAnswer: incomingWord!.zh,
+              timestamp: Date.now()
+          }]);
       }
 
       sendGameEvent({
@@ -319,6 +389,22 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   // --- 3. Event Handling ---
   const handleGameEvent = (payload: PkGamePayload) => {
+      if (payload.type === 'SURRENDER') {
+          if (payload.winnerId === user.studentId) {
+              setEndReason('opponent_left'); // Treat surrender as opponent yield
+              setOpHp(0);
+              setPhase('result');
+          }
+          return;
+      }
+
+      if (payload.type === 'OPPONENT_LEFT') {
+          setEndReason('opponent_left');
+          setOpHp(0);
+          setPhase('result');
+          return;
+      }
+
       if (payload.type === 'SEND_ACTION') {
           if (payload.attackerId !== user.studentId) {
               setOpActionReceived(true);
@@ -333,27 +419,15 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                       setOpHp(prev => Math.min(MAX_HP, prev + 150));
                   }
                   
-                  // Logic fix: If opponent uses skill, I don't need to defend a word.
-                  // If I have already sent my action:
-                  //   - If I sent a Word -> Opponent defends (handled on their side)
-                  //   - If I sent a Skill -> Both Skills -> Round Over
-                  // If I haven't sent action -> Wait for me to send.
-                  
+                  // Force Check: If I already sent my action, check if we need to proceed
+                  // This fixes the "stuck" issue if both use skills
                   setPhase(prev => {
                       if (prev === 'waiting_opponent') {
-                          // I already acted.
-                          // If I sent a word, wait for result.
-                          // If I sent a skill, round over.
-                          // We can't easily know "what I sent" here without state, 
-                          // but since incomingSkill is set, let's wait a bit then summary
-                          // assuming mutual skill usage or skill vs attack flow.
-                          
-                          // Actually, if opponent used SKILL, they don't send a word.
-                          // So I have nothing to defend.
-                          // Show the skill effect, then Summary.
-                          setTimeout(() => setPhase('round_summary'), 2000);
+                          // I acted, Opponent acted (Skill) -> Round Over
+                          setTimeout(() => setPhase('round_summary'), 1500);
                           return prev; 
                       }
+                      // I haven't acted, wait for my action
                       return prev;
                   });
 
@@ -383,7 +457,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               setOpHp(prev => Math.max(0, prev - damage));
               setOpDefenseResult(damage === 0 ? 'success' : 'fail');
               
-              // Opponent finished defending, I can go to summary if I was waiting
               setPhase(prev => {
                   if (prev === 'waiting_opponent') return 'round_summary';
                   return prev;
@@ -417,7 +490,8 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               isWin: win, 
               score: score, 
               ratingChange: ratingChange,
-              opponentName: opponent?.name || '' 
+              opponentName: opponent?.name || '',
+              mistakes: mistakes
           });
       } else {
           setRound(prev => prev + 1);
@@ -602,25 +676,29 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   if (phase === 'result') {
       const isWin = myHp > opHp;
       return (
-        <div className="fixed inset-0 z-[60] bg-gray-900 flex flex-col items-center justify-center p-6">
+        <div className="fixed inset-0 z-[60] bg-gray-900 flex flex-col items-center justify-center p-6 overflow-y-auto">
              <div className={`absolute inset-0 opacity-20 ${isWin ? 'bg-gradient-to-t from-yellow-600 to-black' : 'bg-gradient-to-t from-red-900 to-black'}`}></div>
              
-             <div className="relative z-10 text-center animate-in zoom-in duration-500 w-full max-w-md">
+             <div className="relative z-10 text-center animate-in zoom-in duration-500 w-full max-w-md pt-10 pb-10">
                  {isWin ? (
-                     <div className="mb-8">
+                     <div className="mb-6">
                          <Crown size={80} className="text-yellow-400 mx-auto mb-4 drop-shadow-[0_0_20px_rgba(250,204,21,0.5)] animate-bounce" />
                          <h1 className="text-5xl font-black text-white mb-2 tracking-tighter">VICTORY</h1>
-                         <p className="text-yellow-500 text-sm font-bold tracking-widest uppercase">Dominating Performance</p>
+                         <p className="text-yellow-500 text-sm font-bold tracking-widest uppercase">
+                             {endReason === 'opponent_left' ? '對手已離開' : 'Dominating Performance'}
+                         </p>
                      </div>
                  ) : (
-                     <div className="mb-8">
+                     <div className="mb-6">
                          <Skull size={80} className="text-gray-600 mx-auto mb-4" />
                          <h1 className="text-5xl font-black text-gray-400 mb-2 tracking-tighter">DEFEAT</h1>
-                         <p className="text-gray-600 text-sm font-bold tracking-widest uppercase">Mission Failed</p>
+                         <p className="text-gray-600 text-sm font-bold tracking-widest uppercase">
+                             {endReason === 'surrender' ? '您已投降' : 'Mission Failed'}
+                         </p>
                      </div>
                  )}
 
-                 <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-3xl p-6 mb-8">
+                 <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-3xl p-6 mb-6">
                      <div className="flex justify-between items-center">
                          <div className="text-center">
                              <div className="w-14 h-14 rounded-full bg-gray-700 mx-auto mb-2 overflow-hidden border-2 border-gray-600">
@@ -644,6 +722,22 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                          </span>
                      </div>
                  </div>
+
+                 {mistakes.length > 0 && (
+                     <div className="bg-gray-800/50 backdrop-blur-md border border-red-500/30 rounded-3xl p-4 mb-6 text-left">
+                         <h4 className="text-red-400 font-bold text-sm mb-3 flex items-center gap-2">
+                             <AlertTriangle size={16} /> 錯誤複習
+                         </h4>
+                         <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                             {mistakes.map((m, idx) => (
+                                 <div key={idx} className="text-xs bg-black/30 p-2 rounded flex justify-between items-center">
+                                     <span className="text-white font-bold">{m.word.en}</span>
+                                     <span className="text-gray-400">{m.word.zh}</span>
+                                 </div>
+                             ))}
+                         </div>
+                     </div>
+                 )}
                  
                  <button 
                     onClick={() => onFinish({ isWin, score: 0, ratingChange: 0, opponentName: '' })} 
@@ -661,12 +755,16 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       <div className="fixed inset-0 z-[60] bg-gray-900 flex flex-col overflow-hidden font-sans">
           
           {/* Top Bar: Opponent */}
-          <div className="bg-gray-800/90 p-4 pt-safe flex items-center gap-4 border-b border-gray-700 shadow-lg z-20">
+          <div className="bg-gray-800/90 p-4 pt-safe flex items-center gap-4 border-b border-gray-700 shadow-lg z-20 relative">
+              <button onClick={handleSurrender} className="absolute top-safe right-4 z-30 text-gray-500 hover:text-red-500">
+                  <Flag size={18} />
+              </button>
+
               <div className={`relative w-12 h-12 rounded-full ${opponent?.avatarColor} flex-shrink-0 overflow-hidden border-2 border-rose-500/50`}>
                   {opponent?.avatarImage ? <img src={opponent.avatarImage} className="w-full h-full object-cover"/> : (opponent?.name[0] || '?')}
                   {opDefenseResult === 'fail' && <div className="absolute inset-0 bg-red-500/80 flex items-center justify-center font-black text-white text-xs animate-ping">HIT</div>}
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 pr-8">
                   <div className="flex justify-between items-end mb-1.5">
                       <span className="font-bold text-gray-200 text-sm truncate">{opponent?.name}</span>
                       <span className="text-xs font-mono text-rose-400">{opHp} HP</span>
@@ -686,7 +784,17 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                   <div className="inline-block bg-black/60 backdrop-blur px-4 py-1 rounded-full border border-white/10 text-xs font-mono text-gray-400 tracking-widest">
                       ROUND {round} / {TOTAL_ROUNDS}
                   </div>
-                  <div className="mt-4 h-8">
+                  
+                  {/* Turn Timer */}
+                  {(phase === 'selecting_attack' || phase === 'defending') && (
+                      <div className="mt-2 flex justify-center">
+                          <div className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-bold ${turnTimeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-blue-400'}`}>
+                              <Timer size={12} /> {turnTimeLeft}s
+                          </div>
+                      </div>
+                  )}
+
+                  <div className="mt-2 h-8">
                       <p className="text-yellow-400 font-bold text-sm animate-pulse drop-shadow-md">{battleLog}</p>
                   </div>
               </div>

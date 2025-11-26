@@ -7,7 +7,7 @@ import { submitGameScore } from '../services/dataService';
 
 // --- Constants & Types ---
 const BOARD_SIZE = 8;
-const TOUCH_OFFSET_Y = 80; // Distance between finger and block center (reduced for better control)
+const TOUCH_OFFSET_Y = 70; // Slightly reduced offset for better control
 
 // Neon/Vibrant Colors
 const BLOCK_COLORS = [
@@ -30,24 +30,28 @@ type Shape = {
     color: string;
 };
 
-// Define shapes (matrices)
-const SHAPE_DEFINITIONS: number[][][] = [
-    [[1]], // Dot
-    [[1, 1]], // H-Line 2
-    [[1], [1]], // V-Line 2
-    [[1, 1, 1]], // H-Line 3
-    [[1], [1], [1]], // V-Line 3
-    [[1, 1, 1, 1]], // H-Line 4
-    [[1], [1], [1], [1]], // V-Line 4
-    [[1, 1], [1, 1]], // Square 2x2
-    [[1, 1, 1], [1, 1, 1], [1, 1, 1]], // Square 3x3
-    [[1, 1, 0], [0, 1, 1]], // Z
-    [[0, 1, 1], [1, 1, 0]], // S
-    [[1, 1, 1], [0, 1, 0]], // T
-    [[1, 0], [1, 0], [1, 1]], // L
-    [[0, 1], [0, 1], [1, 1]], // J
-    [[1, 1], [1, 0]], // Small L
-    [[1, 0, 0], [1, 0, 0], [1, 1, 1]], // Big L
+// Define shapes with weights (Weighted Generation)
+const SHAPE_DEFINITIONS: { matrix: number[][], weight: number }[] = [
+    { matrix: [[1]], weight: 1 }, // Dot (Reduced chance)
+    { matrix: [[1, 1]], weight: 3 }, // H-Line 2
+    { matrix: [[1], [1]], weight: 3 }, // V-Line 2
+    { matrix: [[1, 1, 1]], weight: 4 }, // H-Line 3
+    { matrix: [[1], [1], [1]], weight: 4 }, // V-Line 3
+    { matrix: [[1, 1, 1, 1]], weight: 3 }, // H-Line 4
+    { matrix: [[1], [1], [1], [1]], weight: 3 }, // V-Line 4
+    { matrix: [[1, 1, 1, 1, 1]], weight: 1 }, // H-Line 5
+    { matrix: [[1], [1], [1], [1], [1]], weight: 1 }, // V-Line 5
+    { matrix: [[1, 1], [1, 1]], weight: 5 }, // Square 2x2 (Common)
+    { matrix: [[1, 1, 1], [1, 1, 1], [1, 1, 1]], weight: 2 }, // Square 3x3
+    { matrix: [[1, 1, 0], [0, 1, 1]], weight: 3 }, // Z
+    { matrix: [[0, 1, 1], [1, 1, 0]], weight: 3 }, // S
+    { matrix: [[1, 1, 1], [0, 1, 0]], weight: 4 }, // T
+    { matrix: [[1, 0], [1, 0], [1, 1]], weight: 4 }, // L
+    { matrix: [[0, 1], [0, 1], [1, 1]], weight: 4 }, // J
+    { matrix: [[1, 1], [1, 0]], weight: 5 }, // Small L
+    { matrix: [[1, 0, 0], [1, 0, 0], [1, 1, 1]], weight: 2 }, // Big L
+    { matrix: [[1, 1, 1], [1, 0, 1]], weight: 2 }, // U
+    { matrix: [[1, 0], [1, 1]], weight: 4 }, // Small corner
 ];
 
 interface BlockBlastScreenProps {
@@ -106,7 +110,7 @@ class GameSynth {
                 osc.stop(now + 0.05);
                 break;
             case 'place':
-                osc.type = 'triangle'; // Soft place sound
+                osc.type = 'triangle';
                 osc.frequency.setValueAtTime(300, now);
                 osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
                 gain.gain.setValueAtTime(0.2, now);
@@ -115,31 +119,15 @@ class GameSynth {
                 osc.stop(now + 0.15);
                 break;
             case 'clear':
-                // Sparkle sound
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(500, now);
                 osc.frequency.linearRampToValueAtTime(1200, now + 0.2);
                 gain.gain.setValueAtTime(0.1, now);
                 gain.gain.linearRampToValueAtTime(0, now + 0.3);
-                
-                // Add a second harmonic
-                const osc2 = this.ctx.createOscillator();
-                const gain2 = this.ctx.createGain();
-                osc2.connect(gain2);
-                gain2.connect(this.ctx.destination);
-                osc2.type = 'triangle';
-                osc2.frequency.setValueAtTime(800, now);
-                osc2.frequency.linearRampToValueAtTime(1600, now + 0.2);
-                gain2.gain.setValueAtTime(0.05, now);
-                gain2.gain.linearRampToValueAtTime(0, now + 0.3);
-                osc2.start(now);
-                osc2.stop(now + 0.3);
-
                 osc.start(now);
                 osc.stop(now + 0.3);
                 break;
             case 'combo':
-                // Chord
                 [440, 554, 659].forEach((f, i) => {
                      const o = this.ctx!.createOscillator();
                      const g = this.ctx!.createGain();
@@ -168,35 +156,17 @@ class GameSynth {
     startBGM() {
         if (this.bgmInterval) clearInterval(this.bgmInterval);
         this.noteIndex = 0;
-        
-        // Simple ambient loop (Pentatonic C Majorish)
-        const sequence = [
-            261.63, // C4
-            329.63, // E4
-            392.00, // G4
-            329.63, // E4
-            440.00, // A4
-            392.00, // G4
-            329.63, // E4
-            293.66, // D4
-        ];
-
-        // Bassline
-        const bass = [65.41, 65.41, 73.42, 73.42, 87.31, 87.31, 73.42, 65.41]; // C2, D2, F2..
+        const sequence = [261.63, 329.63, 392.00, 329.63, 440.00, 392.00, 329.63, 293.66];
+        const bass = [65.41, 65.41, 73.42, 73.42, 87.31, 87.31, 73.42, 65.41];
 
         this.bgmInterval = window.setInterval(() => {
             if (this.isMuted) return;
-            
-            // Play melody (soft sine)
             this.playTone(sequence[this.noteIndex % sequence.length], 'sine', 0.3, 0.05);
-            
-            // Play bass (soft triangle) every 2 beats
             if (this.noteIndex % 2 === 0) {
                  this.playTone(bass[(this.noteIndex / 2) % bass.length], 'triangle', 0.6, 0.08);
             }
-
             this.noteIndex++;
-        }, 400); // 150 BPM approx quarter note
+        }, 400);
     }
 
     stopBGM() {
@@ -207,7 +177,6 @@ class GameSynth {
 
 const synth = new GameSynth();
 
-// Haptic Feedback Helper
 const vibrate = (pattern: number | number[] = 10) => {
     if (navigator.vibrate) {
         navigator.vibrate(pattern);
@@ -225,63 +194,66 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const [gameStarted, setGameStarted] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
     
-    // Animation States
     const [clearingRows, setClearingRows] = useState<number[]>([]);
     const [clearingCols, setClearingCols] = useState<number[]>([]);
     const [comboCount, setComboCount] = useState(0);
     const [screenShake, setScreenShake] = useState(false);
 
-    // Dynamic sizing for drag logic
     const [boardCellSize, setBoardCellSize] = useState(0);
 
-    // --- Drag & Drop State ---
     const [draggingShape, setDraggingShape] = useState<{
         index: number;
         shape: Shape;
-        x: number; // Viewport X (finger)
-        y: number; // Viewport Y (finger)
+        x: number;
+        y: number;
     } | null>(null);
 
-    // Refs for coordinate calculation
     const gridRef = useRef<HTMLDivElement>(null);
 
-    // Sync Mute State
     useEffect(() => {
         synth.isMuted = isMuted;
     }, [isMuted]);
 
-    // Clean up BGM on unmount
     useEffect(() => {
         return () => {
             synth.stopBGM();
         };
     }, []);
 
-    // Update cell size on resize/init
     useEffect(() => {
         const updateSize = () => {
             if (gridRef.current) {
                 const rect = gridRef.current.getBoundingClientRect();
-                // BOARD_SIZE columns + gaps. But usually simpler to just divide width
                 setBoardCellSize(rect.width / BOARD_SIZE);
             }
         };
         updateSize();
-        // Slightly delay to ensure layout is final
         setTimeout(updateSize, 100);
         window.addEventListener('resize', updateSize);
         return () => window.removeEventListener('resize', updateSize);
     }, [gameStarted]);
 
-    // --- Helpers ---
-    
+    // --- Generation Logic (Weighted) ---
     const generateNewShapes = () => {
         const newShapes: Shape[] = [];
+        const totalWeight = SHAPE_DEFINITIONS.reduce((sum, item) => sum + item.weight, 0);
+
         for (let i = 0; i < 3; i++) {
-            const def = SHAPE_DEFINITIONS[Math.floor(Math.random() * SHAPE_DEFINITIONS.length)];
+            // Weighted Random
+            let randomNum = Math.random() * totalWeight;
+            let selectedDef = SHAPE_DEFINITIONS[0].matrix;
+            
+            for (const item of SHAPE_DEFINITIONS) {
+                if (randomNum < item.weight) {
+                    selectedDef = item.matrix;
+                    break;
+                }
+                randomNum -= item.weight;
+            }
+
             const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
             newShapes.push({
-                matrix: def,
+                matrix: selectedDef,
                 id: Math.random().toString(36).substr(2, 9),
                 color
             });
@@ -307,7 +279,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         setGameStarted(true);
         setDockShapes(generateNewShapes());
         
-        // Short delay to ensure DOM is ready for sizing
         setTimeout(() => {
              if (gridRef.current) {
                 const rect = gridRef.current.getBoundingClientRect();
@@ -320,7 +291,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         const availableShapes = currentDock.filter(s => s !== null);
         if (availableShapes.length === 0) return false;
 
-        // Check if ANY available shape fits ANYWHERE
         for (const shape of availableShapes) {
             if (!shape) continue;
             for (let r = 0; r < BOARD_SIZE; r++) {
@@ -348,17 +318,14 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         return true;
     };
 
-    // --- Drag Logic ---
+    // --- Drag Logic (Improved) ---
 
     const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
         if (gameOver) return;
-        
         const shape = dockShapes[index];
         if (!shape) return;
 
-        // Prevent scrolling on touch
-        // e.preventDefault(); // Moved to touchmove/mousemove
-
+        // Ensure we get coordinates correctly
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
 
@@ -375,7 +342,9 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
         if (!draggingShape) return;
-        e.preventDefault(); // Stop scrolling
+        
+        // Prevent default to stop scrolling on mobile
+        if (e.cancelable) e.preventDefault();
 
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
@@ -383,29 +352,22 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         setDraggingShape(prev => prev ? { ...prev, x: clientX, y: clientY } : null);
     }, [draggingShape]);
 
-    // Core Logic: Calculate grid position from drag position
     const getDropTarget = (mouseX: number, mouseY: number, shape: Shape) => {
         if (!gridRef.current || boardCellSize === 0) return null;
         const rect = gridRef.current.getBoundingClientRect();
         
-        // IMPORTANT: Coordinate System Matching
-        // The visual block is rendered with `transform: translate(-50%, -50%) translateY(-OFFSET)`.
-        // This means the visual Center is at `mouseY - OFFSET`.
-        
+        // Visual Center is where the finger is
         const visualCenterX = mouseX;
+        // Actual Block Center is visually offset upwards so finger doesn't cover it
         const visualCenterY = mouseY - TOUCH_OFFSET_Y;
 
-        // Shape dimensions
         const shapeWidthPx = shape.matrix[0].length * boardCellSize;
         const shapeHeightPx = shape.matrix.length * boardCellSize;
 
-        // Calculate Top-Left of the shape in Grid Space
-        // If center is at visualCenter, TopLeft is center - half size
+        // Calculate Top-Left of shape
         const shapeTopLeftX = visualCenterX - (shapeWidthPx / 2);
         const shapeTopLeftY = visualCenterY - (shapeHeightPx / 2);
 
-        // Convert to Grid Index
-        // Note: Using Math.round helps snap to the nearest cell center
         const relativeX = shapeTopLeftX - rect.left;
         const relativeY = shapeTopLeftY - rect.top;
 
@@ -434,6 +396,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         if (draggingShape) {
             window.addEventListener('mousemove', handleDragMove);
             window.addEventListener('mouseup', handleDragEnd);
+            // Use { passive: false } to allow preventDefault for scroll locking
             window.addEventListener('touchmove', handleDragMove, { passive: false });
             window.addEventListener('touchend', handleDragEnd);
         }
@@ -481,7 +444,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         if (linesCleared > 0) {
             const newCombo = comboCount + 1;
             setComboCount(newCombo);
-            moveScore += (linesCleared * 10) * newCombo; // Bonus
+            moveScore += (linesCleared * 10) * newCombo;
             
             setClearingRows(rowsToClear);
             setClearingCols(colsToClear);
@@ -540,8 +503,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         }
     };
 
-    // --- Render Helpers ---
-
     const renderShapePreview = (shape: Shape, blockSize: number) => {
         const rows = shape.matrix.length;
         const cols = shape.matrix[0].length;
@@ -573,13 +534,11 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const renderGhost = () => {
         if (!draggingShape || !gridRef.current || boardCellSize === 0) return null;
         
-        // Calculate Ghost Position
         const target = getDropTarget(draggingShape.x, draggingShape.y, draggingShape.shape);
         if (!target) return null;
 
         const { r, c } = target;
 
-        // Check if strictly valid
         if (!canPlace(grid, draggingShape.shape.matrix, r, c)) return null;
 
         const ghosts = [];
@@ -591,9 +550,9 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                             key={`ghost-${i}-${j}`}
                             className="absolute rounded-[4px] border-2 border-white/50 box-border z-0"
                             style={{
-                                width: `${boardCellSize - 2}px`, // Adjust for gap approx
+                                width: `${boardCellSize - 2}px`,
                                 height: `${boardCellSize - 2}px`,
-                                left: `${(c + j) * boardCellSize + 1}px`, // +1 for gap centering
+                                left: `${(c + j) * boardCellSize + 1}px`,
                                 top: `${(r + i) * boardCellSize + 1}px`,
                                 backgroundColor: 'rgba(255, 255, 255, 0.1)',
                                 pointerEvents: 'none'
@@ -610,7 +569,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     return (
         <div 
             className={`fixed inset-0 z-50 bg-[#1e1e2e] flex flex-col items-center select-none overflow-hidden transition-transform ${screenShake ? 'animate-[shake_0.3s_ease-in-out]' : ''}`} 
-            style={{ touchAction: 'none' }} // Disable browser gestures
+            style={{ touchAction: 'none' }} // Critical for disabling browser gestures
         >
             <style>{`
                 @keyframes shake {
@@ -713,7 +672,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     {/* Dock (Shapes) */}
                     <div className="mt-8 w-full flex justify-between items-center px-4 h-32 gap-2">
                         {dockShapes.map((shape, idx) => {
-                            // Only render shape if not being dragged
                             const isBeingDragged = draggingShape?.index === idx;
                             return (
                                 <div 
@@ -732,18 +690,17 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                         })}
                     </div>
 
-                    {/* Drag Portal - Fixed size matching grid cells */}
+                    {/* Drag Portal */}
                     {draggingShape && createPortal(
                         <div 
                             className="fixed pointer-events-none z-[100]"
                             style={{
                                 left: draggingShape.x,
                                 top: draggingShape.y,
-                                // Center X, Offset Y up by TOUCH_OFFSET_Y so finger is visible
+                                // Offset visual slightly up so finger doesn't cover it
                                 transform: `translate(-50%, -50%) translateY(-${TOUCH_OFFSET_Y}px)`, 
                             }}
                         >
-                            {/* Render exact size as board cells */}
                             {renderShapePreview(draggingShape.shape, boardCellSize)}
                         </div>,
                         document.body

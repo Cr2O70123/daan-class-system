@@ -183,11 +183,19 @@ export interface GameResult {
 }
 
 // --- PK Game Types (Realtime) ---
+export interface PkMistake {
+    word: Word;
+    correctAnswer: string;
+    timestamp: number;
+}
+
 export interface PkResult {
   isWin: boolean;
   score: number;
   ratingChange: number; // New
   opponentName: string;
+  mistakes?: PkMistake[]; // New: For review
+  reason?: 'normal' | 'surrender' | 'opponent_left' | 'timeout'; // New
 }
 
 export interface PkPlayerState {
@@ -213,7 +221,7 @@ export interface BattleCard {
 }
 
 export interface PkGamePayload {
-    type: 'START_GAME' | 'SEND_ACTION' | 'REPORT_RESULT' | 'GAME_OVER';
+    type: 'START_GAME' | 'SEND_ACTION' | 'REPORT_RESULT' | 'GAME_OVER' | 'SURRENDER' | 'OPPONENT_LEFT';
     
     // SEND_ACTION (Attack Phase)
     attackerId?: string;
@@ -224,6 +232,9 @@ export interface PkGamePayload {
     defenderId?: string;
     damageTaken?: number; 
     isCorrect?: boolean;
+
+    // GAME_OVER / SURRENDER
+    winnerId?: string;
 }
 
 export interface GameLeaderboardEntry {
