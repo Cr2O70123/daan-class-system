@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff } from 'lucide-react';
-import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType } from '../types';
+import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy } from 'lucide-react';
+import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry } from '../types';
 import { WORD_DATABASE } from '../services/mockData';
 import { joinMatchmaking, leaveMatchmaking, joinGameRoom, leaveGameRoom, sendGameEvent } from '../services/pkService';
+import { fetchPkLeaderboard } from '../services/dataService';
 
 interface PkGameScreenProps {
   user: User;
@@ -24,6 +25,18 @@ const RANKS = [
 
 const getRank = (points: number) => {
     return [...RANKS].reverse().find(r => points >= r.min) || RANKS[0];
+};
+
+// Helper for frame styles
+const getFrameStyle = (frameId?: string) => {
+    switch(frameId) {
+      case 'frame_gold': return 'ring-2 ring-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+      case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
+      case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
+      case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
+      case 'frame_beta': return 'ring-2 ring-amber-500 border-2 border-dashed border-yellow-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]';
+      default: return 'ring-2 ring-white dark:ring-gray-700';
+    }
 };
 
 // --- Sound Logic ---
@@ -115,13 +128,15 @@ const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill
 
 // --- Constants ---
 const MAX_HP = 1000;
-const DAMAGE_PER_HIT = 150; // Reduced to allow longer games (10 rounds)
+const DAMAGE_PER_HIT = 150; 
 const TOTAL_ROUNDS = 10;
 
-type BattlePhase = 'matching' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
+type BattlePhase = 'menu' | 'matching' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
 
 export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFinish }) => {
-  const [phase, setPhase] = useState<BattlePhase>('matching');
+  const [phase, setPhase] = useState<BattlePhase>('menu');
+  const [menuTab, setMenuTab] = useState<'lobby' | 'rank' | 'help'>('lobby');
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [matchStatus, setMatchStatus] = useState("正在掃描對手訊號...");
   
   // Players
@@ -135,11 +150,11 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const myRank = getRank(myRating);
   
   // Round Data
-  const [battleCards, setBattleCards] = useState<BattleCard[]>([]); // 4 Cards
-  const [incomingWord, setIncomingWord] = useState<Word | null>(null); // Attack received
-  const [incomingSkill, setIncomingSkill] = useState<SkillType>('NONE'); // Skill received
+  const [battleCards, setBattleCards] = useState<BattleCard[]>([]); 
+  const [incomingWord, setIncomingWord] = useState<Word | null>(null); 
+  const [incomingSkill, setIncomingSkill] = useState<SkillType>('NONE'); 
   const [defenseOptions, setDefenseOptions] = useState<string[]>([]); 
-  const [blindEffect, setBlindEffect] = useState(false); // UI effect
+  const [blindEffect, setBlindEffect] = useState(false); 
   
   // Round State
   const [myActionSent, setMyActionSent] = useState(false);
@@ -150,42 +165,61 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [battleLog, setBattleLog] = useState<string>("");
   const timeoutFallbackRef = useRef<number | null>(null);
 
+  // --- 0. Data Loading (Leaderboard) ---
+  useEffect(() => {
+      if (phase === 'menu' && menuTab === 'rank') {
+          const loadLeaderboard = async () => {
+              const data = await fetchPkLeaderboard();
+              setLeaderboard(data);
+          };
+          loadLeaderboard();
+      }
+  }, [phase, menuTab]);
+
   // --- 1. Matchmaking Lifecycle ---
   useEffect(() => {
-      joinMatchmaking(
-          user,
-          (op, roomId, host) => {
-              setOpponent(op);
-              setMatchStatus("配對成功！連線建立中...");
-              playSound('match');
-              leaveMatchmaking();
-              joinGameRoom(roomId, handleGameEvent);
+      if (phase === 'matching') {
+          setMatchStatus("正在掃描對手訊號...");
+          joinMatchmaking(
+              user,
+              (op, roomId, host) => {
+                  setOpponent(op);
+                  setMatchStatus("配對成功！連線建立中...");
+                  playSound('match');
+                  leaveMatchmaking();
+                  joinGameRoom(roomId, handleGameEvent);
 
-              setTimeout(() => {
-                  setPhase('ready');
-                  setTimeout(startRound, 2500);
-              }, 1500);
-          },
-          (status) => setMatchStatus(status)
-      );
-      
-      timeoutFallbackRef.current = window.setTimeout(() => {
-          if (phase === 'matching') {
-              setMatchStatus("無人回應，請稍後再試");
-          }
-      }, 20000);
+                  setTimeout(() => {
+                      setPhase('ready');
+                      setTimeout(startRound, 2500);
+                  }, 1500);
+              },
+              (status) => setMatchStatus(status)
+          );
+          
+          timeoutFallbackRef.current = window.setTimeout(() => {
+              if (phase === 'matching') {
+                  setMatchStatus("無人回應，請稍後再試");
+              }
+          }, 20000);
+      }
 
       return () => {
-          leaveMatchmaking();
-          leaveGameRoom();
-          if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
+          if (phase === 'matching') {
+              leaveMatchmaking();
+              leaveGameRoom();
+              if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
+          }
       };
-  }, []);
+  }, [phase]);
+
+  const handleStartMatch = () => {
+      setPhase('matching');
+  };
 
   // --- 2. Game Logic ---
 
   const generateCards = (roundNum: number): BattleCard[] => {
-      // Increase difficulty based on round
       let minLevel = 3;
       if (roundNum >= 4) minLevel = 4;
       if (roundNum >= 7) minLevel = 5;
@@ -200,7 +234,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           id: `word_${w.id}`
       }));
 
-      // Add 1 Random Skill Card
       const skills: SkillType[] = ['HEAL', 'SHIELD', 'CRIT', 'BLIND'];
       const randomSkill = skills[Math.floor(Math.random() * skills.length)];
       cards.push({
@@ -231,7 +264,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setMyActionSent(true);
       
       if (card.type === 'SKILL') {
-          // Instant Self-Effect logic for HEAL
           if (card.skill === 'HEAL') {
               setMyHp(prev => Math.min(MAX_HP, prev + 150));
               setBattleLog("使用回復！HP +150");
@@ -247,7 +279,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               skill: card.skill
           });
       } else {
-          // Word Attack
           setBattleLog(`發送攻擊：${card.word?.en}`);
           playSound('attack');
           sendGameEvent({
@@ -276,15 +307,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           setMyDefenseResult('success');
       } else {
           damageTaken = DAMAGE_PER_HIT;
-          // Crit logic handled on sender side usually, but simplified here: 
-          // If incomingSkill was CRIT, damage * 1.5
           if (incomingSkill === 'CRIT') damageTaken = Math.floor(damageTaken * 1.5);
-          
-          // Shield logic: if I used SHIELD this turn (tracked by local state? No, simpler: check if I picked shield)
-          // This needs 'mySelectedCard' state tracking.
-          // For simplicity: Assume SHIELD blocks valid word attacks too? 
-          // Let's keep it simple: Skill cards are ONE-WAY events mostly. 
-          // If opponent sent word, I defend.
           
           setMyHp(prev => Math.max(0, prev - damageTaken));
           playSound('damage');
@@ -310,29 +333,20 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const handleGameEvent = (payload: PkGamePayload) => {
       if (payload.type === 'SEND_ACTION') {
           if (payload.attackerId !== user.studentId) {
-              // Opponent Action
               setOpActionReceived(true);
               
               if (payload.skill) {
                   setIncomingSkill(payload.skill);
-                  // Immediate effects from opponent
                   if (payload.skill === 'BLIND') {
                       setBlindEffect(true);
                       setBattleLog("對手使用了閃光彈！");
                   }
                   if (payload.skill === 'HEAL') {
-                      // We don't update opponent HP here, we wait for REPORT or just visual
-                      // But simpler: assume they healed
                       setOpHp(prev => Math.min(MAX_HP, prev + 150));
                   }
-                  // Skills imply no defense needed usually, unless it's a modifier?
-                  // For this game: If opponent uses skill, I don't need to answer a word.
-                  // So auto-transition to result if I also acted.
                   
                   setPhase(prev => {
                       if (prev === 'waiting_opponent') {
-                          // Both acted (I sent something, they sent skill) -> Summary
-                          // Since no word to defend, we skip defending
                           setTimeout(() => setPhase('round_summary'), 1000); 
                           return prev; 
                       }
@@ -343,8 +357,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                   const word = WORD_DATABASE.find(w => w.id === payload.wordId);
                   if (word) {
                       setIncomingWord(word);
-                      
-                      // Generate Defense Options
                       const wrongs = WORD_DATABASE
                         .filter(w => w.id !== word.id)
                         .sort(() => 0.5 - Math.random())
@@ -363,7 +375,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       } 
       else if (payload.type === 'REPORT_RESULT') {
           if (payload.defenderId !== user.studentId) {
-              // Opponent reporting their defense result against my attack
               const damage = payload.damageTaken || 0;
               setOpHp(prev => Math.max(0, prev - damage));
               setOpDefenseResult(damage === 0 ? 'success' : 'fail');
@@ -371,18 +382,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   };
 
-  // Sync Round End
   useEffect(() => {
-      // Logic: If I defended (or didn't need to) AND opponent defended (or didn't need to)
-      // Simplified: If I have a result (or opponent used skill so no result needed)
-      // AND (opponent sent result OR I used skill)
-      
-      const iAmReady = myDefenseResult !== null || incomingSkill !== 'NONE'; // I finished defending or no need
-      const opIsReady = opDefenseResult !== null; // Opponent finished defending (logic gap: what if I used skill?)
-      
-      // This sync is tricky. Let's rely on simple timeout in summary phase if we reach it.
-      // Force transition if both HP updated or logic done.
-      
       if (phase === 'defending' && myDefenseResult) {
            setPhase('round_summary');
       }
@@ -402,10 +402,8 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           playSound(win ? 'win' : 'lose');
           setPhase('result');
           
-          // Calc Score & Rating
           let score = win ? 100 : 20;
           score += Math.floor(myHp / 10);
-          
           const ratingChange = win ? 25 : -10;
           
           onFinish({ 
@@ -420,8 +418,108 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   };
 
-  // --- Render ---
+  // --- RENDER: Menu Phase ---
+  if (phase === 'menu') {
+      return (
+          <div className="fixed inset-0 z-50 flex flex-col bg-gray-900 text-white overflow-hidden transition-colors">
+              {/* Header */}
+              <div className="p-4 pt-safe flex justify-between items-center bg-gray-800 shadow-md z-10">
+                  <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-700 rounded-full transition-colors">
+                      <ArrowLeft size={24} className="text-gray-300" />
+                  </button>
+                  <div className="flex gap-2 items-center">
+                        <div className="bg-black/30 px-3 py-1.5 rounded-full border border-gray-700 flex items-center gap-1">
+                            <Swords size={14} className="text-rose-500" />
+                            <span className="text-xs font-bold text-gray-300">PK Battle</span>
+                        </div>
+                  </div>
+              </div>
 
+              {/* Tab Navigation */}
+              <div className="p-4 pb-0">
+                  <div className="flex bg-gray-800 p-1 rounded-xl">
+                      <button onClick={() => setMenuTab('lobby')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${menuTab === 'lobby' ? 'bg-rose-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>大廳</button>
+                      <button onClick={() => setMenuTab('rank')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${menuTab === 'rank' ? 'bg-rose-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>排行榜</button>
+                      <button onClick={() => setMenuTab('help')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${menuTab === 'help' ? 'bg-rose-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>說明</button>
+                  </div>
+              </div>
+
+              <div className="flex-1 p-6 flex flex-col items-center justify-center">
+                  {menuTab === 'lobby' && (
+                      <div className="w-full max-w-sm flex flex-col items-center animate-in fade-in zoom-in duration-300">
+                          <div className="relative w-32 h-32 mb-6">
+                              <div className="absolute inset-0 bg-rose-500 rounded-full blur-2xl opacity-40 animate-pulse"></div>
+                              <div className={`relative w-full h-full rounded-full ${user.avatarColor} border-4 border-white flex items-center justify-center overflow-hidden shadow-2xl`}>
+                                  {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : <UserIcon size={60}/>}
+                              </div>
+                              <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full border bg-gray-900 text-xs font-bold whitespace-nowrap ${myRank.color}`}>
+                                  {myRank.name} ({user.pkRating || 0})
+                              </div>
+                          </div>
+                          
+                          <h2 className="text-3xl font-black text-white mb-2">知識對決</h2>
+                          <p className="text-gray-400 text-sm mb-8 text-center">
+                              即時配對，即時攻防。<br/>用你的英文單字量擊敗對手！
+                          </p>
+
+                          <button 
+                              onClick={handleStartMatch}
+                              className="w-full py-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-2xl font-black text-xl shadow-[0_0_30px_rgba(225,29,72,0.4)] flex items-center justify-center gap-2 transition-transform active:scale-95 border-b-4 border-rose-900"
+                          >
+                              <Swords size={24} /> 開始配對
+                          </button>
+                      </div>
+                  )}
+
+                  {menuTab === 'rank' && (
+                      <div className="w-full h-full flex flex-col animate-in slide-in-from-right">
+                          <h3 className="text-center font-bold text-gray-300 mb-4 flex items-center justify-center gap-2">
+                              <Trophy size={18} className="text-yellow-500" /> 全服強者
+                          </h3>
+                          <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                              {leaderboard.map((entry, idx) => (
+                                  <div key={idx} className="bg-gray-800 p-3 rounded-xl flex items-center border border-gray-700">
+                                      <div className={`w-8 text-center font-black text-lg ${idx < 3 ? 'text-yellow-500' : 'text-gray-500'}`}>{entry.rank}</div>
+                                      <div className={`w-10 h-10 rounded-full mx-3 ${entry.avatarColor} flex items-center justify-center font-bold text-xs overflow-hidden ${getFrameStyle(entry.avatarFrame)}`}>
+                                          {entry.name[0]}
+                                      </div>
+                                      <div className="flex-1">
+                                          <span className="font-bold text-white block">{entry.name}</span>
+                                          <span className="text-xs text-gray-500">{getRank(entry.points).name}</span>
+                                      </div>
+                                      <div className="font-mono font-bold text-rose-400">{entry.points}</div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+
+                  {menuTab === 'help' && (
+                      <div className="w-full h-full overflow-y-auto animate-in slide-in-from-right space-y-4 text-gray-300 text-sm">
+                          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                              <h4 className="text-rose-400 font-bold mb-2 flex items-center gap-2"><Zap size={16}/> 遊戲規則</h4>
+                              <p>1. 遊戲採回和制，共 10 回合。</p>
+                              <p>2. 每回合你可以選擇「發動單字攻擊」或「使用技能」。</p>
+                              <p>3. 攻擊方發送單字後，防守方需在 4 個選項中選出正確中文。</p>
+                              <p>4. 防守失敗扣除 150 HP，成功則無傷。</p>
+                          </div>
+                          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                              <h4 className="text-blue-400 font-bold mb-2 flex items-center gap-2"><Shield size={16}/> 技能卡牌</h4>
+                              <ul className="space-y-2">
+                                  <li><span className="text-green-400 font-bold">HEAL</span>: 回復 150 HP。</li>
+                                  <li><span className="text-blue-400 font-bold">SHIELD</span>: 下一次受到的傷害無效。</li>
+                                  <li><span className="text-yellow-400 font-bold">CRIT</span>: 下一次攻擊造成 1.5 倍傷害。</li>
+                                  <li><span className="text-purple-400 font-bold">BLIND</span>: 遮蔽對手視線。</li>
+                              </ul>
+                          </div>
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
+  }
+
+  // --- RENDER: Matching Phase ---
   if (phase === 'matching') {
       return (
         <div className="flex-1 flex flex-col items-center justify-center space-y-10 bg-gray-900 text-white h-screen relative overflow-hidden">
@@ -449,6 +547,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       );
   }
 
+  // --- RENDER: Result Phase ---
   if (phase === 'result') {
       const isWin = myHp > opHp;
       return (
@@ -503,7 +602,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       );
   }
 
-  // --- Main Game UI ---
+  // --- RENDER: Playing Phase ---
   return (
       <div className="flex-1 flex flex-col bg-gray-900 text-white h-screen relative overflow-hidden">
           

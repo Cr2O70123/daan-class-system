@@ -1,6 +1,4 @@
 
-
-
 import { supabase } from './supabaseClient';
 import { Question, Resource, Exam, User, GameLeaderboardEntry, LeaderboardEntry } from '../types';
 import { calculateLevel } from './levelService';
@@ -278,8 +276,6 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         .from('users')
         .select('name, student_id, points, lifetime_points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
         .eq('is_banned', false)
-        // We fetch a larger batch to ensure we sort correctly client-side for mixed null values
-        // Assuming class size is reasonable (< 1000)
         .limit(1000);
 
     if (error) {
@@ -287,7 +283,6 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         return [];
     }
 
-    // Ensure strict uniqueness by student_id to prevent "same person" bugs
     const uniqueMap = new Map();
     data.forEach((u: any) => {
         if (!uniqueMap.has(u.student_id)) {
@@ -297,8 +292,6 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
 
     const uniqueData = Array.from(uniqueMap.values());
 
-    // Sort by Lifetime Points (XP) DESC
-    // Fallback to current points if lifetime_points is null (for legacy users)
     uniqueData.sort((a: any, b: any) => {
         const xpA = a.lifetime_points ?? a.points;
         const xpB = b.lifetime_points ?? b.points;
@@ -309,7 +302,6 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         rank: index + 1,
         name: u.name,
         studentId: u.student_id,
-        // IMPORTANT: Return XP here, not current points, so the leaderboard reflects the sorting
         points: u.lifetime_points ?? u.points, 
         level: calculateLevel(u.lifetime_points ?? u.points), 
         avatarColor: u.avatar_color || 'bg-gray-400',
@@ -317,6 +309,33 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         avatarFrame: u.avatar_frame,
         checkInStreak: u.consecutive_check_in_days || 0,
         lastCheckInDate: u.last_check_in_date
+    }));
+};
+
+// --- PK Leaderboard (New) ---
+
+export const fetchPkLeaderboard = async (): Promise<LeaderboardEntry[]> => {
+    const { data, error } = await supabase
+        .from('users')
+        .select('name, student_id, pk_rating, avatar_color, avatar_image, avatar_frame')
+        .eq('is_banned', false)
+        .order('pk_rating', { ascending: false })
+        .limit(50);
+
+    if (error) {
+        console.error("Error fetching PK leaderboard:", error);
+        return [];
+    }
+
+    return data.map((u: any, index: number) => ({
+        rank: index + 1,
+        name: u.name,
+        studentId: u.student_id,
+        points: u.pk_rating || 0, // Use points field to store Rating for display
+        level: 0, // Not needed
+        avatarColor: u.avatar_color || 'bg-gray-400',
+        avatarImage: u.avatar_image,
+        avatarFrame: u.avatar_frame,
     }));
 };
 

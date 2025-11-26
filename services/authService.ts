@@ -52,7 +52,8 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             avatar_image: null,
             is_banned: false,
             consecutive_check_in_days: 0,
-            last_check_in_date: null
+            last_check_in_date: null,
+            pk_rating: 0 // Default PK Rating
         };
 
         const { data: createdUser, error: createError } = await supabase
@@ -110,7 +111,10 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         banExpiresAt: user.ban_expires_at,
 
         // Push
-        pushClientId: user.push_client_id
+        pushClientId: user.push_client_id,
+        
+        // PK Rating
+        pkRating: user.pk_rating || 0
     };
 
     // Persist session
@@ -177,7 +181,9 @@ export const checkSession = async (): Promise<User | null> => {
         isBanned: user.is_banned,
         banExpiresAt: user.ban_expires_at,
 
-        pushClientId: user.push_client_id
+        pushClientId: user.push_client_id,
+        
+        pkRating: user.pk_rating || 0
     };
 };
 
@@ -207,7 +213,10 @@ export const updateUserInDb = async (user: User) => {
         consecutive_check_in_days: user.checkInStreak,
 
         // Push
-        push_client_id: user.pushClientId
+        push_client_id: user.pushClientId,
+        
+        // PK Rating
+        pk_rating: user.pkRating
     };
 
     const { error } = await supabase
@@ -217,10 +226,6 @@ export const updateUserInDb = async (user: User) => {
         
     if (error) {
         console.error('Error updating user:', error);
-        // Specifically check for column errors
-        if (error.message.includes('column') && error.message.includes('hearts')) {
-             throw new Error("資料庫缺少 hearts 欄位，請執行 SQL 更新");
-        }
         throw new Error(error.message);
     }
     return true;
