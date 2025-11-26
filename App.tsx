@@ -20,8 +20,8 @@ import { CheckInModal } from './components/CheckInModal';
 import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
 import { BlockBlastScreen } from './screens/BlockBlastScreen'; 
 import { PkGameScreen } from './screens/PkGameScreen';
-import { BaseConverterScreen } from './screens/BaseConverterScreen'; // New Tool
-import { LogicGateScreen } from './screens/LogicGateScreen'; // New Tool
+import { BaseConverterScreen } from './screens/BaseConverterScreen'; 
+import { LogicGateScreen } from './screens/LogicGateScreen'; 
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult } from './types';
 import { RefreshCw, X, Bell } from 'lucide-react';
@@ -51,9 +51,8 @@ const getFrameStyle = (frameId?: string) => {
 };
 
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
-    // IMPORTANT: lifetimePoints is the source of truth for Level. Fallback to points only if undefined.
     const xp = user.lifetimePoints ?? user.points;
-    const progress = (xp % 500) / 5; // 500 XP per level
+    const progress = (xp % 500) / 5; 
 
     return (
         <div className="bg-white dark:bg-gray-800 px-4 pb-2 pt-safe sticky top-0 z-20 shadow-sm flex justify-between items-center transition-colors">
@@ -73,7 +72,6 @@ const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpen
             </div>
             
             <div className="flex items-center space-x-3">
-                {/* Notification Bell */}
                 <button 
                     onClick={onOpenNotifications}
                     className="relative p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -113,7 +111,7 @@ const App = () => {
   const [reports, setReports] = useState<Report[]>([]);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
-  // UI States - Modal/Overlay Management
+  // UI States
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
@@ -132,13 +130,9 @@ const App = () => {
   
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showNotificationScreen, setShowNotificationScreen] = useState(false);
-  
-  // Global Lightbox
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // --- NAVIGATION HANDLER ---
   const handleTabChange = (newTab: Tab) => {
-      // Force close all overlays
       setShowWordChallenge(false);
       setShowResistorGame(false);
       setShowLuckyWheel(false);
@@ -156,7 +150,6 @@ const App = () => {
       setCurrentTab(newTab);
   };
 
-  // --- BACK BUTTON HANDLING ---
   useEffect(() => {
       const handlePopState = (event: PopStateEvent) => {
           if (lightboxImage) { setLightboxImage(null); return; }
@@ -184,7 +177,6 @@ const App = () => {
       window.history.pushState({ overlay: true }, '');
   };
 
-  // Init
   useEffect(() => {
     const initSession = async () => {
         try {
@@ -235,7 +227,7 @@ const App = () => {
   const checkDailyReset = async (currentUser: User) => {
     const today = new Date().toDateString();
     if (currentUser.lastHeartReset !== today) {
-        const updatedUser = { ...currentUser, hearts: 3, lastHeartReset: today };
+        const updatedUser = { ...currentUser, hearts: 3, lastHeartReset: today, dailyWheelSpins: 0, lastWheelDate: today };
         try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
     }
   };
@@ -326,7 +318,7 @@ const App = () => {
       let updatedUser: User = { 
           ...user, 
           points: user.points - product.price,
-          lifetimePoints: currentLifetimePoints // Lock in XP
+          lifetimePoints: currentLifetimePoints 
       };
 
       if (product.category === 'consumable' && product.id === 'item_heart_refill') {
@@ -346,20 +338,26 @@ const App = () => {
       await updateUserInDb(updatedUser); setUser(updatedUser); alert("購買成功！");
   };
 
-  // --- Wheel Logic ---
   const handleWheelSpin = async (prize: number, cost: number) => {
       if (!user) return;
       
+      // Calculate new values
       const currentLifetimePoints = user.lifetimePoints ?? user.points;
       const newLifetime = currentLifetimePoints + (prize > 0 ? prize : 0);
       const safeLifetime = Math.max(currentLifetimePoints, newLifetime);
       const netPoints = user.points - cost + prize;
       
+      // Update Spin Counts
+      const today = new Date().toDateString();
+      const newSpins = (user.lastWheelDate === today ? (user.dailyWheelSpins || 0) : 0) + 1;
+
       const updatedUser = { 
           ...user, 
           points: netPoints,
           lifetimePoints: safeLifetime,
-          level: calculateLevel(safeLifetime)
+          level: calculateLevel(safeLifetime),
+          dailyWheelSpins: newSpins,
+          lastWheelDate: today
       };
       
       try {
@@ -372,7 +370,7 @@ const App = () => {
 
   const handleFinishChallenge = async (result: GameResult) => {
     if (!user) return;
-    const earnedPt = Math.floor(result.score / 10); // Generic scoring
+    const earnedPt = Math.floor(result.score / 10); 
     const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt;
     const updatedUser: User = { 
         ...user, 
@@ -387,16 +385,21 @@ const App = () => {
     setShowBlockBlast(false);
   };
   
-  // PK Result Handler
+  // PK Result Handler - Update Rating
   const handleFinishPk = async (result: PkResult) => {
       if (!user) return;
-      // result.score is the PT earned
-      const newLifetime = (user.lifetimePoints ?? user.points) + result.score;
+      
+      const earnedPt = result.score; // Score is PT
+      const ratingChange = result.ratingChange || 0;
+      const newRating = Math.max(0, (user.pkRating || 0) + ratingChange); // No negative rating
+
+      const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt;
       const updatedUser: User = { 
           ...user, 
-          points: user.points + result.score,
+          points: user.points + earnedPt,
           lifetimePoints: newLifetime,
-          level: calculateLevel(newLifetime)
+          level: calculateLevel(newLifetime),
+          pkRating: newRating
       };
       
       try { 
@@ -527,7 +530,6 @@ const App = () => {
                 currentUser={user} 
                 onBack={() => setSelectedResource(null)}
                 onLike={async (id) => { 
-                    // Simple optimistic like logic...
                     const r = resources.find(res => res.id === id);
                     if(!r) return;
                     const isLiked = r.likedBy.includes(user.name);
@@ -607,10 +609,8 @@ const App = () => {
                         onOpenLuckyWheel={() => { pushHistory(); setShowLuckyWheel(true); }}
                         onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }}
                         onOpenPkGame={() => { pushHistory(); setShowPkGame(true); }}
-                        onOpenOhmsLaw={() => { pushHistory(); setShowBaseConverter(true); }} // Mapped
-                        // Pass the new prop explicitly if type allows, or via spread if we updated interface
-                        // Since I updated the interface above but casting `props as any` inside PlaygroundScreen, 
-                        // I need to pass it here for it to be received.
+                        onOpenOhmsLaw={() => { pushHistory(); setShowBaseConverter(true); }}
+                        // @ts-ignore
                         onOpenLogicGate={() => { pushHistory(); setShowLogicGate(true); }}
                     />
                 )}

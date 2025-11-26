@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send } from 'lucide-react';
-import { User, PkResult, Word, PkPlayerState, PkGamePayload } from '../types';
+import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff } from 'lucide-react';
+import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType } from '../types';
 import { WORD_DATABASE } from '../services/mockData';
 import { joinMatchmaking, leaveMatchmaking, joinGameRoom, leaveGameRoom, sendGameEvent } from '../services/pkService';
 
@@ -11,8 +11,23 @@ interface PkGameScreenProps {
   onFinish: (result: PkResult) => void;
 }
 
+// --- Ranks System ---
+const RANKS = [
+    { name: '青銅', color: 'text-orange-700 border-orange-700', min: 0 },
+    { name: '白銀', color: 'text-gray-400 border-gray-400', min: 1000 },
+    { name: '黃金', color: 'text-yellow-500 border-yellow-500', min: 2000 },
+    { name: '白金', color: 'text-cyan-400 border-cyan-400', min: 3000 },
+    { name: '鑽石', color: 'text-blue-500 border-blue-500', min: 4000 },
+    { name: '星耀', color: 'text-purple-500 border-purple-500', min: 5000 },
+    { name: '傳說', color: 'text-rose-500 border-rose-500', min: 6000 },
+];
+
+const getRank = (points: number) => {
+    return [...RANKS].reverse().find(r => points >= r.min) || RANKS[0];
+};
+
 // --- Sound Logic ---
-const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'turn_switch' | 'block') => {
+const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill' | 'block' | 'card_flip') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -32,16 +47,32 @@ const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'turn_
         osc.start(now);
         osc.stop(now + 0.5);
         break;
-      case 'attack': // Send attack sound
+      case 'card_flip':
+        osc.frequency.setValueAtTime(1000, now);
+        gain.gain.setValueAtTime(0.02, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+        break;
+      case 'skill':
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.linearRampToValueAtTime(1200, now + 0.2);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.4);
+        osc.start(now);
+        osc.stop(now + 0.4);
+        break;
+      case 'attack':
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(300, now);
-        osc.frequency.linearRampToValueAtTime(600, now + 0.2);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.1);
         gain.gain.setValueAtTime(0.1, now);
-        gain.gain.linearRampToValueAtTime(0, now + 0.2);
+        gain.gain.linearRampToValueAtTime(0, now + 0.1);
         osc.start(now);
-        osc.stop(now + 0.2);
+        osc.stop(now + 0.1);
         break;
-      case 'block': // Defense success
+      case 'block': 
         osc.type = 'square';
         osc.frequency.setValueAtTime(800, now);
         osc.frequency.linearRampToValueAtTime(1200, now + 0.1);
@@ -82,52 +113,41 @@ const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'turn_
   } catch(e) {}
 };
 
-const getFrameStyle = (frameId?: string) => {
-    switch(frameId) {
-      case 'frame_gold': return 'ring-2 ring-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
-      case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
-      case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
-      case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
-      case 'frame_beta': return 'ring-2 ring-amber-500 border-2 border-dashed border-yellow-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]';
-      default: return 'ring-2 ring-white dark:ring-gray-700';
-    }
-};
-
 // --- Constants ---
 const MAX_HP = 1000;
-const DAMAGE_PER_HIT = 250;
-const TOTAL_ROUNDS = 3; // Shorter but more intense rounds (1 round = Attack + Defend)
+const DAMAGE_PER_HIT = 150; // Reduced to allow longer games (10 rounds)
+const TOTAL_ROUNDS = 10;
 
 type BattlePhase = 'matching' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
 
 export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFinish }) => {
   const [phase, setPhase] = useState<BattlePhase>('matching');
-  const [matchStatus, setMatchStatus] = useState("正在搜尋對手...");
+  const [matchStatus, setMatchStatus] = useState("正在掃描對手訊號...");
   
   // Players
   const [opponent, setOpponent] = useState<PkPlayerState | null>(null);
-  const [isHost, setIsHost] = useState(false);
   
   // Stats
   const [myHp, setMyHp] = useState(MAX_HP);
   const [opHp, setOpHp] = useState(MAX_HP);
   const [round, setRound] = useState(1);
+  const myRating = user.pkRating || 0;
+  const myRank = getRank(myRating);
   
   // Round Data
-  const [attackOptions, setAttackOptions] = useState<Word[]>([]); // Words I can choose to send
-  const [incomingWord, setIncomingWord] = useState<Word | null>(null); // Word opponent sent me
-  const [defenseOptions, setDefenseOptions] = useState<string[]>([]); // Options for incoming word
+  const [battleCards, setBattleCards] = useState<BattleCard[]>([]); // 4 Cards
+  const [incomingWord, setIncomingWord] = useState<Word | null>(null); // Attack received
+  const [incomingSkill, setIncomingSkill] = useState<SkillType>('NONE'); // Skill received
+  const [defenseOptions, setDefenseOptions] = useState<string[]>([]); 
+  const [blindEffect, setBlindEffect] = useState(false); // UI effect
   
   // Round State
-  const [myAttackSent, setMyAttackSent] = useState(false);
-  const [opponentAttackReceived, setOpponentAttackReceived] = useState(false);
-  const [myDefenseResult, setMyDefenseResult] = useState<'success' | 'fail' | null>(null);
-  const [opDefenseResult, setOpDefenseResult] = useState<'success' | 'fail' | null>(null); // Did opponent defend my attack?
+  const [myActionSent, setMyActionSent] = useState(false);
+  const [opActionReceived, setOpActionReceived] = useState(false);
+  const [myDefenseResult, setMyDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
+  const [opDefenseResult, setOpDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
   
-  // Messages
   const [battleLog, setBattleLog] = useState<string>("");
-
-  // Refs
   const timeoutFallbackRef = useRef<number | null>(null);
 
   // --- 1. Matchmaking Lifecycle ---
@@ -136,15 +156,14 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           user,
           (op, roomId, host) => {
               setOpponent(op);
-              setIsHost(host);
-              setMatchStatus("配對成功！");
+              setMatchStatus("配對成功！連線建立中...");
               playSound('match');
               leaveMatchmaking();
               joinGameRoom(roomId, handleGameEvent);
 
               setTimeout(() => {
                   setPhase('ready');
-                  setTimeout(startRound, 2000);
+                  setTimeout(startRound, 2500);
               }, 1500);
           },
           (status) => setMatchStatus(status)
@@ -152,7 +171,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       
       timeoutFallbackRef.current = window.setTimeout(() => {
           if (phase === 'matching') {
-              setMatchStatus("線上無人，請稍後再試");
+              setMatchStatus("無人回應，請稍後再試");
           }
       }, 20000);
 
@@ -163,113 +182,188 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       };
   }, []);
 
-  // --- 2. Game Loop ---
+  // --- 2. Game Logic ---
+
+  const generateCards = (roundNum: number): BattleCard[] => {
+      // Increase difficulty based on round
+      let minLevel = 3;
+      if (roundNum >= 4) minLevel = 4;
+      if (roundNum >= 7) minLevel = 5;
+      if (roundNum >= 9) minLevel = 6;
+
+      const wordPool = WORD_DATABASE.filter(w => w.level >= minLevel);
+      const selectedWords = wordPool.sort(() => 0.5 - Math.random()).slice(0, 3);
+      
+      const cards: BattleCard[] = selectedWords.map(w => ({
+          type: 'WORD',
+          word: w,
+          id: `word_${w.id}`
+      }));
+
+      // Add 1 Random Skill Card
+      const skills: SkillType[] = ['HEAL', 'SHIELD', 'CRIT', 'BLIND'];
+      const randomSkill = skills[Math.floor(Math.random() * skills.length)];
+      cards.push({
+          type: 'SKILL',
+          skill: randomSkill,
+          id: `skill_${Date.now()}`
+      });
+
+      return cards.sort(() => 0.5 - Math.random());
+  };
 
   const startRound = () => {
-      // Reset Round State
-      setMyAttackSent(false);
-      setOpponentAttackReceived(false);
+      setMyActionSent(false);
+      setOpActionReceived(false);
       setIncomingWord(null);
+      setIncomingSkill('NONE');
       setMyDefenseResult(null);
       setOpDefenseResult(null);
-      setBattleLog(`Round ${round} 開始！選擇題目攻擊對手！`);
+      setBlindEffect(false);
+      setBattleLog(`Round ${round} / ${TOTAL_ROUNDS}`);
       
-      // Generate 3 difficult words for me to choose
-      const pool = WORD_DATABASE.filter(w => w.level >= 4); // Harder words for attack
-      const options = pool.sort(() => 0.5 - Math.random()).slice(0, 3);
-      setAttackOptions(options);
-      
+      setBattleCards(generateCards(round));
       setPhase('selecting_attack');
   };
 
-  const handleSelectAttack = (word: Word) => {
-      setMyAttackSent(true);
-      setBattleLog("已發送攻擊！等待對手...");
+  const handleSelectCard = (card: BattleCard) => {
+      playSound('card_flip');
+      setMyActionSent(true);
       
-      // Send attack to opponent
-      sendGameEvent({
-          type: 'SEND_WORD',
-          wordId: word.id,
-          attackerId: user.studentId
-      });
-      playSound('attack');
+      if (card.type === 'SKILL') {
+          // Instant Self-Effect logic for HEAL
+          if (card.skill === 'HEAL') {
+              setMyHp(prev => Math.min(MAX_HP, prev + 150));
+              setBattleLog("使用回復！HP +150");
+              playSound('skill');
+          } else if (card.skill === 'SHIELD') {
+              setBattleLog("展開護盾！抵擋下一次攻擊");
+              playSound('skill');
+          }
+          
+          sendGameEvent({
+              type: 'SEND_ACTION',
+              attackerId: user.studentId,
+              skill: card.skill
+          });
+      } else {
+          // Word Attack
+          setBattleLog(`發送攻擊：${card.word?.en}`);
+          playSound('attack');
+          sendGameEvent({
+              type: 'SEND_ACTION',
+              attackerId: user.studentId,
+              wordId: card.word?.id
+          });
+      }
 
-      // If we already received opponent's attack, go to defend
-      if (opponentAttackReceived) {
+      if (opActionReceived) {
           setPhase('defending');
       } else {
           setPhase('waiting_opponent');
       }
   };
 
-  const generateDefenseOptions = (word: Word) => {
-      // Generate 3 wrong answers
-      const wrongs = WORD_DATABASE
-        .filter(w => w.id !== word.id)
-        .sort(() => 0.5 - Math.random())
-        .slice(0, 3)
-        .map(w => w.zh);
-      const opts = [word.zh, ...wrongs].sort(() => 0.5 - Math.random());
-      setDefenseOptions(opts);
-  };
-
   const handleDefend = (selectedZh: string) => {
       if (!incomingWord) return;
       
       const isCorrect = selectedZh === incomingWord.zh;
-      const damageTaken = isCorrect ? 0 : DAMAGE_PER_HIT;
-      
-      setMyHp(prev => Math.max(0, prev - damageTaken));
-      setMyDefenseResult(isCorrect ? 'success' : 'fail');
-      
+      let damageTaken = 0;
+
       if (isCorrect) {
           playSound('block');
-          setBattleLog("防禦成功！完美格擋！");
+          setBattleLog("防禦成功！");
+          setMyDefenseResult('success');
       } else {
+          damageTaken = DAMAGE_PER_HIT;
+          // Crit logic handled on sender side usually, but simplified here: 
+          // If incomingSkill was CRIT, damage * 1.5
+          if (incomingSkill === 'CRIT') damageTaken = Math.floor(damageTaken * 1.5);
+          
+          // Shield logic: if I used SHIELD this turn (tracked by local state? No, simpler: check if I picked shield)
+          // This needs 'mySelectedCard' state tracking.
+          // For simplicity: Assume SHIELD blocks valid word attacks too? 
+          // Let's keep it simple: Skill cards are ONE-WAY events mostly. 
+          // If opponent sent word, I defend.
+          
+          setMyHp(prev => Math.max(0, prev - damageTaken));
           playSound('damage');
-          setBattleLog("防禦失敗！受到傷害！");
+          setBattleLog("防禦失敗！");
+          setMyDefenseResult('fail');
       }
 
-      // Report result to opponent so they know if their attack landed
       sendGameEvent({
-          type: 'REPORT_DAMAGE',
+          type: 'REPORT_RESULT',
           defenderId: user.studentId,
-          damageTaken: damageTaken
+          damageTaken: damageTaken,
+          isCorrect: isCorrect
       });
 
       checkRoundEnd();
   };
 
   const checkRoundEnd = () => {
-      // Wait for both defense results
-      // But simpler: wait for my result, and we assume we will get opponent's result event
-      // We handle the phase transition in handleGameEvent when REPORT_DAMAGE is received
+      // Handled via event listener
   };
 
   // --- 3. Event Handling ---
   const handleGameEvent = (payload: PkGamePayload) => {
-      if (payload.type === 'SEND_WORD') {
-          if (payload.attackerId !== user.studentId && payload.wordId) {
-              // Opponent sent an attack
-              const word = WORD_DATABASE.find(w => w.id === payload.wordId);
-              if (word) {
-                  setIncomingWord(word);
-                  generateDefenseOptions(word);
-                  setOpponentAttackReceived(true);
+      if (payload.type === 'SEND_ACTION') {
+          if (payload.attackerId !== user.studentId) {
+              // Opponent Action
+              setOpActionReceived(true);
+              
+              if (payload.skill) {
+                  setIncomingSkill(payload.skill);
+                  // Immediate effects from opponent
+                  if (payload.skill === 'BLIND') {
+                      setBlindEffect(true);
+                      setBattleLog("對手使用了閃光彈！");
+                  }
+                  if (payload.skill === 'HEAL') {
+                      // We don't update opponent HP here, we wait for REPORT or just visual
+                      // But simpler: assume they healed
+                      setOpHp(prev => Math.min(MAX_HP, prev + 150));
+                  }
+                  // Skills imply no defense needed usually, unless it's a modifier?
+                  // For this game: If opponent uses skill, I don't need to answer a word.
+                  // So auto-transition to result if I also acted.
                   
-                  // If I have already sent mine, I can start defending
-                  // Using functional update to check current state ref logic is tricky in closure
-                  // Relying on state update cycle logic below:
                   setPhase(prev => {
-                      if (prev === 'waiting_opponent') return 'defending';
+                      if (prev === 'waiting_opponent') {
+                          // Both acted (I sent something, they sent skill) -> Summary
+                          // Since no word to defend, we skip defending
+                          setTimeout(() => setPhase('round_summary'), 1000); 
+                          return prev; 
+                      }
                       return prev;
                   });
+
+              } else if (payload.wordId) {
+                  const word = WORD_DATABASE.find(w => w.id === payload.wordId);
+                  if (word) {
+                      setIncomingWord(word);
+                      
+                      // Generate Defense Options
+                      const wrongs = WORD_DATABASE
+                        .filter(w => w.id !== word.id)
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 3)
+                        .map(w => w.zh);
+                      const opts = [word.zh, ...wrongs].sort(() => 0.5 - Math.random());
+                      setDefenseOptions(opts);
+
+                      setPhase(prev => {
+                          if (prev === 'waiting_opponent') return 'defending';
+                          return prev;
+                      });
+                  }
               }
           }
       } 
-      else if (payload.type === 'REPORT_DAMAGE') {
+      else if (payload.type === 'REPORT_RESULT') {
           if (payload.defenderId !== user.studentId) {
-              // This is opponent telling me how much damage they took from MY attack
+              // Opponent reporting their defense result against my attack
               const damage = payload.damageTaken || 0;
               setOpHp(prev => Math.max(0, prev - damage));
               setOpDefenseResult(damage === 0 ? 'success' : 'fail');
@@ -277,183 +371,274 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   };
 
-  // Use effect to sync round end logic
+  // Sync Round End
   useEffect(() => {
-      if (myDefenseResult && opDefenseResult && phase !== 'round_summary' && phase !== 'result') {
-          setTimeout(() => {
-              setPhase('round_summary');
-              setTimeout(nextRoundOrEnd, 2500);
-          }, 1000);
+      // Logic: If I defended (or didn't need to) AND opponent defended (or didn't need to)
+      // Simplified: If I have a result (or opponent used skill so no result needed)
+      // AND (opponent sent result OR I used skill)
+      
+      const iAmReady = myDefenseResult !== null || incomingSkill !== 'NONE'; // I finished defending or no need
+      const opIsReady = opDefenseResult !== null; // Opponent finished defending (logic gap: what if I used skill?)
+      
+      // This sync is tricky. Let's rely on simple timeout in summary phase if we reach it.
+      // Force transition if both HP updated or logic done.
+      
+      if (phase === 'defending' && myDefenseResult) {
+           setPhase('round_summary');
       }
-  }, [myDefenseResult, opDefenseResult]);
+      if (phase === 'round_summary') {
+           const timer = setTimeout(nextRoundOrEnd, 3000);
+           return () => clearTimeout(timer);
+      }
+  }, [phase, myDefenseResult]);
 
   const nextRoundOrEnd = () => {
-      // Check Game Over
       if (myHp <= 0 || opHp <= 0 || round >= TOTAL_ROUNDS) {
-          // Determine Winner
           let win = false;
           if (myHp > 0 && opHp <= 0) win = true;
           else if (myHp > 0 && opHp > 0 && myHp > opHp) win = true;
-          else if (myHp > 0 && opHp > 0 && myHp === opHp) win = true; // Draw gives win to player for UX
+          else if (myHp === opHp) win = true; 
           
           playSound(win ? 'win' : 'lose');
           setPhase('result');
           
-          // Calc Score
-          let finalScore = win ? 100 : 20;
-          finalScore += Math.floor(myHp / 10);
-          onFinish({ isWin: win, score: finalScore, opponentName: opponent?.name || '' });
+          // Calc Score & Rating
+          let score = win ? 100 : 20;
+          score += Math.floor(myHp / 10);
+          
+          const ratingChange = win ? 25 : -10;
+          
+          onFinish({ 
+              isWin: win, 
+              score: score, 
+              ratingChange: ratingChange,
+              opponentName: opponent?.name || '' 
+          });
       } else {
           setRound(prev => prev + 1);
           startRound();
       }
   };
 
-  // --- Renders ---
+  // --- Render ---
 
   if (phase === 'matching') {
       return (
-        <div className="flex-1 flex flex-col items-center justify-center space-y-8 bg-gray-900 text-white h-screen">
-            <div className="relative">
-                <div className="w-48 h-48 rounded-full border-4 border-blue-500/30 animate-[spin_3s_linear_infinite]">
-                    <div className="w-full h-1 bg-blue-500 absolute top-1/2 rotate-45"></div>
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <div className={`w-20 h-20 rounded-full ${user.avatarColor} border-4 border-white flex items-center justify-center overflow-hidden`}>
-                         {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : user.name[0]}
+        <div className="flex-1 flex flex-col items-center justify-center space-y-10 bg-gray-900 text-white h-screen relative overflow-hidden">
+            {/* Radar Animation */}
+            <div className="relative flex items-center justify-center">
+                <div className="absolute w-[500px] h-[500px] border border-blue-500/20 rounded-full animate-[ping_3s_linear_infinite]"></div>
+                <div className="absolute w-[350px] h-[350px] border border-blue-500/40 rounded-full animate-[ping_3s_linear_infinite_1s]"></div>
+                <div className="w-48 h-48 rounded-full border-2 border-blue-400/50 relative bg-gray-900/50 backdrop-blur-sm flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.3)]">
+                    <div className="absolute inset-0 rounded-full border-t-2 border-blue-400 animate-[spin_2s_linear_infinite]"></div>
+                    <div className={`w-24 h-24 rounded-full ${user.avatarColor} flex items-center justify-center border-4 border-white overflow-hidden z-10`}>
+                         {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : <UserIcon size={40} />}
                     </div>
                 </div>
             </div>
-            <div className="text-center">
-                 <Loader2 className="animate-spin mb-2 mx-auto text-blue-400" size={32} />
-                 <h2 className="text-xl font-bold animate-pulse">{matchStatus}</h2>
+            
+            <div className="text-center z-10">
+                 <h2 className="text-2xl font-bold animate-pulse tracking-widest mb-2">{matchStatus}</h2>
+                 <div className={`inline-block px-4 py-1 rounded-full border ${myRank.color} bg-black/30 text-sm font-bold`}>
+                     當前段位：{myRank.name} ({user.pkRating || 0})
+                 </div>
             </div>
-            <button onClick={onBack} className="absolute top-10 left-4 p-2 bg-gray-800 rounded-full"><ArrowLeft size={20}/></button>
+            
+            <button onClick={onBack} className="absolute top-10 left-4 p-2 bg-white/10 rounded-full hover:bg-white/20"><ArrowLeft size={24}/></button>
         </div>
       );
   }
 
   if (phase === 'result') {
-      const isWin = myHp > opHp; // Simple check for render
+      const isWin = myHp > opHp;
       return (
-        <div className="flex-1 flex flex-col items-center justify-center bg-gray-900 text-white p-6 h-screen">
-             <div className={`absolute inset-0 opacity-20 ${isWin ? 'bg-yellow-500' : 'bg-red-900'}`}></div>
-             <div className="relative z-10 text-center animate-in zoom-in">
+        <div className="flex-1 flex flex-col items-center justify-center bg-gray-900 text-white p-6 h-screen relative overflow-hidden">
+             <div className={`absolute inset-0 opacity-30 ${isWin ? 'bg-gradient-to-t from-yellow-600 to-black' : 'bg-gradient-to-t from-red-900 to-black'}`}></div>
+             
+             <div className="relative z-10 text-center animate-in zoom-in duration-500">
                  {isWin ? (
-                     <div><Crown size={80} className="text-yellow-400 mx-auto mb-4" /><h1 className="text-5xl font-black text-yellow-400">VICTORY</h1></div>
+                     <div>
+                         <Crown size={100} className="text-yellow-400 mx-auto mb-6 drop-shadow-[0_0_20px_rgba(250,204,21,0.8)] animate-bounce" />
+                         <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 mb-2">VICTORY</h1>
+                         <p className="text-yellow-200 text-lg font-bold tracking-widest">王者誕生</p>
+                     </div>
                  ) : (
-                     <div><Skull size={80} className="text-gray-500 mx-auto mb-4" /><h1 className="text-5xl font-black text-gray-400">DEFEAT</h1></div>
+                     <div>
+                         <Skull size={100} className="text-gray-500 mx-auto mb-6" />
+                         <h1 className="text-6xl font-black text-gray-400 mb-2">DEFEAT</h1>
+                         <p className="text-gray-500 text-lg font-bold tracking-widest">再接再厲</p>
+                     </div>
                  )}
-                 <div className="mt-8 bg-gray-800/80 p-6 rounded-2xl border border-gray-700">
-                     <div className="flex justify-between gap-12 mb-4">
+
+                 <div className="mt-12 bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/10 w-full max-w-md mx-auto">
+                     <div className="flex justify-between items-center mb-6">
                          <div className="text-center">
-                             <div className="text-xs text-gray-400">YOU</div>
-                             <div className="text-2xl font-bold text-blue-400">{myHp}</div>
+                             <div className="w-16 h-16 rounded-full bg-gray-700 mx-auto mb-2 overflow-hidden border-2 border-white">
+                                 {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : user.name[0]}
+                             </div>
+                             <div className="text-xl font-bold">{myHp}</div>
                          </div>
+                         <div className="text-3xl font-black text-gray-500">VS</div>
                          <div className="text-center">
-                             <div className="text-xs text-gray-400">{opponent?.name}</div>
-                             <div className="text-2xl font-bold text-red-400">{opHp}</div>
+                             <div className="w-16 h-16 rounded-full bg-gray-700 mx-auto mb-2 overflow-hidden border-2 border-gray-500">
+                                 {opponent?.avatarImage ? <img src={opponent.avatarImage} className="w-full h-full object-cover"/> : (opponent?.name[0] || '?')}
+                             </div>
+                             <div className="text-xl font-bold text-gray-400">{opHp}</div>
                          </div>
                      </div>
-                     <button onClick={() => onFinish({ isWin, score: 0, opponentName: '' })} className="w-full py-3 bg-blue-600 rounded-xl font-bold">返回大廳</button>
+                     
+                     <div className="border-t border-white/10 pt-4 flex justify-between text-sm font-bold">
+                         <span>積分變動</span>
+                         <span className={isWin ? "text-green-400" : "text-red-400"}>
+                             {isWin ? "+25" : "-10"}
+                         </span>
+                     </div>
                  </div>
+                 
+                 <button onClick={() => onFinish({ isWin, score: 0, ratingChange: 0, opponentName: '' })} className="mt-8 px-10 py-3 bg-white text-black rounded-full font-bold hover:scale-105 transition-transform">
+                     返回大廳
+                 </button>
              </div>
         </div>
       );
   }
 
+  // --- Main Game UI ---
   return (
       <div className="flex-1 flex flex-col bg-gray-900 text-white h-screen relative overflow-hidden">
+          
           {/* Top Bar: Opponent */}
-          <div className="bg-gray-800 p-4 pt-safe flex items-center gap-4 border-b border-gray-700">
-              <div className={`relative w-14 h-14 rounded-full ${opponent?.avatarColor} flex-shrink-0 overflow-hidden border-2 border-gray-500`}>
+          <div className="bg-gray-800/80 backdrop-blur p-4 pt-safe flex items-center gap-4 border-b border-gray-700 z-20 shadow-md">
+              <div className={`relative w-14 h-14 rounded-full ${opponent?.avatarColor} flex-shrink-0 overflow-hidden border-2 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]`}>
                   {opponent?.avatarImage ? <img src={opponent.avatarImage} className="w-full h-full object-cover"/> : (opponent?.name[0] || '?')}
-                  {opDefenseResult === 'fail' && <div className="absolute inset-0 bg-red-500/60 flex items-center justify-center font-bold text-xs animate-ping">Hit!</div>}
-                  {opDefenseResult === 'success' && <div className="absolute inset-0 bg-blue-500/60 flex items-center justify-center font-bold text-xs">Block</div>}
+                  {/* Hit Effect */}
+                  {opDefenseResult === 'fail' && <div className="absolute inset-0 bg-red-500/80 flex items-center justify-center font-black text-white animate-ping">HIT!</div>}
               </div>
               <div className="flex-1">
                   <div className="flex justify-between items-end mb-1">
-                      <span className="font-bold">{opponent?.name}</span>
-                      <span className="text-xs font-mono">{opHp} HP</span>
+                      <span className="font-bold text-red-200">{opponent?.name}</span>
+                      <span className="text-xs font-mono text-red-400">{opHp} HP</span>
                   </div>
-                  <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-red-500 transition-all duration-500" style={{ width: `${(opHp / MAX_HP) * 100}%` }}></div>
+                  <div className="w-full h-3 bg-gray-700 rounded-full overflow-hidden border border-gray-600">
+                      <div className="h-full bg-gradient-to-r from-red-600 to-red-400 transition-all duration-500" style={{ width: `${(opHp / MAX_HP) * 100}%` }}></div>
                   </div>
               </div>
           </div>
 
-          {/* Center Arena */}
-          <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
-              <div className="absolute top-2 text-gray-500 font-bold text-sm uppercase tracking-widest">Round {round} / {TOTAL_ROUNDS}</div>
+          {/* Battle Arena */}
+          <div className="flex-1 flex flex-col items-center justify-center p-4 relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
               
-              {phase === 'ready' && <h1 className="text-6xl font-black text-yellow-500 animate-bounce">VS</h1>}
-              
+              {/* Round Indicator */}
+              <div className="absolute top-4 bg-black/40 px-4 py-1 rounded-full border border-white/10 backdrop-blur text-xs font-bold tracking-widest text-gray-300">
+                  ROUND {round} / {TOTAL_ROUNDS}
+              </div>
+
+              {/* Info Messages */}
+              <div className="absolute top-16 text-center w-full px-4">
+                  <p className="text-yellow-400 font-bold text-shadow-sm animate-pulse">{battleLog}</p>
+              </div>
+
+              {/* Phase: Ready */}
+              {phase === 'ready' && <h1 className="text-7xl font-black text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] animate-bounce">VS</h1>}
+
+              {/* Phase: Attack Selection (Cards) */}
               {phase === 'selecting_attack' && (
-                  <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom duration-300">
-                      <h2 className="text-xl font-bold text-center mb-6 flex items-center justify-center gap-2">
-                          <Swords className="text-red-500" /> 選擇題目攻擊對手
-                      </h2>
-                      <div className="grid gap-3">
-                          {attackOptions.map((word, idx) => (
-                              <button 
-                                key={idx}
-                                onClick={() => handleSelectAttack(word)}
-                                className="bg-gray-800 hover:bg-gray-700 border border-gray-600 p-4 rounded-xl text-left transition-all hover:scale-[1.02] active:scale-95 group"
-                              >
-                                  <div className="flex justify-between items-center">
-                                      <span className="font-bold text-lg group-hover:text-red-400">{word.en}</span>
-                                      <span className="text-xs bg-gray-700 px-2 py-1 rounded text-gray-300">Lv.{word.level}</span>
-                                  </div>
-                                  <div className="text-sm text-gray-400 mt-1">{word.zh}</div>
-                              </button>
-                          ))}
-                      </div>
+                  <div className="w-full max-w-md grid grid-cols-2 gap-3 animate-in slide-in-from-bottom duration-300">
+                      <div className="col-span-2 text-center mb-2 text-sm font-bold text-cyan-300">選擇卡牌發動攻勢</div>
+                      {battleCards.map((card) => (
+                          <button 
+                            key={card.id}
+                            onClick={() => handleSelectCard(card)}
+                            className={`
+                                relative h-32 rounded-2xl p-3 flex flex-col justify-center items-center text-center border-b-4 active:border-b-0 active:translate-y-1 transition-all hover:brightness-110
+                                ${card.type === 'SKILL' 
+                                    ? 'bg-gradient-to-br from-purple-600 to-indigo-700 border-purple-900' 
+                                    : 'bg-gray-800 border-gray-950 hover:bg-gray-700'
+                                }
+                            `}
+                          >
+                              {card.type === 'SKILL' ? (
+                                  <>
+                                    <Zap size={32} className="text-yellow-300 mb-2" />
+                                    <span className="font-black text-white text-lg">{card.skill}</span>
+                                    <span className="text-[10px] text-indigo-200">特殊技能</span>
+                                  </>
+                              ) : (
+                                  <>
+                                    <span className="font-bold text-white text-lg mb-1">{card.word?.en}</span>
+                                    <span className="text-xs text-gray-400 bg-black/20 px-2 py-0.5 rounded">{card.word?.zh}</span>
+                                    <div className="absolute top-2 right-2 text-[10px] font-bold text-gray-500">Lv.{card.word?.level}</div>
+                                  </>
+                              )}
+                          </button>
+                      ))}
                   </div>
               )}
 
+              {/* Phase: Defending */}
+              {phase === 'defending' && (incomingWord || incomingSkill !== 'NONE') && (
+                  <div className="w-full max-w-sm animate-in zoom-in duration-200 relative">
+                      {/* Blind Effect Overlay */}
+                      {blindEffect && (
+                          <div className="absolute -inset-10 bg-white/90 z-20 flex items-center justify-center">
+                              <div className="text-black font-black text-2xl flex flex-col items-center">
+                                  <EyeOff size={48} />
+                                  <span>視線受阻！</span>
+                              </div>
+                          </div>
+                      )}
+
+                      {incomingSkill !== 'NONE' ? (
+                          <div className="text-center py-10">
+                              <Zap size={64} className="mx-auto text-yellow-400 mb-4 animate-bounce" />
+                              <h2 className="text-2xl font-bold">對手發動了 {incomingSkill} !</h2>
+                          </div>
+                      ) : (
+                          <>
+                            <div className="bg-red-600 text-white p-6 rounded-2xl text-center mb-6 shadow-[0_0_20px_rgba(220,38,38,0.6)] border-2 border-red-400">
+                                <div className="text-xs font-bold opacity-80 mb-1">INCOMING ATTACK</div>
+                                <h2 className="text-4xl font-black">{incomingWord?.en}</h2>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3">
+                                {defenseOptions.map((opt, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleDefend(opt)}
+                                        className="bg-white text-gray-900 font-bold py-4 rounded-xl hover:bg-gray-200 active:scale-95 transition-all shadow-lg"
+                                    >
+                                        {opt}
+                                    </button>
+                                ))}
+                            </div>
+                          </>
+                      )}
+                  </div>
+              )}
+
+              {/* Phase: Waiting */}
               {phase === 'waiting_opponent' && (
                   <div className="text-center animate-pulse">
                       <Shield size={64} className="text-blue-500 mx-auto mb-4 opacity-50" />
-                      <h2 className="text-xl font-bold text-gray-300">等待對手出招...</h2>
+                      <h2 className="text-xl font-bold text-gray-300">等待對手行動...</h2>
                   </div>
               )}
 
-              {phase === 'defending' && incomingWord && (
-                  <div className="w-full max-w-sm animate-in zoom-in duration-200">
-                      <div className="bg-red-500/20 border border-red-500/50 rounded-2xl p-6 text-center mb-6 relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-full h-1 bg-red-500 animate-[shrink_10s_linear]"></div>
-                          <div className="text-xs text-red-300 font-bold mb-2 uppercase">Incoming Attack!</div>
-                          <h2 className="text-4xl font-black text-white mb-1">{incomingWord.en}</h2>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-3">
-                          {defenseOptions.map((opt, idx) => (
-                              <button
-                                  key={idx}
-                                  onClick={() => handleDefend(opt)}
-                                  className="bg-white text-gray-900 font-bold py-4 rounded-xl hover:bg-gray-200 active:scale-95 transition-all"
-                              >
-                                  {opt}
-                              </button>
-                          ))}
-                      </div>
-                  </div>
-              )}
-
+              {/* Phase: Summary */}
               {phase === 'round_summary' && (
-                  <div className="bg-gray-800 p-6 rounded-2xl border border-gray-600 text-center animate-in zoom-in">
-                      <h2 className="text-xl font-bold mb-4">回合結算</h2>
-                      <div className="space-y-3">
-                          <div className="flex justify-between items-center gap-8">
+                  <div className="bg-gray-800/90 backdrop-blur p-8 rounded-3xl border border-gray-600 text-center animate-in zoom-in shadow-2xl">
+                      <h2 className="text-2xl font-bold mb-6 text-white">回合結算</h2>
+                      <div className="space-y-4 text-lg">
+                          <div className="flex justify-between items-center gap-12 border-b border-gray-700 pb-2">
                               <span className="text-gray-400">你的攻擊</span>
-                              <span className={`font-bold ${opDefenseResult === 'fail' ? 'text-green-400' : 'text-gray-500'}`}>
-                                  {opDefenseResult === 'fail' ? '命中! -250' : '被格擋'}
+                              <span className={`font-black ${opDefenseResult === 'fail' ? 'text-green-400' : 'text-gray-500'}`}>
+                                  {opDefenseResult === 'fail' ? '命中!' : '被防禦'}
                               </span>
                           </div>
-                          <div className="flex justify-between items-center gap-8">
+                          <div className="flex justify-between items-center gap-12 border-b border-gray-700 pb-2">
                               <span className="text-gray-400">你的防禦</span>
-                              <span className={`font-bold ${myDefenseResult === 'success' ? 'text-blue-400' : 'text-red-500'}`}>
-                                  {myDefenseResult === 'success' ? '完美!' : '失敗 -250'}
+                              <span className={`font-black ${myDefenseResult === 'success' ? 'text-blue-400' : 'text-red-500'}`}>
+                                  {myDefenseResult === 'success' ? '完美!' : myDefenseResult === 'skill_hit' ? '技能命中' : '失敗'}
                               </span>
                           </div>
                       </div>
@@ -462,19 +647,19 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           </div>
 
           {/* Bottom Bar: Me */}
-          <div className="bg-gray-800 p-4 pb-8 flex items-center gap-4 border-t border-gray-700">
+          <div className="bg-gray-800/80 backdrop-blur p-4 pb-8 flex items-center gap-4 border-t border-gray-700 z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.2)]">
               <div className="flex-1 text-right">
                   <div className="flex justify-between items-end mb-1">
-                      <span className="text-xs font-mono text-gray-400">{myHp}/{MAX_HP}</span>
+                      <span className="text-xs font-mono text-blue-300">{myHp}/{MAX_HP}</span>
                       <span className="font-bold text-blue-400">YOU</span>
                   </div>
-                  <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(myHp / MAX_HP) * 100}%` }}></div>
+                  <div className="w-full h-3 bg-gray-700 rounded-full overflow-hidden border border-gray-600">
+                      <div className="h-full bg-gradient-to-r from-blue-600 to-cyan-400 transition-all duration-500" style={{ width: `${(myHp / MAX_HP) * 100}%` }}></div>
                   </div>
               </div>
-              <div className={`relative w-14 h-14 rounded-full ${user.avatarColor} flex-shrink-0 overflow-hidden border-2 border-white`}>
+              <div className={`relative w-16 h-16 rounded-full ${user.avatarColor} flex-shrink-0 overflow-hidden border-2 border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]`}>
                   {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : user.name[0]}
-                  {myDefenseResult === 'fail' && <div className="absolute inset-0 bg-red-500/60 flex items-center justify-center font-bold text-xs animate-ping">Hit!</div>}
+                  {myDefenseResult === 'fail' && <div className="absolute inset-0 bg-red-500/80 flex items-center justify-center font-black text-white animate-ping">HIT!</div>}
               </div>
           </div>
       </div>

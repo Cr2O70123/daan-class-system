@@ -44,6 +44,13 @@ export interface User {
   hearts: number; // Max 3
   lastHeartReset: string; // Date string to track daily reset
 
+  // Lucky Wheel System (New)
+  dailyWheelSpins?: number; // Track spins used today
+  lastWheelDate?: string; // Track date of last spin
+
+  // PK Rank System (New)
+  pkRating?: number; // ELO-like rating for PK
+
   // Check-in System
   lastCheckInDate?: string;
   checkInStreak?: number;
@@ -179,6 +186,7 @@ export interface GameResult {
 export interface PkResult {
   isWin: boolean;
   score: number;
+  ratingChange: number; // New
   opponentName: string;
 }
 
@@ -189,23 +197,33 @@ export interface PkPlayerState {
     avatarImage?: string;
     avatarFrame?: string;
     level: number;
+    pkRating?: number; // New
     status: 'idle' | 'matched' | 'playing';
     roomId?: string;
     joinedAt: number; // Timestamp for FIFO queue
 }
 
-export interface PkGamePayload {
-    type: 'START_GAME' | 'SEND_WORD' | 'REPORT_DAMAGE' | 'GAME_OVER';
-    // START_GAME
-    // No initial words needed, we generate per round
-    
-    // SEND_WORD (Attack Phase)
-    wordId?: number;
-    attackerId?: string;
+export type SkillType = 'HEAL' | 'SHIELD' | 'CRIT' | 'BLIND' | 'NONE';
 
-    // REPORT_DAMAGE (Defense Phase Result)
-    damageTaken?: number; // How much damage I took from your word
+export interface BattleCard {
+    type: 'WORD' | 'SKILL';
+    word?: Word;
+    skill?: SkillType;
+    id: string; // Unique ID for selection
+}
+
+export interface PkGamePayload {
+    type: 'START_GAME' | 'SEND_ACTION' | 'REPORT_RESULT' | 'GAME_OVER';
+    
+    // SEND_ACTION (Attack Phase)
+    attackerId?: string;
+    wordId?: number; // If word attack
+    skill?: SkillType; // If skill used
+    
+    // REPORT_RESULT (Defense Phase Result)
     defenderId?: string;
+    damageTaken?: number; 
+    isCorrect?: boolean;
 }
 
 export interface GameLeaderboardEntry {

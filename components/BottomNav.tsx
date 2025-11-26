@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Home, BookOpen, ShoppingBag, User, Gamepad2, Calendar } from 'lucide-react';
 import { Tab } from '../types';
@@ -11,7 +12,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, setTab }) => {
   const navItems = [
     { tab: Tab.HOME, label: '首頁', icon: <Home size={24} /> },
     { tab: Tab.RESOURCE, label: '資源', icon: <BookOpen size={24} /> },
-    { tab: Tab.PLAYGROUND, label: '遊樂場', icon: <Gamepad2 size={24} /> },
+    { tab: Tab.PLAYGROUND, label: '娛樂', icon: <Gamepad2 size={24} /> }, // Renamed
     { tab: Tab.EXAM, label: '考試', icon: <Calendar size={24} /> },
     { tab: Tab.STORE, label: '商店', icon: <ShoppingBag size={24} /> },
     { tab: Tab.PROFILE, label: '我的', icon: <User size={24} /> },
