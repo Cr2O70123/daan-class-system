@@ -107,6 +107,9 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [matchStatus, setMatchStatus] = useState("正在掃描對手訊號...");
   const [showRankModal, setShowRankModal] = useState(false);
   
+  // Stable Room ID State - Key to fixing the connection drop
+  const [roomId, setRoomId] = useState<string | null>(null);
+  
   const [opponent, setOpponent] = useState<PkPlayerState | null>(null);
   
   const [myHp, setMyHp] = useState(MAX_HP);
@@ -157,34 +160,20 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   }, [phase, menuTab]);
 
-  // --- 1. Matchmaking & Connection ---
+  // --- 1. Matchmaking Logic ---
   useEffect(() => {
       if (phase === 'matching') {
           setMatchStatus("正在掃描對手訊號...");
           joinMatchmaking(
               user,
-              (op, roomId, host) => {
+              (op, foundRoomId, host) => {
                   setOpponent(op);
                   setMatchStatus("配對成功！連線中...");
                   playSound('match');
-                  leaveMatchmaking();
                   
-                  // Join Game Room & Wait for Presence Sync
+                  // CRITICAL FIX: Set Room ID state to trigger the game connection effect
+                  setRoomId(foundRoomId);
                   setPhase('connecting');
-                  joinGameRoom(
-                      roomId, 
-                      user.studentId, // Pass userId
-                      handleGameEvent,
-                      () => { // On Opponent Left (Detected via Presence Drop)
-                          console.log("Opponent Left via Presence");
-                          handleOpponentLeft();
-                      },
-                      () => { // On Room Ready (Sync count >= 2)
-                          console.log("Room Ready - 2 Players Present!");
-                          setPhase('ready');
-                          setTimeout(startRound, 2000);
-                      }
-                  );
               },
               (status) => setMatchStatus(status)
           );
@@ -196,14 +185,48 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           }, 20000);
       }
 
+      // Cleanup: Leave matchmaking if we leave the matching phase
+      // Note: We do NOT leave game room here. Game room is managed by the roomId effect.
       return () => {
-          if (phase === 'matching' || phase === 'menu') {
+          if (phase === 'matching') {
               leaveMatchmaking();
-              leaveGameRoom();
               if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
           }
       };
   }, [phase]);
+
+  // --- 2. Game Connection Logic (Separated) ---
+  useEffect(() => {
+      if (roomId && user.studentId) {
+          // Leave matchmaking now that we have a room
+          leaveMatchmaking();
+          if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
+
+          console.log("Initializing Game Connection to", roomId);
+          
+          joinGameRoom(
+              roomId, 
+              user.studentId, 
+              handleGameEvent,
+              () => { // On Opponent Left
+                  console.log("Opponent Left via Presence");
+                  handleOpponentLeft();
+              },
+              () => { // On Room Ready (Both Players Connected)
+                  console.log("Room Ready - 2 Players Present!");
+                  setPhase('ready');
+                  setTimeout(startRound, 2000);
+              }
+          );
+      }
+
+      return () => {
+          // Only leave game room when component unmounts or roomId is cleared
+          if (roomId) {
+              leaveGameRoom();
+          }
+      };
+  }, [roomId]); // Only re-run if roomId changes
 
   const handleStartMatch = () => {
       setPhase('matching');
@@ -218,7 +241,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   const handleSurrender = async () => {
       if (confirm("確定要投降嗎？將會扣除積分。")) {
-          // Send event first
           try {
             await sendGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
           } catch(e) { console.error(e); }
@@ -227,6 +249,12 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           setMyHp(0);
           setPhase('result');
       }
+  };
+
+  const handleExit = () => {
+      setRoomId(null); // This will trigger leaveGameRoom via effect cleanup
+      setOpponent(null);
+      onBack();
   };
 
   // --- Timer Logic ---
@@ -276,7 +304,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   };
 
-  // --- 2. Game Logic ---
+  // --- 3. Game Logic ---
 
   const generateCards = (roundNum: number): BattleCard[] => {
       let minLevel = 3;
@@ -345,7 +373,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           setBattleLog(`發送攻擊：${card.word?.en}`);
           playSound('attack');
           
-          // Ensure wordId is defined
           if (card.word && card.word.id) {
               sendGameEvent({
                   type: 'SEND_ACTION',
@@ -357,7 +384,6 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           }
       }
 
-      // State Transition Logic
       if (opActionReceived) {
           if (incomingWord) {
               setPhase('defending');
@@ -407,7 +433,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setTimeout(() => setPhase('round_summary'), 1000);
   };
 
-  // --- 3. Event Handling ---
+  // --- 4. Event Handling ---
   const handleGameEvent = (payload: PkGamePayload) => {
       console.log("Game Event Received:", payload);
 
@@ -687,7 +713,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
             </div>
             
             {phase === 'matching' && (
-                <button onClick={onBack} className="absolute top-safe left-4 p-3 bg-gray-800 rounded-full text-gray-400 hover:text-white mt-4">
+                <button onClick={handleExit} className="absolute top-safe left-4 p-3 bg-gray-800 rounded-full text-gray-400 hover:text-white mt-4">
                     <ArrowLeft size={20}/>
                 </button>
             )}
@@ -763,7 +789,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                  )}
                  
                  <button 
-                    onClick={() => onFinish({ isWin, score: 0, ratingChange: 0, opponentName: '' })} 
+                    onClick={() => {
+                        onFinish({ isWin, score: 0, ratingChange: 0, opponentName: '' });
+                        setRoomId(null); // Ensure room is cleaned up
+                    }}
                     className="w-full py-4 bg-white text-black rounded-2xl font-black text-lg hover:scale-[1.02] transition-transform"
                  >
                      返回大廳
