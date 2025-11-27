@@ -128,7 +128,7 @@ const App = () => {
   const [showLuckyWheel, setShowLuckyWheel] = useState(false);
   const [showBlockBlast, setShowBlockBlast] = useState(false); 
   const [showPkGame, setShowPkGame] = useState(false);
-  const [pkGameMode, setPkGameMode] = useState<'CLASSIC' | 'OVERLOAD'>('CLASSIC'); // Track PK mode
+  const [pkGameMode, setPkGameMode] = useState<'CLASSIC' | 'OVERLOAD' | undefined>(undefined); // Track PK mode (undefined = show select)
   const [showVocabPractice, setShowVocabPractice] = useState(false);
   const [showDrawGuess, setShowDrawGuess] = useState(false);
   const [showHighLowGame, setShowHighLowGame] = useState(false); 
@@ -440,6 +440,7 @@ const App = () => {
           const newRating = Math.max(0, (user.pkRatingOverload || 0) + ratingChange);
           updatedUser = { ...updatedUser, pkRatingOverload: newRating };
       } else {
+          // Default to Classic if undefined or 'CLASSIC'
           const newRating = Math.max(0, (user.pkRating || 0) + ratingChange);
           updatedUser = { ...updatedUser, pkRating: newRating };
       }
@@ -543,7 +544,7 @@ const App = () => {
               user={user}
               onBack={() => setShowPkGame(false)}
               onFinish={handleFinishPk}
-              initialMode={pkGameMode} // Pass default if needed
+              initialMode={pkGameMode} 
           />
       )}
 
@@ -655,7 +656,7 @@ const App = () => {
                         onRefresh={loadData}
                         onImageClick={(url) => { pushHistory(); setLightboxImage(url); }}
                         onOpenPkGame={(mode) => { 
-                            if(mode) setPkGameMode(mode);
+                            setPkGameMode(mode);
                             pushHistory(); 
                             setShowPkGame(true); 
                         }}
@@ -689,8 +690,7 @@ const App = () => {
                         onOpenLuckyWheel={() => { pushHistory(); setShowLuckyWheel(true); }}
                         onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }}
                         onOpenPkGame={(mode) => { 
-                            if(mode) setPkGameMode(mode);
-                            else setPkGameMode('CLASSIC'); // Default if not specified
+                            setPkGameMode(mode);
                             pushHistory(); 
                             setShowPkGame(true); 
                         }}
