@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Rocket, CheckCircle2, Clock, Crown, Palette, Layout, Gamepad2, Zap, Swords, ShoppingBag, Image as ImageIcon, BookOpen } from 'lucide-react';
+import { Rocket, CheckCircle2, ShoppingBag, Image as ImageIcon, Zap, X } from 'lucide-react';
 
 interface UpdateAnnouncementModalProps {
   onClose: () => void;
@@ -9,8 +9,16 @@ interface UpdateAnnouncementModalProps {
 export const UpdateAnnouncementModal: React.FC<UpdateAnnouncementModalProps> = ({ onClose }) => {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-500">
-      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh]">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh] relative">
         
+        {/* Top Right Close Button */}
+        <button 
+            onClick={onClose}
+            className="absolute top-4 right-4 z-20 bg-black/20 hover:bg-black/40 text-white p-2 rounded-full transition-colors backdrop-blur-sm"
+        >
+            <X size={20} />
+        </button>
+
         {/* Header - Premium Solid Dark Style */}
         <div className="bg-slate-800 p-6 text-white text-center relative overflow-hidden shrink-0">
             {/* Subtle Texture Overlay */}

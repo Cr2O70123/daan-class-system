@@ -121,9 +121,9 @@ const App = () => {
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
   const [showModeration, setShowModeration] = useState(false);
   
-  // Update Announcement State (Check localStorage)
+  // Update Announcement State (Key changed to force show)
   const [showUpdateModal, setShowUpdateModal] = useState(() => {
-      return !localStorage.getItem('hasSeenUpdate2.0');
+      return !localStorage.getItem('hasSeenUpdate2.2');
   });
   
   // Game States
@@ -479,10 +479,10 @@ const App = () => {
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       
-      {/* 2.0 Update Announcement Modal */}
+      {/* 2.2 Update Announcement Modal (Updated Key) */}
       {showUpdateModal && (
           <UpdateAnnouncementModal onClose={() => {
-              localStorage.setItem('hasSeenUpdate2.0', 'true');
+              localStorage.setItem('hasSeenUpdate2.2', 'true');
               setShowUpdateModal(false);
           }} />
       )}
