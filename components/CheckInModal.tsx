@@ -25,30 +25,12 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onC
 
   // Calculate visuals for 7 days
   const currentCycleDay = streak % 7 === 0 ? (isCheckedInToday ? 7 : 0) : streak % 7;
-  // If streak is 7 and checked in today, currentCycleDay is 0 (mod 7), but visually we want to show 7th day done.
-  // Actually simplest logic: show 1-7. If streak=8, day 1 is filled.
-  // Visual Progress:
-  // Index 0 (Day 1) to 6 (Day 7).
-  // If streak = 3 (checked in today), days 1, 2, 3 are filled.
-  // If streak = 3 (NOT checked in today), days 1, 2 are filled, 3 is active target.
   
   const displayStreak = isCheckedInToday ? streak : streak; 
   const daysInCycle = [];
   
   for (let i = 1; i <= 7; i++) {
       let status: 'done' | 'active' | 'future' = 'future';
-      
-      // Logic for cycle visualization
-      // E.g. Streak 5 (Checked in). Cycle is 5/7. Days 1-5 done.
-      // E.g. Streak 5 (Not checked in). Cycle is 5/7. Days 1-5 done? No, streak represents *consecutive* days.
-      // If not checked in today, existing streak is from yesterday. So visual needs to show next step.
-      
-      const effectiveStreak = isCheckedInToday ? streak : streak + 1; // Target for today
-      const cycleProgress = (streak % 7) || (isCheckedInToday ? 7 : 0); // 1-7
-      
-      // Simplified UI Logic: Just show 1-7
-      // If checked in today: fill up to `cycleProgress`
-      // If not checked in: fill up to `cycleProgress` (which is previous streak), highlight current
       
       const currentDayIndex = isCheckedInToday 
         ? ((streak - 1) % 7) + 1 
@@ -68,17 +50,18 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onC
         {/* Header with Gradient */}
         <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-center relative overflow-hidden">
             {/* Background Decoration */}
-            <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
-            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 pointer-events-none"></div>
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl pointer-events-none"></div>
             
+            {/* Close Button - Increased Z-Index */}
             <button 
                 onClick={onClose} 
-                className="absolute top-4 right-4 bg-black/20 hover:bg-black/30 text-white p-2 rounded-full transition-colors z-10"
+                className="absolute top-4 right-4 bg-black/20 hover:bg-black/30 text-white p-2 rounded-full transition-colors z-50 cursor-pointer"
             >
                 <X size={20} />
             </button>
             
-            <div className="relative z-10">
+            <div className="relative z-10 pointer-events-none">
                 <div className="inline-flex p-3 bg-white/20 rounded-2xl mb-3 backdrop-blur-md shadow-inner border border-white/20">
                     <Calendar size={32} className="text-white drop-shadow-md" />
                 </div>

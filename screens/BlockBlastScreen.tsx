@@ -228,11 +228,13 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const gridRef = useRef<HTMLDivElement>(null);
 
-    // Load Leaderboard
+    // Load Leaderboard (With specific game ID)
     useEffect(() => {
         const loadRank = async () => {
-            const data = await fetchGameLeaderboard();
-            setLeaderboard(data);
+            if (activeTab === 'rank') {
+                const data = await fetchGameLeaderboard('block_blast'); // Pass Game ID
+                setLeaderboard(data);
+            }
         };
         loadRank();
     }, [activeTab]);
@@ -584,7 +586,8 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const handleSubmitScore = async () => {
         try {
-            await submitGameScore(user, score);
+            // Updated: Submit with specific game ID
+            await submitGameScore(user, score, 'block_blast');
             // Calculate PT: 100 Score = 1 PT
             // Bonus: > 5000 score = +50 PT extra
             let pt = Math.floor(score / 100);

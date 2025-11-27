@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices } from 'lucide-react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
@@ -50,7 +50,7 @@ const SubPageHeader = ({ title, onBack }: { title: string, onBack: () => void })
 const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: any) => (
     <div 
         onClick={onClick}
-        className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden transition-all flex gap-4 items-center ${onClick ? 'cursor-pointer active:scale-[0.98]' : 'opacity-75 cursor-not-allowed'}`}
+        className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden transition-all flex gap-4 items-center ${onClick ? 'cursor-pointer active:scale-[0.98]' : 'opacity-60 cursor-not-allowed grayscale-[0.5]'}`}
     >
         <div className={`w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center ${colorClass} text-white shadow-md`}>
             {icon}
@@ -59,7 +59,11 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: an
             <div className="flex justify-between items-start">
                 <h4 className="font-bold text-gray-800 dark:text-white text-lg mb-1 truncate">{title}</h4>
                 {tags.length > 0 && (
-                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${tags[0] === 'Coming Soon' ? 'bg-gray-200 text-gray-500' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                        tags[0] === 'Coming Soon' ? 'bg-gray-200 text-gray-500' : 
+                        tags[0] === '維修中' ? 'bg-red-500 text-white animate-pulse shadow-red-500/50 shadow-sm' :
+                        'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                    }`}>
                         {tags[0]}
                     </span>
                 )}
@@ -188,14 +192,17 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
           {view === 'PUZZLE' && (
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="休閒益智" onBack={() => setView('HOME')} />
+                  
+                  {/* Maintenance Mode for Draw Guess */}
                   <GameItem 
                       title="畫畫接龍" 
-                      desc="多人即時繪圖聊天室，發揮創意猜題互動。" 
-                      icon={<PenTool size={24} />} 
-                      colorClass="bg-pink-500"
-                      onClick={onOpenDrawGuess}
-                      tags={['社交']}
+                      desc="系統緊急維護中，修復破圖與版面問題。" 
+                      icon={<Hammer size={24} />} 
+                      colorClass="bg-gray-400"
+                      onClick={undefined}
+                      tags={['維修中']}
                   />
+
                   <GameItem 
                       title="方塊爆破" 
                       desc="經典消除遊戲，無限模式挑戰最高分。" 
@@ -245,14 +252,17 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
           {view === 'LEARN' && (
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="學習挑戰" onBack={() => setView('HOME')} />
+                  
+                  {/* Maintenance Mode for Vocab Practice */}
                   <GameItem 
                       title="單字練習 (純練習)" 
-                      desc="不扣分不限時，分組記憶，含發音與例句。" 
-                      icon={<BookOpen size={24} />} 
-                      colorClass="bg-green-500"
-                      onClick={onOpenVocabPractice}
-                      tags={['自修']}
+                      desc="發現大量 Bug，正在緊急修復測驗模式。" 
+                      icon={<Hammer size={24} />} 
+                      colorClass="bg-gray-400"
+                      onClick={undefined}
+                      tags={['維修中']}
                   />
+
                   <GameItem 
                       title="單字挑戰賽" 
                       desc="快速回答單字，累積 Combo 衝擊排行榜！" 

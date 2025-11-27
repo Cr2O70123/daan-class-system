@@ -146,13 +146,14 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   // Initialize Data (Leaderboard)
   useEffect(() => {
       const initData = async () => {
-          if (gameState === 'menu') {
-              const data = await fetchGameLeaderboard();
+          if (gameState === 'menu' && activeTab === 'rank') {
+              // Updated to fetch word_challenge specifically
+              const data = await fetchGameLeaderboard('word_challenge');
               setLeaderboard(data);
           }
       };
       initData();
-  }, [gameState]);
+  }, [gameState, activeTab]);
 
   // Filter words by strict level logic to ensure all levels are played
   const getPool = (currentLvl: number) => {
@@ -328,7 +329,8 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
   const handleClaim = async () => {
       try {
-          await submitGameScore(user, score);
+          // Updated to submit with word_challenge ID
+          await submitGameScore(user, score, 'word_challenge');
           await onFinish({ score, maxCombo, correctCount });
           onBack();
       } catch(e) {

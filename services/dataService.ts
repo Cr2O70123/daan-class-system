@@ -341,12 +341,13 @@ export const fetchPkLeaderboard = async (mode: 'CLASSIC' | 'OVERLOAD' = 'CLASSIC
     }));
 };
 
-// --- Game System ---
+// --- Game System (Updated for Multiple Games) ---
 
-export const submitGameScore = async (user: User, score: number) => {
+export const submitGameScore = async (user: User, score: number, gameId: string = 'word_challenge') => {
     const avatarData = {
         color: user.avatarColor,
-        frame: user.avatarFrame
+        frame: user.avatarFrame,
+        gameId: gameId // Store game ID in metadata to distinguish leaderboards
     };
 
     const { error } = await supabase.from('game_scores').insert([{
@@ -362,7 +363,7 @@ export const submitGameScore = async (user: User, score: number) => {
     }
 };
 
-export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> => {
+export const fetchGameLeaderboard = async (gameId: string = 'word_challenge'): Promise<GameLeaderboardEntry[]> => {
     const now = new Date();
     const day = now.getDay(); 
     const diff = now.getDate() - (day === 0 ? 6 : day - 1);
@@ -371,6 +372,7 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
     startOfWeek.setDate(diff);
     startOfWeek.setHours(0, 0, 0, 0);
 
+    // Fetch all scores for the week
     const { data, error } = await supabase
         .from('game_scores')
         .select('*')
@@ -382,10 +384,17 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
         return [];
     }
 
+    // Filter by gameId in memory (since we store it in JSONB avatar_data)
+    // Default to 'word_challenge' if gameId is missing in data (backward compatibility)
+    const validData = data.filter((row: any) => {
+        const rowGameId = row.avatar_data?.gameId || 'word_challenge';
+        return rowGameId === gameId;
+    });
+
     const uniqueEntries: Record<string, any> = {};
     const studentIds = new Set<string>();
     
-    data.forEach((entry: any) => {
+    validData.forEach((entry: any) => {
         if (!uniqueEntries[entry.student_id] || entry.score > uniqueEntries[entry.student_id].score) {
             uniqueEntries[entry.student_id] = entry;
             studentIds.add(entry.student_id);
@@ -395,6 +404,7 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
     const sortedEntries = Object.values(uniqueEntries).sort((a: any, b: any) => b.score - a.score).slice(0, 10);
     
     if (sortedEntries.length > 0) {
+        // Fetch up-to-date avatar info
         const { data: userData, error: userError } = await supabase
             .from('users')
             .select('student_id, avatar_color, avatar_image, avatar_frame')
@@ -404,7 +414,9 @@ export const fetchGameLeaderboard = async (): Promise<GameLeaderboardEntry[]> =>
             sortedEntries.forEach((entry: any) => {
                 const userProfile = userData.find((u: any) => u.student_id === entry.student_id);
                 if (userProfile) {
+                    // Update visual data but keep the score/gameId context
                     entry.avatar_data = {
+                        ...entry.avatar_data,
                         color: userProfile.avatar_color,
                         image: userProfile.avatar_image,
                         frame: userProfile.avatar_frame

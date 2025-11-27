@@ -166,8 +166,8 @@ export const ResistorGameScreen: React.FC<ResistorGameScreenProps> = ({ user, on
 
   const handleSubmitScore = async () => {
       try {
-          // Submit just like Word Challenge
-          await submitGameScore(user, score);
+          // Submit just like Word Challenge but with 'resistor' ID
+          await submitGameScore(user, score, 'resistor');
           await onFinish({ score, maxCombo, correctCount: Math.floor(score/100) }); // Approximation
           onBack();
       } catch(e) {
