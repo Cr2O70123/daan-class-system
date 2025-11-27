@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Eraser, Trash2, Palette, Send, MessageCircle, PenTool, Play, Clock, Crown, PlusCircle, Sparkles, User as UserIcon, Users, Copy, Info, CheckCircle2, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Eraser, Trash2, Palette, Send, MessageCircle, PenTool, Play, Clock, Crown, PlusCircle, Sparkles, User as UserIcon, Users, Copy, Info, CheckCircle2, HelpCircle, X, Shuffle, Trophy } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { User, DrawPoint, ChatMsg, DrawGuessWord, DrawDifficulty } from '../types';
 import { getDrawChoices, submitUserWord } from '../services/visualVocabService';
@@ -10,11 +10,24 @@ interface DrawGuessScreenProps {
   onBack: () => void;
 }
 
-const COLORS = ['#000000', '#EF4444', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6'];
+const COLORS = [
+    '#000000', // Black
+    '#FFFFFF', // White
+    '#9CA3AF', // Gray
+    '#EF4444', // Red
+    '#F97316', // Orange
+    '#F59E0B', // Yellow
+    '#10B981', // Green
+    '#3B82F6', // Blue
+    '#8B5CF6', // Purple
+    '#EC4899', // Pink
+    '#78350F', // Brown
+];
+
 const WIDTHS = [2, 5, 10, 20];
 
 // Game Stages
-type GamePhase = 'MENU' | 'LOBBY' | 'SELECTING' | 'DRAWING' | 'ENDED';
+type GamePhase = 'MENU' | 'LOBBY' | 'SELECTING' | 'DRAWING' | 'ROUND_END' | 'GAME_END';
 
 // Helper for UI colors
 const DIFF_CONFIG = {
@@ -25,27 +38,36 @@ const DIFF_CONFIG = {
 
 // --- Game Rules Modal ---
 const RulesModal = ({ onClose }: { onClose: () => void }) => (
-    <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+    <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
         <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
-            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><PlusCircle className="rotate-45" size={24}/></button>
+            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={24}/></button>
             <h3 className="text-xl font-black text-gray-800 mb-4 flex items-center gap-2">
-                <HelpCircle className="text-blue-600" /> 遊戲說明
+                <HelpCircle className="text-blue-600" /> 遊戲規則
             </h3>
-            <ul className="space-y-3 text-sm text-gray-600">
+            <ul className="space-y-4 text-sm text-gray-600">
                 <li className="flex gap-3">
-                    <span className="bg-blue-100 text-blue-600 font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">1</span>
-                    <span><span className="font-bold text-gray-800">多人連線：</span>創建房間或輸入房號加入，至少 2 人即可開始。</span>
+                    <div className="bg-blue-100 text-blue-600 font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">1</div>
+                    <div>
+                        <span className="font-bold text-gray-800 block">選詞繪畫</span>
+                        輪到你畫畫時，從三個題目中選一個。不能寫字，只能用畫的！
+                    </div>
                 </li>
                 <li className="flex gap-3">
-                    <span className="bg-blue-100 text-blue-600 font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">2</span>
-                    <span><span className="font-bold text-gray-800">輪流作畫：</span>房主開始遊戲後，系統隨機選一位畫家，其他人猜題。</span>
+                    <div className="bg-green-100 text-green-600 font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">2</div>
+                    <div>
+                        <span className="font-bold text-gray-800 block">競速猜題</span>
+                        其他玩家在聊天室輸入答案。越快猜對分數越高！
+                    </div>
                 </li>
                 <li className="flex gap-3">
-                    <span className="bg-blue-100 text-blue-600 font-bold w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0">3</span>
-                    <span><span className="font-bold text-gray-800">即時互動：</span>在聊天室輸入答案，答對者獲勝！</span>
+                    <div className="bg-yellow-100 text-yellow-600 font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">3</div>
+                    <div>
+                        <span className="font-bold text-gray-800 block">積分獲勝</span>
+                        遊戲結束時，積分最高的玩家獲得冠軍。
+                    </div>
                 </li>
             </ul>
-            <button onClick={onClose} className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-bold">了解</button>
+            <button onClick={onClose} className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">開始遊戲</button>
         </div>
     </div>
 );
@@ -62,8 +84,8 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
   const [currentWord, setCurrentWord] = useState<DrawGuessWord | null>(null);
   const [timer, setTimer] = useState(0);
   const [wordChoices, setWordChoices] = useState<DrawGuessWord[]>([]);
-  const [players, setPlayers] = useState<{id: string, name: string, score: number, isHost: boolean}[]>([]);
-  const [winner, setWinner] = useState<string | null>(null);
+  const [players, setPlayers] = useState<{id: string, name: string, score: number, isHost: boolean, hasGuessed: boolean}[]>([]);
+  const [roundWinner, setRoundWinner] = useState<string | null>(null); // For round end display
 
   // Drawing State
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -71,17 +93,11 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
   const [lineWidth, setLineWidth] = useState(5);
-  const [isEraser, setIsEraser] = useState(false);
   
   // Chat State
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [showChat, setShowChat] = useState(false);
-  
-  // Submission Modal
-  const [showSubmitModal, setShowSubmitModal] = useState(false);
-  const [submitEn, setSubmitEn] = useState('');
-  const [submitZh, setSubmitZh] = useState('');
+  const [showChatMobile, setShowChatMobile] = useState(false); // Mobile chat toggle
   
   const channelRef = useRef<any>(null);
   const lastPos = useRef<DrawPoint | null>(null);
@@ -89,20 +105,24 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
 
   const isDrawer = user.studentId === drawerId;
   const isHost = players.find(p => p.id === user.studentId)?.isHost || false;
+  const iHaveGuessed = players.find(p => p.id === user.studentId)?.hasGuessed || false;
 
   // --- Initialization ---
   useEffect(() => {
+    // Initialize Canvas Context whenever phase switches to DRAWING or LOBBY
+    // We keep canvas available in LOBBY for scribbling if desired, or reset it.
     if (canvasRef.current) {
         const context = canvasRef.current.getContext('2d');
         if (context) {
             context.lineCap = 'round';
             context.lineJoin = 'round';
             setCtx(context);
+            // White background
             context.fillStyle = '#ffffff';
             context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
         }
     }
-  }, [phase]); // Re-init when phase changes (e.g. entering game)
+  }, [phase]);
 
   // --- Room Connection Logic ---
   const joinRoom = (room: string, create: boolean = false) => {
@@ -121,9 +141,13 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
             if (payload.drawerId) setDrawerId(payload.drawerId);
             if (payload.currentWord) setCurrentWord(payload.currentWord); 
             if (payload.timer !== undefined) setTimer(payload.timer);
-            if (payload.winner) setWinner(payload.winner);
-            // Reset local chat/canvas if new game
-            if (payload.phase === 'SELECTING') clearCanvas(false);
+            if (payload.players) setPlayers(payload.players); // Full player list sync from host
+            
+            // Logic Triggers
+            if (payload.phase === 'SELECTING') {
+                clearCanvas(false); 
+                setRoundWinner(null);
+            }
         })
         .on('broadcast', { event: 'CHAT' }, ({ payload }: { payload: ChatMsg }) => {
             setMessages(prev => [...prev, payload]);
@@ -136,14 +160,20 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
                 if(state[key][0]) currentUsers.push(state[key][0]);
             }
             
-            // First user is host logic (Simplified)
-            const sortedUsers = currentUsers.sort((a,b) => a.joinedAt - b.joinedAt);
-            setPlayers(sortedUsers.map((p, idx) => ({ 
-                id: p.userId, 
-                name: p.name, 
-                score: 0, 
-                isHost: idx === 0 
-            })));
+            // If I am NOT host, I rely on host's player list broadcast for scores.
+            // But initially or if host drops, we need to rebuild.
+            // Simplified: If I am Host, I manage the official list.
+            // If I am joining, I wait for list.
+            
+            // For simplicity in this demo: We rebuild list from presence, preserving known scores if possible is tricky without persistent store.
+            // We will let Host manage the "Official" list and broadcast it in GAME_STATE.
+            // Presence is just for "Who is here".
+            
+            // Initial Set
+            if (currentUsers.length === 1) {
+                 // I am the only one, I am host
+                 setPlayers([{ id: user.studentId, name: user.name, score: 0, isHost: true, hasGuessed: false }]);
+            }
         })
         .subscribe(async (status: string) => {
             if (status === 'SUBSCRIBED') {
@@ -166,26 +196,26 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
       setPhase('MENU');
       setPlayers([]);
       setMessages([]);
+      setTimer(0);
   };
 
   // --- Game Logic (Host Side) ---
   useEffect(() => {
-      if (isHost && (phase === 'DRAWING' || phase === 'SELECTING')) {
+      if (isHost && (phase === 'DRAWING' || phase === 'SELECTING' || phase === 'ROUND_END')) {
           if (timerInterval.current) clearInterval(timerInterval.current);
           timerInterval.current = window.setInterval(() => {
               setTimer(prev => {
                   if (prev <= 1) {
-                      if (phase === 'DRAWING') broadcastState({ phase: 'ENDED', timer: 0, winner: null }); 
-                      else if (phase === 'SELECTING') {
+                      if (phase === 'DRAWING') {
+                          // Time up, nobody guessed all? or just end
+                          handleRoundEnd();
+                      } else if (phase === 'SELECTING') {
                           // Auto select random if timeout
-                          const word: DrawGuessWord = wordChoices[0] || { 
-                              en: 'Timeout', 
-                              zh: '超時', 
-                              difficulty: 'EASY' as DrawDifficulty, // Fix: Cast string to Literal Type 
-                              category: 'System', 
-                              points: 0 
-                          };
-                          handleSelectWord(word);
+                          const word = wordChoices[0] || { en: 'Timeout', zh: '超時', difficulty: 'EASY', category: 'System', points: 0 } as DrawGuessWord;
+                          handleSelectWord(word); // Force select
+                      } else if (phase === 'ROUND_END') {
+                          // Next round
+                          handleStartGame(); // Restart cycle
                       }
                       return 0;
                   }
@@ -196,7 +226,7 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
           if (timerInterval.current) clearInterval(timerInterval.current);
       }
       return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
-  }, [phase, isHost]);
+  }, [phase, isHost, wordChoices]); // Added wordChoices dependency for auto-select
 
   const broadcastState = (newState: any) => {
       // Local Update
@@ -204,7 +234,7 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
       if (newState.drawerId) setDrawerId(newState.drawerId);
       if (newState.currentWord) setCurrentWord(newState.currentWord);
       if (newState.timer !== undefined) setTimer(newState.timer);
-      if (newState.winner !== undefined) setWinner(newState.winner);
+      if (newState.players) setPlayers(newState.players);
 
       channelRef.current?.send({
           type: 'broadcast',
@@ -214,30 +244,75 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
   };
 
   const handleStartGame = () => {
-      // Randomly pick a drawer
-      const randomPlayer = players[Math.floor(Math.random() * players.length)];
-      setDrawerId(randomPlayer.id);
+      // Reset Guessed Status
+      const resetPlayers = players.map(p => ({ ...p, hasGuessed: false }));
       
-      // If I am the drawer, generate choices locally
-      if (randomPlayer.id === user.studentId) {
+      // Pick Drawer (Simple Rotation could be better, here Random)
+      const potentialDrawers = resetPlayers; 
+      const nextDrawer = potentialDrawers[Math.floor(Math.random() * potentialDrawers.length)];
+      
+      setDrawerId(nextDrawer.id);
+      
+      // If I am the drawer (and Host), generate choices locally
+      // Note: If Host is NOT drawer, Host needs to tell Drawer to generate? 
+      // Simpler: Host Generates choices and sends to Drawer via "PRIVATE" event? 
+      // OR: Drawer generates locally when they enter SELECTING phase.
+      
+      // Update: Let's make Drawer generate locally upon seeing SELECTING phase.
+      
+      broadcastState({ 
+          phase: 'SELECTING', 
+          drawerId: nextDrawer.id, 
+          timer: 15, 
+          currentWord: null,
+          players: resetPlayers 
+      });
+  };
+
+  // Drawer generates choices when entering SELECTING
+  useEffect(() => {
+      if (phase === 'SELECTING' && isDrawer) {
           setWordChoices(getDrawChoices());
       }
-      
-      // Notify everyone
-      broadcastState({ phase: 'SELECTING', drawerId: randomPlayer.id, timer: 15, winner: null, currentWord: null });
-  };
+  }, [phase, isDrawer]);
 
   const handleSelectWord = (word: DrawGuessWord) => {
       setWordChoices([]);
       clearCanvas(true);
-      broadcastState({ phase: 'DRAWING', currentWord: word, timer: 90, winner: null });
+      
+      // If I am not host, I need to tell host I selected.
+      // Actually everyone needs to know phase changed.
+      // Any client can broadcast game state in this simple architecture?
+      // Better: Drawer broadcasts "I selected word X", everyone updates.
+      // But we want to hide word from guessers.
+      // So Drawer broadcasts: "Phase: DRAWING, Word: {zh: '???', ...realData}" 
+      // Wait, clients need to verify guess.
+      // SECURE WAY: Host knows word.
+      // SIMPLE WAY (This App): Everyone receives word, but UI hides it if !isDrawer.
+      
+      const payload = { 
+          phase: 'DRAWING', 
+          currentWord: word, 
+          timer: 80 
+      };
+      
+      channelRef.current?.send({
+          type: 'broadcast',
+          event: 'GAME_STATE',
+          payload
+      });
+      // Also update local for responsiveness
+      setPhase('DRAWING');
+      setCurrentWord(word);
+      setTimer(80);
   };
 
-  const handleCorrectGuess = (winnerName: string) => {
-      broadcastState({ phase: 'ENDED', winner: winnerName });
+  const handleRoundEnd = () => {
+      if (!isHost) return;
+      broadcastState({ phase: 'ROUND_END', timer: 5 });
   };
 
-  // --- Canvas & Chat Logic (Same as before) ---
+  // --- Canvas Logic ---
   const handleRemoteDraw = (data: { start: DrawPoint, end: DrawPoint, color: string, width: number }) => {
       if (!ctx) return;
       ctx.beginPath();
@@ -266,14 +341,14 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
       ctx.beginPath();
       ctx.moveTo(lastPos.current.x, lastPos.current.y);
       ctx.lineTo(currentPos.x, currentPos.y);
-      ctx.strokeStyle = isEraser ? '#ffffff' : color;
+      ctx.strokeStyle = color; // Eraser is just white color now handled by palette
       ctx.lineWidth = lineWidth;
       ctx.stroke();
 
       channelRef.current?.send({
           type: 'broadcast',
           event: 'DRAW_STROKE',
-          payload: { start: lastPos.current, end: currentPos, color: isEraser ? '#ffffff' : color, width: lineWidth }
+          payload: { start: lastPos.current, end: currentPos, color: color, width: lineWidth }
       });
 
       lastPos.current = currentPos;
@@ -290,9 +365,13 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
       const canvas = canvasRef.current;
       if (!canvas) return { x: 0, y: 0 };
       const rect = canvas.getBoundingClientRect();
+      // Handle scaling if canvas CSS size != attribute size
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      return { x: clientX - rect.left, y: clientY - rect.top };
+      return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
   };
 
   const clearCanvas = (emit = true) => {
@@ -303,103 +382,167 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
       }
   };
 
+  // --- Chat & Guessing Logic ---
   const sendMessage = () => {
       if (!chatInput.trim()) return;
       
-      const msg: ChatMsg = {
-          id: Date.now().toString(),
-          sender: user.name,
-          text: chatInput
-      };
+      const cleanInput = chatInput.trim();
+      const isGuess = !isDrawer && phase === 'DRAWING' && currentWord;
+      let isCorrect = false;
 
-      // Check win condition (Client-side check for responsiveness)
-      // Note: In a real secure app, answer checking should be server-side or host-side only.
-      if (!isDrawer && phase === 'DRAWING' && currentWord && chatInput.trim().toLowerCase() === currentWord.en.toLowerCase()) {
-          const winMsg = { ...msg, text: '🎉 猜對了！正確答案！', isSystem: true };
-          channelRef.current?.send({ type: 'broadcast', event: 'CHAT', payload: winMsg });
-          setMessages(prev => [...prev, winMsg]);
-          
-          if (isHost) handleCorrectGuess(user.name); // If I am host, I end it. If not, host receives chat and ends it.
+      if (isGuess) {
+          // Check answer
+          if (cleanInput === currentWord?.zh) {
+              isCorrect = true;
+          }
+      }
+
+      if (isCorrect) {
+          if (iHaveGuessed) {
+              // Already guessed, prevent spamming correct answer
+              setMessages(prev => [...prev, { id: Date.now().toString(), sender: '系統', text: '你已經猜對了，請勿洩題！', isSystem: true }]);
+          } else {
+              // Correct Guess!
+              // 1. Send "Guessed Correctly" system message to everyone
+              const winMsg: ChatMsg = { 
+                  id: Date.now().toString(), 
+                  sender: '', 
+                  text: `${user.name} 猜對了答案！`, 
+                  isSystem: true 
+              };
+              channelRef.current?.send({ type: 'broadcast', event: 'CHAT', payload: winMsg });
+              setMessages(prev => [...prev, winMsg]);
+
+              // 2. Update Scores (Host handles this usually, but distributed for simplicity)
+              // We need to tell Host to update score. Or Host observes chat?
+              // Simpler: Everyone calculates locally? No, sync issues.
+              // Host observes CHAT events. If text matches word, update score.
+              // BUT: We don't want to send the answer in clear text if correct!
+              
+              // HACK: Send a special "GUESS_SUCCESS" event
+              // Or send chat but UI hides it? 
+              
+              // Let's send a special message type or handle it on Host
+              // We will just handle it locally for "I guessed" state, and Host sees it.
+          }
       } else {
-          setMessages(prev => [...prev, msg]);
+          // Normal Message
+          const msg: ChatMsg = {
+              id: Date.now().toString(),
+              sender: user.name,
+              text: cleanInput
+          };
           channelRef.current?.send({ type: 'broadcast', event: 'CHAT', payload: msg });
+          setMessages(prev => [...prev, msg]);
       }
       setChatInput('');
   };
 
-  // Host watches chat for correct answer (if host is not the guesser)
+  // Host Logic: Watch for correct guesses via Chat messages (simulated or real)
+  // Actually, to make "Hidden Answer" work, client should verify.
+  // If correct, client sends "I_CORRECT" event. Host updates score.
   useEffect(() => {
-      if (isHost && phase === 'DRAWING' && messages.length > 0) {
-          const lastMsg = messages[messages.length - 1];
-          if (currentWord && !lastMsg.isSystem && lastMsg.text.toLowerCase() === currentWord.en.toLowerCase()) {
-               handleCorrectGuess(lastMsg.sender);
-          }
-      }
-  }, [messages, isHost, phase, currentWord]);
+      if (!channelRef.current) return;
+      
+      const handleGuessSuccess = (payload: { userId: string }) => {
+          setPlayers(prev => prev.map(p => {
+              if (p.id === payload.userId && !p.hasGuessed) {
+                  // Scoring Logic
+                  // Base score + Time bonus?
+                  // Simple: +10 points
+                  return { ...p, score: p.score + 10, hasGuessed: true };
+              }
+              // Drawer gets points too?
+              if (p.id === drawerId && !p.hasGuessed) { // drawerId check
+                   // Drawer gets +2 per correct guess
+                   return { ...p, score: p.score + 2 };
+              }
+              return p;
+          }));
+          
+          // Check if everyone guessed
+          // ... (Complex logic omitted for brevity, host can trigger end)
+      };
 
-  // Submit Word Logic
-  const handleSubmitWord = async () => {
-      if (!submitEn || !submitZh) return;
-      await submitUserWord(submitEn, submitZh);
-      alert("感謝您的投稿！獲得 2 PT 獎勵！"); // Updated to 2 PT as requested
-      setShowSubmitModal(false);
-      setSubmitEn('');
-      setSubmitZh('');
+      channelRef.current.on('broadcast', { event: 'GUESS_SUCCESS' }, ({ payload }: any) => handleGuessSuccess(payload));
+      
+      return () => {
+          channelRef.current?.off('broadcast', { event: 'GUESS_SUCCESS' });
+      };
+  }, [drawerId]);
+
+  // Client Logic: Check my own chat input
+  const handleClientChat = () => {
+      if (!chatInput.trim()) return;
+      const input = chatInput.trim();
+      
+      if (!isDrawer && phase === 'DRAWING' && currentWord && input === currentWord.zh) {
+          if (!iHaveGuessed) {
+              // Send Success Event
+              channelRef.current?.send({ type: 'broadcast', event: 'GUESS_SUCCESS', payload: { userId: user.studentId } });
+              // Send System Chat
+              const winMsg = { id: Date.now().toString(), sender: '', text: `${user.name} 猜對了答案！`, isSystem: true };
+              channelRef.current?.send({ type: 'broadcast', event: 'CHAT', payload: winMsg });
+              setMessages(prev => [...prev, winMsg]);
+              
+              // Update local state temporarily
+              setPlayers(prev => prev.map(p => p.id === user.studentId ? { ...p, hasGuessed: true } : p));
+          }
+      } else {
+          // Normal Chat
+          const msg = { id: Date.now().toString(), sender: user.name, text: input };
+          channelRef.current?.send({ type: 'broadcast', event: 'CHAT', payload: msg });
+          setMessages(prev => [...prev, msg]);
+      }
+      setChatInput('');
   };
 
 
   // --- RENDER ---
 
-  // 1. MENU PHASE (Start)
+  // 1. MENU PHASE
   if (phase === 'MENU') {
       return (
-          <div className="fixed inset-0 z-50 bg-gray-50 flex flex-col items-center justify-center p-6">
+          <div className="fixed inset-0 z-50 bg-indigo-50 flex flex-col items-center justify-center p-6">
               {showRules && <RulesModal onClose={() => setShowRules(false)} />}
               
-              <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center animate-in zoom-in">
-                  <div className="w-24 h-24 bg-pink-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <PenTool size={48} className="text-pink-500" />
+              <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center animate-in zoom-in border-4 border-indigo-100">
+                  <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                      <Palette size={48} className="text-indigo-600" />
                   </div>
-                  <h1 className="text-3xl font-black text-gray-800 mb-2">畫畫接龍</h1>
-                  <p className="text-gray-500 mb-8 text-sm">多人即時連線，發揮你的創意！</p>
+                  <h1 className="text-3xl font-black text-gray-800 mb-2 tracking-tight">你畫我猜</h1>
+                  <p className="text-gray-500 mb-8 text-sm font-medium">發揮創意，考驗默契！</p>
 
                   <div className="space-y-4">
-                      <button 
-                          onClick={() => joinRoom(Math.floor(1000 + Math.random() * 9000).toString(), true)}
-                          className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
-                      >
-                          <PlusCircle size={20} /> 創建房間
-                      </button>
-                      
-                      <div className="relative">
-                          <div className="absolute inset-0 flex items-center">
-                              <div className="w-full border-t border-gray-200"></div>
-                          </div>
-                          <div className="relative flex justify-center text-sm">
-                              <span className="px-2 bg-white text-gray-400">或</span>
-                          </div>
-                      </div>
-
-                      <div className="flex gap-2">
+                      <div className="bg-gray-50 p-2 rounded-2xl border border-gray-200">
                           <input 
                               type="text" 
-                              placeholder="輸入房號" 
+                              inputMode="numeric" 
+                              placeholder="輸入房號加入" 
                               value={joinCode}
-                              onChange={e => setJoinCode(e.target.value)}
-                              className="flex-1 bg-gray-100 border-none rounded-xl px-4 text-center font-mono text-lg outline-none focus:ring-2 ring-blue-400"
+                              onChange={e => setJoinCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
+                              className="w-full bg-white border-none rounded-xl px-4 py-3 text-center font-mono text-xl outline-none focus:ring-2 ring-indigo-400 mb-2 shadow-sm"
                           />
-                          <button 
-                              onClick={() => joinCode && joinRoom(joinCode)}
-                              disabled={!joinCode}
-                              className="px-6 bg-gray-800 text-white rounded-xl font-bold disabled:opacity-50"
-                          >
-                              加入
-                          </button>
+                          <div className="flex gap-2">
+                              <button 
+                                  onClick={() => joinCode && joinRoom(joinCode)}
+                                  disabled={joinCode.length < 4}
+                                  className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-700 transition-colors"
+                              >
+                                  加入房間
+                              </button>
+                              <button 
+                                  onClick={() => joinRoom(Math.floor(1000 + Math.random() * 9000).toString(), true)}
+                                  className="flex-1 bg-indigo-500 text-white py-3 rounded-xl font-bold hover:bg-indigo-600 transition-colors shadow-lg shadow-indigo-200"
+                              >
+                                  創建房間
+                              </button>
+                          </div>
                       </div>
                   </div>
 
-                  <div className="mt-8 flex justify-center gap-4 text-sm text-gray-400">
-                      <button onClick={onBack} className="hover:text-gray-600">退出</button>
+                  <div className="mt-8 flex justify-center gap-6 text-sm text-gray-400 font-bold">
+                      <button onClick={onBack} className="hover:text-gray-600 flex items-center gap-1"><ArrowLeft size={14}/> 離開</button>
                       <button onClick={() => setShowRules(true)} className="hover:text-gray-600 flex items-center gap-1"><Info size={14}/> 規則</button>
                   </div>
               </div>
@@ -407,242 +550,303 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
       );
   }
 
-  // 2. LOBBY PHASE (Waiting)
+  // 2. LOBBY PHASE
   if (phase === 'LOBBY') {
       return (
-          <div className="fixed inset-0 z-50 bg-gray-50 flex flex-col">
-              <div className="p-4 pt-safe flex justify-between items-center bg-white shadow-sm">
-                  <button onClick={leaveRoom} className="p-2 -ml-2 rounded-full hover:bg-gray-100"><ArrowLeft size={24} className="text-gray-600"/></button>
+          <div className="fixed inset-0 z-50 bg-indigo-50 flex flex-col">
+              {/* Navbar */}
+              <div className="p-4 pt-safe flex justify-between items-center bg-white shadow-sm border-b border-gray-200">
+                  <button onClick={leaveRoom} className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-500"><ArrowLeft size={24}/></button>
                   <div className="flex flex-col items-center">
-                      <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">ROOM CODE</span>
-                      <div className="text-2xl font-black text-blue-600 font-mono tracking-wider flex items-center gap-2">
+                      <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">ROOM ID</span>
+                      <div className="text-3xl font-black text-indigo-600 font-mono tracking-wider flex items-center gap-2">
                           {roomId}
-                          <button onClick={() => navigator.clipboard.writeText(roomId || '')} className="text-gray-300 hover:text-blue-500"><Copy size={16}/></button>
+                          <button onClick={() => navigator.clipboard.writeText(roomId || '')} className="text-gray-300 hover:text-indigo-500 active:scale-95"><Copy size={18}/></button>
                       </div>
                   </div>
                   <div className="w-8"></div>
               </div>
 
-              <div className="flex-1 p-6 flex flex-col items-center">
-                  <div className="flex-1 w-full max-w-sm grid grid-cols-2 gap-4 content-start">
+              {/* Player Grid */}
+              <div className="flex-1 p-6 overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-4">
                       {players.map(p => (
-                          <div key={p.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center relative">
-                              {p.isHost && <Crown size={16} className="absolute top-2 right-2 text-yellow-500 fill-current" />}
-                              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-2 text-gray-400">
+                          <div key={p.id} className="bg-white p-4 rounded-2xl shadow-sm border-2 border-transparent hover:border-indigo-100 transition-all flex flex-col items-center relative group">
+                              {p.isHost && <Crown size={20} className="absolute top-[-10px] right-[-5px] text-yellow-400 fill-yellow-400 drop-shadow-sm rotate-12" />}
+                              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 text-gray-400 group-hover:scale-110 transition-transform">
                                   <UserIcon size={32} />
                               </div>
-                              <span className="font-bold text-gray-800">{p.name}</span>
-                              {p.id === user.studentId && <span className="text-[10px] text-blue-500 font-bold bg-blue-50 px-2 py-0.5 rounded-full mt-1">YOU</span>}
+                              <span className="font-bold text-gray-800 text-sm truncate w-full text-center">{p.name}</span>
+                              {p.id === user.studentId && <span className="text-[10px] text-indigo-500 font-bold bg-indigo-50 px-2 py-0.5 rounded-full mt-1">YOU</span>}
                           </div>
                       ))}
-                      {/* Empty Slots placeholders */}
+                      {/* Empty Slots */}
                       {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, i) => (
-                          <div key={i} className="border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center min-h-[120px] text-gray-300">
+                          <div key={i} className="border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center min-h-[120px] text-gray-300 bg-gray-50/50">
                               <Users size={24} className="mb-2 opacity-50" />
                               <span className="text-xs font-bold">等待加入...</span>
                           </div>
                       ))}
                   </div>
+              </div>
 
-                  <div className="w-full max-w-sm mt-6">
-                      {isHost ? (
-                          <button 
-                              onClick={handleStartGame}
-                              disabled={players.length < 2}
-                              className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black shadow-lg shadow-blue-200 disabled:opacity-50 disabled:bg-gray-400 disabled:shadow-none transition-all flex items-center justify-center gap-2"
-                          >
-                              {players.length < 2 ? '等待更多玩家...' : '開始遊戲'}
-                          </button>
-                      ) : (
-                          <div className="text-center text-gray-500 font-bold animate-pulse">
-                              等待房主開始遊戲...
-                          </div>
-                      )}
-                  </div>
+              {/* Action Bar */}
+              <div className="p-6 bg-white border-t border-gray-200 safe-pb">
+                  {isHost ? (
+                      <button 
+                          onClick={handleStartGame}
+                          disabled={players.length < 2}
+                          className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-lg shadow-indigo-200 disabled:opacity-50 disabled:bg-gray-400 disabled:shadow-none transition-all flex items-center justify-center gap-2 text-lg"
+                      >
+                          {players.length < 2 ? '等待更多玩家...' : '開始遊戲'} <Play size={20} fill="currentColor"/>
+                      </button>
+                  ) : (
+                      <div className="text-center text-gray-500 font-bold py-4 bg-gray-100 rounded-2xl animate-pulse">
+                          等待房主開始遊戲...
+                      </div>
+                  )}
               </div>
           </div>
       );
   }
 
-  // 3. GAME PHASES (Selecting / Drawing / Ended)
+  // 3. GAME PHASE (Gartic Layout)
   return (
-    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col overflow-hidden font-sans">
+    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col md:flex-row overflow-hidden font-sans">
         
-        {/* --- Top Bar --- */}
-        <div className="bg-white p-2 pt-safe flex items-center justify-between shadow-sm z-20 border-b border-gray-200">
-            <button onClick={leaveRoom} className="p-2 hover:bg-gray-100 rounded-full text-red-500"><ArrowLeft size={20} /></button>
-            
-            <div className="flex flex-col items-center flex-1">
-                {phase === 'DRAWING' && currentWord ? (
-                    <>
-                        {isDrawer ? (
-                            <div className="flex flex-col items-center animate-in slide-in-from-top">
-                                <div className="text-xl font-black text-blue-600 flex items-center gap-2 leading-none">
-                                    {currentWord.en} <span className="text-gray-400 text-sm font-normal">({currentWord.zh})</span>
-                                </div>
-                                <span className={`text-[10px] font-bold px-2 rounded mt-1 ${DIFF_CONFIG[currentWord.difficulty].bg} ${DIFF_CONFIG[currentWord.difficulty].color}`}>
-                                    {DIFF_CONFIG[currentWord.difficulty].label} 題目
-                                </span>
+        {/* --- LEFT SIDEBAR (Players & Round Info) - Desktop / Top on Mobile --- */}
+        <div className="bg-white border-b md:border-b-0 md:border-r border-gray-200 md:w-64 flex flex-col z-20">
+            {/* Header Info */}
+            <div className="p-3 border-b border-gray-100 bg-indigo-50/50 flex justify-between items-center md:block">
+                <div className="flex items-center gap-2 mb-0 md:mb-2">
+                    <button onClick={leaveRoom} className="p-1.5 hover:bg-red-100 rounded-lg text-red-500 transition-colors"><ArrowLeft size={20} /></button>
+                    <span className="font-black text-gray-700">ROUND 1/5</span>
+                </div>
+                <div className="flex items-center gap-1 text-indigo-600 bg-white px-3 py-1 rounded-full shadow-sm border border-indigo-100 md:w-fit">
+                    <Clock size={14} />
+                    <span className="font-mono font-bold">{timer}s</span>
+                </div>
+            </div>
+
+            {/* Player List */}
+            <div className="flex-1 overflow-y-auto p-2 space-y-2 hidden md:block">
+                {players.sort((a,b) => b.score - a.score).map((p, idx) => (
+                    <div key={p.id} className={`p-3 rounded-xl flex items-center gap-3 border-2 transition-all ${p.id === drawerId ? 'border-indigo-400 bg-indigo-50' : p.hasGuessed ? 'border-green-400 bg-green-50' : 'border-transparent bg-gray-50'}`}>
+                        <div className="relative">
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-400 shadow-sm font-bold text-xs border border-gray-100">
+                                {p.name[0]}
                             </div>
-                        ) : (
-                            <div className="text-2xl font-black text-gray-800 tracking-[0.2em] animate-pulse">
-                                {currentWord.en.replace(/[a-zA-Z0-9]/g, '_ ')}
-                            </div>
-                        )}
-                        <div className={`text-xs font-bold flex items-center gap-1 mt-1 ${timer <= 10 ? 'text-red-500 animate-pulse' : 'text-gray-500'}`}>
-                            <Clock size={12} /> {timer}s
+                            {p.id === drawerId && <div className="absolute -top-1 -right-1 bg-indigo-500 text-white p-0.5 rounded-full"><PenTool size={10}/></div>}
+                            {p.hasGuessed && <div className="absolute -bottom-1 -right-1 bg-green-500 text-white p-0.5 rounded-full"><CheckCircle2 size={10}/></div>}
                         </div>
-                    </>
+                        <div className="flex-1 min-w-0">
+                            <div className="font-bold text-gray-800 text-sm truncate">{p.name}</div>
+                            <div className="text-xs text-gray-500 font-mono">{p.score} pts</div>
+                        </div>
+                        <div className="text-lg font-black text-gray-300 italic">#{idx+1}</div>
+                    </div>
+                ))}
+            </div>
+            
+            {/* Mobile Player Summary (Horizontal Scroll) */}
+            <div className="md:hidden flex overflow-x-auto p-2 gap-2 no-scrollbar bg-white border-b border-gray-200">
+                 {players.sort((a,b) => b.score - a.score).map(p => (
+                     <div key={p.id} className={`flex-shrink-0 flex flex-col items-center p-1 px-3 rounded-lg min-w-[60px] ${p.id === drawerId ? 'bg-indigo-50' : p.hasGuessed ? 'bg-green-50' : ''}`}>
+                         <div className="relative">
+                            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">
+                                {p.name[0]}
+                            </div>
+                            {p.id === drawerId && <div className="absolute -top-1 -right-1 bg-indigo-500 text-white p-0.5 rounded-full"><PenTool size={8}/></div>}
+                         </div>
+                         <span className="text-[10px] font-bold text-gray-700 mt-1 truncate max-w-[50px]">{p.name}</span>
+                         <span className="text-[9px] text-gray-400">{p.score}</span>
+                     </div>
+                 ))}
+            </div>
+        </div>
+
+        {/* --- CENTER (Canvas & Word) --- */}
+        <div className="flex-1 flex flex-col bg-gray-200 relative overflow-hidden">
+            
+            {/* Word Display Banner */}
+            <div className="bg-white p-3 shadow-sm flex justify-center items-center gap-4 z-10">
+                {currentWord ? (
+                    isDrawer ? (
+                        <div className="flex flex-col items-center animate-in slide-in-from-top">
+                            <span className="text-xs text-gray-400 font-bold tracking-widest uppercase">DRAW THIS</span>
+                            <div className="text-xl font-black text-indigo-600">{currentWord.zh}</div>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                            {/* Masked Word */}
+                            {currentWord.zh.split('').map((_, i) => (
+                                <div key={i} className="w-8 h-10 bg-gray-100 rounded-lg border-b-4 border-gray-300 flex items-center justify-center font-bold text-gray-300">
+                                    {phase === 'ROUND_END' ? currentWord?.zh[i] : '?'}
+                                </div>
+                            ))}
+                        </div>
+                    )
                 ) : (
-                    <span className="font-bold text-gray-600 flex items-center gap-2"><PenTool size={18}/> 畫畫接龍</span>
+                    <div className="text-gray-400 font-bold text-sm tracking-widest animate-pulse">WAITING...</div>
                 )}
             </div>
 
-            <button 
-                onClick={() => setShowChat(!showChat)} 
-                className={`p-2 rounded-full relative ${showChat ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100 text-gray-600'}`}
-            >
-                <MessageCircle size={20} />
-                {messages.length > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>}
-            </button>
-        </div>
+            {/* Canvas Area */}
+            <div className="flex-1 relative flex items-center justify-center p-4 bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')]">
+                <div className="relative shadow-2xl rounded-lg overflow-hidden bg-white cursor-crosshair">
+                    <canvas
+                        ref={canvasRef}
+                        width={800}
+                        height={600}
+                        onMouseDown={startDrawing}
+                        onMouseMove={draw}
+                        onMouseUp={stopDrawing}
+                        onMouseLeave={stopDrawing}
+                        onTouchStart={startDrawing}
+                        onTouchMove={draw}
+                        onTouchEnd={stopDrawing}
+                        className="touch-none w-full h-auto max-h-[60vh] md:max-h-[75vh]" // Responsive Size
+                        style={{ maxWidth: '100%' }}
+                    />
+                </div>
 
-        {/* --- Main Canvas --- */}
-        <div className="flex-1 relative bg-gray-200 cursor-crosshair overflow-hidden flex flex-col items-center justify-center">
-            <div className="relative bg-white shadow-xl">
-                <canvas
-                    ref={canvasRef}
-                    onMouseDown={startDrawing}
-                    onMouseMove={draw}
-                    onMouseUp={stopDrawing}
-                    onMouseLeave={stopDrawing}
-                    onTouchStart={startDrawing}
-                    onTouchMove={draw}
-                    onTouchEnd={stopDrawing}
-                    className="touch-none block"
-                />
+                {/* Overlays */}
+                {phase === 'SELECTING' && isDrawer && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-30">
+                        <div className="bg-white rounded-3xl p-6 w-full max-w-md text-center shadow-2xl animate-in zoom-in">
+                            <h2 className="text-2xl font-black text-gray-800 mb-6">選擇一個題目</h2>
+                            <div className="grid grid-cols-1 gap-3">
+                                {wordChoices.map((w, idx) => (
+                                    <button 
+                                        key={idx}
+                                        onClick={() => handleSelectWord(w)}
+                                        className={`p-4 rounded-xl border-2 font-bold text-lg transition-all hover:scale-[1.02] active:scale-95 flex justify-between items-center ${DIFF_CONFIG[w.difficulty].bg} ${DIFF_CONFIG[w.difficulty].border} ${DIFF_CONFIG[w.difficulty].color}`}
+                                    >
+                                        <span>{w.zh}</span>
+                                        <span className="text-xs bg-white/50 px-2 py-1 rounded">{w.category}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
+                {phase === 'SELECTING' && !isDrawer && (
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-30 text-white">
+                        <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-4 animate-bounce">
+                            <PenTool size={32} />
+                        </div>
+                        <h2 className="text-3xl font-black mb-2">畫家選題中</h2>
+                        <p className="text-white/70">請稍候...</p>
+                    </div>
+                )}
+
+                {phase === 'ROUND_END' && (
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-40">
+                        <div className="bg-white rounded-3xl p-8 text-center shadow-2xl animate-in zoom-in">
+                            <h2 className="text-gray-400 font-bold text-sm mb-2 uppercase tracking-widest">正確答案</h2>
+                            <div className="text-4xl font-black text-indigo-600 mb-6">{currentWord?.zh}</div>
+                            {currentWord?.en && <div className="text-gray-400 text-sm mb-6 font-mono">{currentWord.en}</div>}
+                            
+                            <div className="h-1 w-full bg-gray-100 mb-6 rounded-full overflow-hidden">
+                                <div className="h-full bg-indigo-500 animate-[loading_5s_linear]"></div>
+                            </div>
+                            <p className="text-xs text-gray-400">即將開始下一回合...</p>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Selecting Overlay (Drawer Only) */}
-            {phase === 'SELECTING' && isDrawer && (
-                <div className="absolute inset-0 bg-gray-900/90 backdrop-blur-sm flex items-center justify-center p-6 z-30">
-                    <div className="w-full max-w-sm">
-                        <h3 className="text-2xl font-black text-white mb-6 text-center">選擇題目</h3>
-                        <div className="grid grid-cols-1 gap-4">
-                            {wordChoices.map((word, idx) => (
-                                <button
-                                    key={idx}
-                                    onClick={() => handleSelectWord(word)}
-                                    className={`relative p-4 rounded-2xl border-l-8 shadow-xl transition-all hover:scale-105 active:scale-95 bg-white flex items-center justify-between group overflow-hidden ${DIFF_CONFIG[word.difficulty].border}`}
-                                >
-                                    <div className="z-10">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className={`text-[10px] font-black px-2 py-0.5 rounded ${DIFF_CONFIG[word.difficulty].bg} ${DIFF_CONFIG[word.difficulty].color}`}>
-                                                {DIFF_CONFIG[word.difficulty].label} ({word.points}分)
-                                            </span>
-                                            <span className="text-xs text-gray-400 font-bold">{word.category}</span>
-                                        </div>
-                                        <div className="text-xl font-black text-gray-800">{word.en}</div>
-                                        <div className="text-sm text-gray-500">{word.zh}</div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Waiting Overlay (Guesser) */}
-            {phase === 'SELECTING' && !isDrawer && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-30">
-                    <div className="text-white text-center animate-pulse">
-                        <div className="text-4xl font-black mb-2">畫家選題中...</div>
-                        <div className="text-sm opacity-70">請稍候，題目即將揭曉</div>
-                    </div>
-                </div>
-            )}
-
-            {/* Ended Overlay */}
-            {phase === 'ENDED' && (
-                <div className="absolute inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-6 z-40">
-                    <div className="bg-white w-full max-w-sm rounded-3xl p-8 text-center shadow-2xl animate-in zoom-in">
-                        <div className="mb-4">
-                            {winner ? <Crown size={60} className="text-yellow-500 mx-auto animate-bounce" /> : <Clock size={60} className="text-gray-400 mx-auto" />}
-                        </div>
-                        <h2 className="text-3xl font-black text-gray-800 mb-2">{winner ? '有人猜對了！' : '時間到！'}</h2>
-                        <div className="text-lg text-gray-600 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
-                            答案是
-                            <div className="text-blue-600 font-black text-3xl mt-1">{currentWord?.en}</div>
-                            <div className="text-gray-400 text-sm font-bold">{currentWord?.zh}</div>
-                        </div>
-                        {winner && <div className="bg-green-50 text-green-700 px-4 py-2 rounded-lg font-bold mb-6 inline-block">贏家: {winner}</div>}
-                        
-                        {isHost ? (
-                            <button onClick={handleStartGame} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold">下一回合</button>
-                        ) : (
-                            <div className="text-gray-400 text-sm">等待房主開始下一局...</div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Drawer Tools */}
+            {/* Tools (Bottom) - Only for Drawer */}
             {isDrawer && phase === 'DRAWING' && (
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur shadow-xl rounded-2xl p-2 border border-gray-200 flex flex-col gap-3 z-10 animate-in slide-in-from-left">
-                    <div className="flex flex-col gap-2 p-1 bg-gray-100 rounded-xl">
+                <div className="bg-white p-3 border-t border-gray-200 flex justify-center gap-4 shadow-lg z-20 overflow-x-auto no-scrollbar">
+                    <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
                         {COLORS.map(c => (
                             <button
                                 key={c}
-                                onClick={() => { setColor(c); setIsEraser(false); }}
-                                className={`w-6 h-6 rounded-full border-2 transition-transform ${color === c && !isEraser ? 'border-gray-600 scale-125' : 'border-transparent'}`}
+                                onClick={() => setColor(c)}
+                                className={`w-8 h-8 rounded-full border-2 transition-transform ${color === c ? 'scale-110 border-gray-400 shadow-sm' : 'border-transparent hover:scale-105'}`}
                                 style={{ backgroundColor: c }}
                             />
                         ))}
                     </div>
-                    <div className="h-[1px] bg-gray-200 w-full"></div>
-                    <button onClick={() => setIsEraser(!isEraser)} className={`p-2 rounded-xl flex justify-center transition-colors ${isEraser ? 'bg-blue-100 text-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}><Eraser size={20} /></button>
-                    <button onClick={() => clearCanvas(true)} className="p-2 hover:bg-red-50 text-red-500 rounded-xl"><Trash2 size={20} /></button>
-                    <div className="h-[1px] bg-gray-200 w-full"></div>
-                    <div className="flex flex-col items-center gap-3 py-1">
+                    <div className="w-[1px] bg-gray-300 h-10 self-center"></div>
+                    <div className="flex gap-2 items-center">
                         {WIDTHS.map(w => (
-                            <button key={w} onClick={() => setLineWidth(w)} className={`w-6 h-6 flex items-center justify-center rounded-full hover:bg-gray-100 ${lineWidth === w ? 'bg-gray-200' : ''}`}><div className="rounded-full bg-black" style={{ width: w, height: w }}></div></button>
+                            <button 
+                                key={w} 
+                                onClick={() => setLineWidth(w)} 
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 ${lineWidth === w ? 'bg-gray-200' : ''}`}
+                            >
+                                <div className="rounded-full bg-black" style={{ width: w, height: w }}></div>
+                            </button>
                         ))}
                     </div>
+                    <div className="w-[1px] bg-gray-300 h-10 self-center"></div>
+                    <button onClick={() => clearCanvas(true)} className="p-2 hover:bg-red-50 text-red-500 rounded-xl flex flex-col items-center justify-center gap-1">
+                        <Trash2 size={18} />
+                    </button>
                 </div>
             )}
         </div>
 
-        {/* Chat Drawer */}
-        {showChat && (
-            <div className="absolute bottom-0 right-0 left-0 md:left-auto md:w-80 h-1/2 md:h-full bg-white shadow-2xl border-l border-gray-200 flex flex-col z-50 animate-in slide-in-from-bottom md:slide-in-from-right duration-300">
-                <div className="p-3 border-b flex justify-between items-center bg-gray-50">
-                    <span className="font-bold text-sm text-gray-600">聊天室 ({players.length}人)</span>
-                    <button onClick={() => setShowChat(false)}><ArrowLeft className="rotate-270 md:rotate-180 text-gray-400" size={18}/></button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50/50">
-                    {messages.map((msg, i) => (
-                        <div key={i} className={`text-sm ${msg.isSystem ? 'text-green-600 font-bold bg-green-50 p-2 rounded text-center' : ''}`}>
-                            {!msg.isSystem && <span className="font-bold text-gray-700">{msg.sender}: </span>}
-                            <span className={msg.isSystem ? '' : 'text-gray-600'}>{msg.text}</span>
-                        </div>
-                    ))}
-                </div>
-                <div className="p-3 border-t bg-white flex gap-2">
+        {/* --- RIGHT SIDEBAR (Chat) --- */}
+        <div className={`
+            fixed inset-0 z-50 md:static md:w-80 md:flex flex-col bg-white border-l border-gray-200 shadow-2xl md:shadow-none transition-transform duration-300
+            ${showChatMobile ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}
+        `}>
+            {/* Mobile Chat Header */}
+            <div className="md:hidden p-3 border-b flex justify-between items-center bg-gray-50">
+                <span className="font-bold text-gray-700">聊天室</span>
+                <button onClick={() => setShowChatMobile(false)} className="p-1"><X size={20}/></button>
+            </div>
+
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+                {messages.map((msg, i) => (
+                    <div key={i} className={`text-sm py-1 px-2 rounded-lg ${msg.isSystem ? 'bg-green-100 text-green-700 text-center font-bold' : i % 2 === 0 ? 'bg-white' : ''}`}>
+                        {!msg.isSystem && <span className="font-bold text-gray-800">{msg.sender}: </span>}
+                        <span className={msg.isSystem ? '' : 'text-gray-600'}>{msg.text}</span>
+                    </div>
+                ))}
+            </div>
+
+            {/* Input Area */}
+            <div className="p-3 border-t bg-white">
+                <form 
+                    onSubmit={(e) => { e.preventDefault(); handleClientChat(); }}
+                    className="flex gap-2"
+                >
                     <input 
                         type="text" 
                         value={chatInput} 
                         onChange={e => setChatInput(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && sendMessage()}
-                        placeholder={isDrawer && phase === 'DRAWING' ? "畫家無法發言" : "輸入答案..."}
+                        placeholder={isDrawer && phase === 'DRAWING' ? "繪畫者不能發言" : "輸入答案..."}
                         disabled={isDrawer && phase === 'DRAWING'}
-                        className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-sm outline-none focus:ring-2 ring-blue-200 disabled:opacity-50"
+                        className="flex-1 bg-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ring-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
-                    <button onClick={sendMessage} disabled={isDrawer && phase === 'DRAWING'} className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:opacity-50">
-                        <Send size={16} />
+                    <button 
+                        type="submit"
+                        disabled={!chatInput.trim() || (isDrawer && phase === 'DRAWING')} 
+                        className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-md shadow-indigo-200"
+                    >
+                        <Send size={18} />
                     </button>
-                </div>
+                </form>
             </div>
+        </div>
+
+        {/* Mobile Chat Toggle Button (Floating) */}
+        {!showChatMobile && (
+            <button 
+                onClick={() => setShowChatMobile(true)}
+                className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl flex items-center justify-center z-40 hover:scale-105 transition-transform"
+            >
+                <MessageCircle size={28} />
+                {/* Unread Badge logic could go here */}
+            </button>
         )}
+
     </div>
   );
 };

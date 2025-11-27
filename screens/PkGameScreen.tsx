@@ -377,8 +377,9 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               handleGameEvent,
               () => handleOpponentLeft(),
               () => {
-                  setPhase('ready');
-                  setTimeout(startRound, 2000);
+                  // This callback runs when presences sync up.
+                  // Send START_GAME again to ensure opponent has my profile data
+                  sendGameEvent({ type: 'START_GAME', attackerId: JSON.stringify(user), gameMode });
               }
           );
       }
@@ -475,8 +476,8 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           handleGameEvent,
           () => handleOpponentLeft(),
           () => {
-              setOpponent({ name: "Player 2", studentId: "p2", avatarColor: "bg-gray-500", level: 1, status: 'playing', joinedAt: 0 }); 
-              sendGameEvent({ type: 'START_GAME', attackerId: JSON.stringify(user), gameMode }); 
+              // I am host, I wait for someone.
+              // When someone joins, `handleGameEvent` will receive their START_GAME.
           }
       );
   };
@@ -496,19 +497,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           user.studentId, 
           (payload) => {
               handleGameEvent(payload);
-              if (payload.type === 'START_GAME' && payload.attackerId) {
-                  try {
-                      const hostProfile = JSON.parse(payload.attackerId);
-                      setOpponent({ ...hostProfile, status: 'playing', joinedAt: 0 });
-                      if (payload.gameMode) setGameMode(payload.gameMode);
-                      setPhase('ready');
-                      setTimeout(startRound, 2000);
-                  } catch(e) {}
-              }
           },
           () => handleOpponentLeft(),
           () => {
-              // Joiner also sends START_GAME to identify themselves to the host
+              // On connected, I (the joiner) introduce myself.
               sendGameEvent({ type: 'START_GAME', attackerId: JSON.stringify(user), gameMode });
           }
       );
@@ -801,8 +793,19 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           try {
               const profile = JSON.parse(payload.attackerId);
               if (profile.studentId !== user.studentId) {
+                  // If I receive a START_GAME from someone else:
+                  // 1. Set them as opponent
                   setOpponent({ ...profile, status: 'playing', joinedAt: 0 });
                   if (payload.gameMode) setGameMode(payload.gameMode);
+                  
+                  // 2. IMPORTANT: If I am hosting or if we haven't synced yet, send MY profile back
+                  // This ensures the joiner gets the host's profile
+                  // We do this by checking if we are in 'connecting' phase or 'matching'
+                  if (phase === 'connecting' || phase === 'matching') {
+                      // Reply with my info so they know who I am
+                      sendGameEvent({ type: 'START_GAME', attackerId: JSON.stringify(user), gameMode });
+                  }
+
                   setPhase('ready');
                   setTimeout(startRound, 2000);
               }
@@ -903,23 +906,17 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   // --- Helpers for Summary Text ---
   const getSummaryDescription = () => {
-      // Case 1: Both used skills (Rare but possible with instant skills like Heal)
-      // However, usually one attacks with word.
-      // If Incoming Skill exists, opponent used a skill.
-      // If My Last Action was Skill, I used a skill.
-      
-      const myMove = myLastAction?.type === 'SKILL' ? `發動${SKILL_NAMES[myLastAction.id as SkillType]}` : '發起攻擊';
-      const opMove = incomingSkill !== 'NONE' ? `發動${SKILL_NAMES[incomingSkill]}` : '發起攻擊';
+      const myMove = myLastAction?.type === 'SKILL' ? `使用${SKILL_NAMES[myLastAction.id as SkillType]}` : '發起攻擊';
+      const opMove = incomingSkill !== 'NONE' ? `使用${SKILL_NAMES[incomingSkill]}` : '發起攻擊';
 
-      // 1. Both used skills (e.g. Heal vs Heal, or Heal vs Blind)
+      // 1. Both used skills
       if (myLastAction?.type === 'SKILL' && incomingSkill !== 'NONE') {
           return `雙方都在調整狀態... 你${myMove}，對手${opMove}。`;
       }
 
-      // 2. I attacked, Opponent defended (or used defensive skill)
+      // 2. I attacked, Opponent defended
       if (myLastAction?.type === 'WORD') {
-          // Check opponent result
-          if (opDefenseResult === 'fail') return '你攻擊成功！對手防禦失敗，受到傷害。';
+          if (opDefenseResult === 'fail') return '你攻擊成功！對手防禦失敗，造成傷害。';
           if (opDefenseResult === 'backlash') return '你的攻擊被完美格擋！受到反噬傷害。';
           return '你的攻擊被化解了。對手防禦成功。';
       }
@@ -933,12 +930,16 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       
       // 4. Skill vs Attack scenarios
       if (myLastAction?.type === 'SKILL') {
-          // I used skill, opponent likely attacked or defended nothing?
-          // Actually if I used skill, I don't attack. Opponent might have attacked me.
           if (incomingWord) {
              return `你${myMove}，但需面對對手的攻擊！`;
           }
           return `你${myMove}。`;
+      }
+      
+      if (incomingSkill !== 'NONE') {
+          if (myLastAction?.type === 'WORD') {
+              return `你發起攻擊，但對手${opMove}。`;
+          }
       }
 
       return '回合結束';
