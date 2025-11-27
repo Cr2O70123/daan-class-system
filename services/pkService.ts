@@ -97,8 +97,10 @@ export const leaveMatchmaking = () => {
 
 /**
  * Join a private game room.
- * REFACTORED: Now waits for 2 people to be present (synced) before calling onRoomReady.
+ * REFACTORED: Now uses a debounce timer for disconnects to prevent flickering.
  */
+let disconnectTimer: number | null = null;
+
 export const joinGameRoom = (
     roomId: string,
     userId: string,
@@ -109,6 +111,10 @@ export const joinGameRoom = (
     if (gameChannel) {
         gameChannel.unsubscribe();
         gameChannel = null;
+    }
+    if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
     }
 
     console.log(`Joining Game Room: ${roomId}`);
@@ -134,15 +140,26 @@ export const joinGameRoom = (
             console.log(`Room Sync: ${count} users present`);
 
             // Trigger start only when BOTH players are connected and tracked
-            if (count >= 2 && !isReadyTriggered) {
-                isReadyTriggered = true;
-                onRoomReady();
+            if (count >= 2) {
+                if (disconnectTimer) {
+                    clearTimeout(disconnectTimer);
+                    disconnectTimer = null;
+                }
+                if (!isReadyTriggered) {
+                    isReadyTriggered = true;
+                    onRoomReady();
+                }
             }
 
-            // If game was ready but count drops, opponent disconnected
+            // If game was ready but count drops, use debounce before declaring opponent left
             if (isReadyTriggered && count < 2) {
-                console.warn("Opponent disconnected (Presence drop)");
-                onOpponentLeft();
+                console.warn("Potential disconnect detected, waiting...");
+                if (!disconnectTimer) {
+                    disconnectTimer = window.setTimeout(() => {
+                        console.warn("Opponent confirmed disconnected");
+                        onOpponentLeft();
+                    }, 3000); // 3 seconds grace period
+                }
             }
         })
         .subscribe(async (status) => {
@@ -157,7 +174,7 @@ export const joinGameRoom = (
 
 export const sendGameEvent = async (payload: PkGamePayload) => {
     if (!gameChannel) {
-        console.warn("Attempted to send event without active channel");
+        // console.warn("Attempted to send event without active channel");
         return;
     }
     try {
@@ -172,6 +189,10 @@ export const sendGameEvent = async (payload: PkGamePayload) => {
 };
 
 export const leaveGameRoom = () => {
+    if (disconnectTimer) {
+        clearTimeout(disconnectTimer);
+        disconnectTimer = null;
+    }
     if (gameChannel) {
         gameChannel.unsubscribe();
         gameChannel = null;

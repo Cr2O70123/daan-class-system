@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle, Users, Copy, Play, Sparkles, Check, HeartCrack, Ban, Target, Bot, Repeat, Shuffle, Split, Flame, Lock, Medal, Star } from 'lucide-react';
+import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle, Users, Copy, Play, Sparkles, Check, HeartCrack, Ban, Target, Bot, Repeat, Shuffle, Split, Flame, Lock, Medal, Star, Hourglass } from 'lucide-react';
 import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry, PkMistake, PkGameMode, OverloadLevel } from '../types';
 import { WORD_DATABASE } from '../services/mockData';
 import { joinMatchmaking, leaveMatchmaking, joinGameRoom, leaveGameRoom, sendGameEvent } from '../services/pkService';
@@ -131,7 +131,7 @@ const CHARGE_LEVELS: Record<OverloadLevel, { cost: number, multiplier: number, n
     3: { cost: 200, multiplier: 2.5, name: '梭哈 Lv3', color: 'bg-red-600' }
 };
 
-type BattlePhase = 'mode_select' | 'menu' | 'matching' | 'connecting' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
+type BattlePhase = 'mode_select' | 'menu' | 'matching' | 'connecting' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'waiting_next_round' | 'result';
 
 // --- Rank Info Modal ---
 const RankInfoModal = ({ onClose }: { onClose: () => void }) => {
@@ -229,8 +229,11 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [isAdrenaline, setIsAdrenaline] = useState(false);
   const [perfectParryTriggered, setPerfectParryTriggered] = useState(false);
   
+  // Game Sync & Action States
   const [myActionSent, setMyActionSent] = useState(false);
   const [opActionReceived, setOpActionReceived] = useState(false);
+  const [opReadyForNextRound, setOpReadyForNextRound] = useState(false); // Sync Barrier
+  const [iAmReadyForNextRound, setIAmReadyForNextRound] = useState(false); // Sync Barrier
   
   const [myLastAction, setMyLastAction] = useState<{type: 'WORD' | 'SKILL', id: string, charge?: number} | null>(null);
   const [myDefenseResult, setMyDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
@@ -306,21 +309,34 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       };
   }, [phase]);
 
-  // --- Auto-Advance Round Logic ---
+  // --- Auto-Advance Round Logic (Replaced with Sync Barrier) ---
   useEffect(() => {
       if (phase === 'round_summary') {
           if (roundSummaryTimerRef.current) clearTimeout(roundSummaryTimerRef.current);
+          
           roundSummaryTimerRef.current = window.setTimeout(() => {
-              if (round < TOTAL_ROUNDS && myHp > 0 && opHp > 0) {
-                  setRound(prev => prev + 1);
-                  startRound();
-              } else {
-                  setPhase('result');
-              }
-          }, 3500);
+              // Instead of starting next round immediately, we enter waiting state and signal readiness
+              setPhase('waiting_next_round');
+              setIAmReadyForNextRound(true);
+              triggerGameEvent({ type: 'ROUND_READY' });
+          }, 4000); // Give enough time to read summary
       }
       return () => { if (roundSummaryTimerRef.current) clearTimeout(roundSummaryTimerRef.current); };
-  }, [phase, round, myHp, opHp]);
+  }, [phase]);
+
+  // --- SYNC BARRIER CHECK ---
+  useEffect(() => {
+      // If both players are ready, or if playing against AI and I am ready
+      if (phase === 'waiting_next_round' && (opReadyForNextRound || opponent?.isAi)) {
+          if (round < TOTAL_ROUNDS && myHp > 0 && opHp > 0) {
+              setRound(prev => prev + 1);
+              startRound();
+          } else {
+              setPhase('result');
+          }
+      }
+  }, [phase, opReadyForNextRound, opponent, round, myHp, opHp]);
+
 
   const startAiMatch = () => {
       const randomName = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
@@ -610,6 +626,9 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setChaosEffect(false);
       setPerfectParryTriggered(false);
       
+      setOpReadyForNextRound(false);
+      setIAmReadyForNextRound(false);
+      
       setMyLastAction(null);
       setBattleLog(`Round ${round} / ${TOTAL_ROUNDS}`);
       
@@ -788,6 +807,11 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
       if (payload.type === 'OPPONENT_LEFT') {
           handleOpponentLeft();
+          return;
+      }
+
+      if (payload.type === 'ROUND_READY') {
+          setOpReadyForNextRound(true);
           return;
       }
 
@@ -1390,42 +1414,51 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                       </div>
                   )}
 
-                  {/* Round Summary */}
+                  {/* Round Summary (Enhanced UI) */}
                   {phase === 'round_summary' && (
-                      <div className="bg-gray-800/95 backdrop-blur border border-gray-600 p-6 rounded-3xl text-center animate-in zoom-in shadow-2xl w-full max-w-xs">
-                          <h2 className="text-lg font-bold mb-6 text-white flex items-center justify-center gap-2">
-                              <Swords size={20} className="text-gray-400" /> 本回合結算
+                      <div className="bg-gray-800/95 backdrop-blur border border-gray-600 p-6 rounded-3xl text-center animate-in zoom-in shadow-2xl w-full max-w-sm">
+                          <h2 className="text-xl font-bold mb-4 text-white flex items-center justify-center gap-2 border-b border-gray-600 pb-4">
+                              <Swords size={24} className="text-yellow-400" /> 回合報告
                           </h2>
-                          <div className="space-y-4">
-                              {/* My Attack Result */}
-                              <div className="bg-gray-900/50 p-4 rounded-xl flex justify-between items-center border border-gray-700">
-                                  <span className="text-gray-400 text-sm font-bold">攻擊</span>
-                                  <div className="flex items-center gap-2">
-                                      {opDefenseResult === 'backlash' ? (
-                                          <span className="text-red-400 font-bold text-sm flex items-center gap-1"><HeartCrack size={14}/> 遭反噬</span>
-                                      ) : opDefenseResult === 'fail' ? (
-                                          <span className="text-green-400 font-bold text-sm flex items-center gap-1"><CheckCircle size={14}/> 命中</span>
+                          
+                          <div className="space-y-4 text-left">
+                              {/* Attack Log */}
+                              <div className="bg-black/30 p-3 rounded-xl border border-gray-700/50">
+                                  <div className="text-xs text-blue-400 font-bold mb-1 uppercase tracking-wider">Your Attack</div>
+                                  <div className="text-sm text-gray-200">
+                                      {myLastAction?.type === 'WORD' ? (
+                                          opDefenseResult === 'backlash' ? `攻擊被完美格擋，受到反噬傷害！` :
+                                          opDefenseResult === 'fail' ? `成功命中！對手受傷。` :
+                                          `攻擊被對手防禦了。`
                                       ) : (
-                                          <span className="text-gray-500 font-bold text-sm">被防禦</span>
+                                          `使用了技能支援。`
                                       )}
                                   </div>
                               </div>
-                              
-                              {/* My Defense Result */}
-                              <div className="bg-gray-900/50 p-4 rounded-xl flex justify-between items-center border border-gray-700">
-                                  <span className="text-gray-400 text-sm font-bold">防禦</span>
-                                  <div className="flex items-center gap-2">
+
+                              {/* Defense Log */}
+                              <div className="bg-black/30 p-3 rounded-xl border border-gray-700/50">
+                                  <div className="text-xs text-red-400 font-bold mb-1 uppercase tracking-wider">Your Defense</div>
+                                  <div className="text-sm text-gray-200">
                                       {myDefenseResult === 'success' ? (
-                                          <>
-                                            <span className="text-blue-400 font-bold text-sm">成功</span>
-                                            {perfectParryTriggered && <span className="text-yellow-400 text-xs font-black">PERFECT</span>}
-                                          </>
+                                          perfectParryTriggered ? `完美格擋！觸發反噬效果。` : `防禦成功！未受傷害。`
+                                      ) : myDefenseResult === 'fail' ? (
+                                          `防禦失敗，受到傷害。`
                                       ) : (
-                                          <span className="text-red-500 font-bold text-sm">失敗</span>
+                                          `對手使用了技能。`
                                       )}
                                   </div>
                               </div>
                           </div>
+                      </div>
+                  )}
+
+                  {/* Sync Barrier Wait Screen */}
+                  {phase === 'waiting_next_round' && (
+                      <div className="text-center animate-pulse">
+                          <Hourglass size={48} className="text-blue-400 mx-auto mb-4" />
+                          <h2 className="text-xl font-bold text-white mb-2">等待同步...</h2>
+                          <p className="text-gray-400 text-sm">雙方確認後將自動開始下一回合</p>
                       </div>
                   )}
               </div>

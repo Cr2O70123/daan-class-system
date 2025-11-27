@@ -237,7 +237,7 @@ export type PkGameMode = 'CLASSIC' | 'OVERLOAD';
 export type OverloadLevel = 1 | 2 | 3;
 
 export interface PkGamePayload {
-    type: 'START_GAME' | 'SEND_ACTION' | 'REPORT_RESULT' | 'GAME_OVER' | 'SURRENDER' | 'OPPONENT_LEFT';
+    type: 'START_GAME' | 'SEND_ACTION' | 'REPORT_RESULT' | 'GAME_OVER' | 'SURRENDER' | 'OPPONENT_LEFT' | 'ROUND_READY';
     
     // START_GAME
     attackerId?: string; // JSON of user profile or 'ai_bot'
