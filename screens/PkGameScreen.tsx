@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle, Users, Copy, Play, Sparkles, Check, HeartCrack, Ban, Target, Bot, Repeat, Shuffle, Split, Flame, Lock, Medal, Star, Hourglass } from 'lucide-react';
+import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle, Users, Copy, Play, Sparkles, Check, HeartCrack, Ban, Target, Bot, Repeat, Shuffle, Split, Flame, Lock, Medal, Star, Hourglass, Activity } from 'lucide-react';
 import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry, PkMistake, PkGameMode, OverloadLevel } from '../types';
 import { WORD_DATABASE } from '../services/mockData';
 import { joinMatchmaking, leaveMatchmaking, joinGameRoom, leaveGameRoom, sendGameEvent } from '../services/pkService';
@@ -233,11 +233,12 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [myActionSent, setMyActionSent] = useState(false);
   const [opActionReceived, setOpActionReceived] = useState(false);
   const [opReadyForNextRound, setOpReadyForNextRound] = useState(false); // Sync Barrier
-  const [iAmReadyForNextRound, setIAmReadyForNextRound] = useState(false); // Sync Barrier
   
   const [myLastAction, setMyLastAction] = useState<{type: 'WORD' | 'SKILL', id: string, charge?: number} | null>(null);
   const [myDefenseResult, setMyDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
   const [opDefenseResult, setOpDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | 'backlash' | null>(null);
+  const [opLastDamageTaken, setOpLastDamageTaken] = useState(0); // Store for summary
+  const [myLastDamageTaken, setMyLastDamageTaken] = useState(0); // Store for summary
   
   const [battleLog, setBattleLog] = useState<string>("");
   const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME_LIMIT);
@@ -309,28 +310,31 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       };
   }, [phase]);
 
-  // --- Auto-Advance Round Logic (Replaced with Sync Barrier) ---
+  // --- Auto-Advance Round Logic (Sync Barrier) ---
   useEffect(() => {
       if (phase === 'round_summary') {
           if (roundSummaryTimerRef.current) clearTimeout(roundSummaryTimerRef.current);
           
+          // Give users 4 seconds to view the summary
           roundSummaryTimerRef.current = window.setTimeout(() => {
-              // Instead of starting next round immediately, we enter waiting state and signal readiness
               setPhase('waiting_next_round');
-              setIAmReadyForNextRound(true);
+              // Immediately signal readiness when entering this state
               triggerGameEvent({ type: 'ROUND_READY' });
-          }, 4000); // Give enough time to read summary
+          }, 4000); 
       }
       return () => { if (roundSummaryTimerRef.current) clearTimeout(roundSummaryTimerRef.current); };
   }, [phase]);
 
   // --- SYNC BARRIER CHECK ---
   useEffect(() => {
-      // If both players are ready, or if playing against AI and I am ready
+      // Logic: I am ready (because I am in 'waiting_next_round') AND Opponent is ready (or is AI)
       if (phase === 'waiting_next_round' && (opReadyForNextRound || opponent?.isAi)) {
           if (round < TOTAL_ROUNDS && myHp > 0 && opHp > 0) {
-              setRound(prev => prev + 1);
-              startRound();
+              // Add small delay to ensure UI updates are smooth
+              setTimeout(() => {
+                  setRound(prev => prev + 1);
+                  startRound();
+              }, 500);
           } else {
               setPhase('result');
           }
@@ -571,6 +575,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               const damageTaken = DAMAGE_PER_HIT * (gameMode === 'OVERLOAD' ? CHARGE_LEVELS[incomingCharge].multiplier : 1);
               setMyHp(prev => Math.max(0, prev - damageTaken));
               setMyDefenseResult('fail');
+              setMyLastDamageTaken(damageTaken);
               
               triggerGameEvent({
                   type: 'REPORT_RESULT',
@@ -625,9 +630,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setBlindEffect(false);
       setChaosEffect(false);
       setPerfectParryTriggered(false);
+      setOpReadyForNextRound(false); // Reset remote ready flag
       
-      setOpReadyForNextRound(false);
-      setIAmReadyForNextRound(false);
+      setOpLastDamageTaken(0);
+      setMyLastDamageTaken(0);
       
       setMyLastAction(null);
       setBattleLog(`Round ${round} / ${TOTAL_ROUNDS}`);
@@ -734,6 +740,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           playSound('block');
           setBattleLog("防禦成功！");
           setMyDefenseResult('success');
+          setMyLastDamageTaken(0);
           
           if (gameMode === 'OVERLOAD') {
               // Calculate Backlash
@@ -758,6 +765,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           
           damageTaken = Math.floor(baseDmg);
           setMyHp(prev => Math.max(0, prev - damageTaken));
+          setMyLastDamageTaken(damageTaken);
           playSound('damage');
           setBattleLog("防禦失敗！");
           setMyDefenseResult('fail');
@@ -875,7 +883,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               setMyHp(prev => Math.max(0, prev - backlash)); // Apply Backlash Self Damage
               
               setOpDefenseResult(damage === 0 ? (backlash > 0 ? 'backlash' : 'success') : 'fail');
+              setOpLastDamageTaken(damage);
               
+              if (backlash > 0) setMyLastDamageTaken(prev => prev + backlash);
+
               setPhase(prev => {
                   if (prev === 'waiting_opponent') return 'round_summary';
                   return prev;
@@ -1416,37 +1427,66 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
                   {/* Round Summary (Enhanced UI) */}
                   {phase === 'round_summary' && (
-                      <div className="bg-gray-800/95 backdrop-blur border border-gray-600 p-6 rounded-3xl text-center animate-in zoom-in shadow-2xl w-full max-w-sm">
-                          <h2 className="text-xl font-bold mb-4 text-white flex items-center justify-center gap-2 border-b border-gray-600 pb-4">
-                              <Swords size={24} className="text-yellow-400" /> 回合報告
-                          </h2>
-                          
-                          <div className="space-y-4 text-left">
-                              {/* Attack Log */}
-                              <div className="bg-black/30 p-3 rounded-xl border border-gray-700/50">
-                                  <div className="text-xs text-blue-400 font-bold mb-1 uppercase tracking-wider">Your Attack</div>
-                                  <div className="text-sm text-gray-200">
-                                      {myLastAction?.type === 'WORD' ? (
-                                          opDefenseResult === 'backlash' ? `攻擊被完美格擋，受到反噬傷害！` :
-                                          opDefenseResult === 'fail' ? `成功命中！對手受傷。` :
-                                          `攻擊被對手防禦了。`
+                      <div className="w-full max-w-sm animate-in zoom-in duration-300">
+                          <div className="bg-gray-800/90 backdrop-blur border-2 border-gray-600 rounded-3xl overflow-hidden shadow-2xl relative">
+                              <div className="bg-gray-900/50 p-4 text-center border-b border-gray-700">
+                                  <h2 className="text-xl font-black text-white tracking-widest uppercase">Round Recap</h2>
+                              </div>
+                              
+                              <div className="p-6 grid grid-cols-2 gap-4 relative">
+                                  {/* VS Divider */}
+                                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-500 font-black italic opacity-50 text-4xl pointer-events-none">VS</div>
+
+                                  {/* YOU Column */}
+                                  <div className="flex flex-col items-center gap-2">
+                                      <span className="text-blue-400 font-bold text-xs">YOU</span>
+                                      {myDefenseResult === 'success' ? (
+                                          <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center border-2 border-blue-500 text-blue-400">
+                                              <Shield size={32} />
+                                          </div>
+                                      ) : myDefenseResult === 'fail' ? (
+                                          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center border-2 border-red-500 text-red-500 animate-pulse">
+                                              <HeartCrack size={32} />
+                                          </div>
                                       ) : (
-                                          `使用了技能支援。`
+                                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+                                              <Activity size={32} className="text-gray-500"/>
+                                          </div>
                                       )}
+                                      <div className={`font-black text-xl ${myLastDamageTaken > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                                          {myLastDamageTaken > 0 ? `-${myLastDamageTaken}` : 'SAFE'}
+                                      </div>
+                                      <span className="text-[10px] text-gray-400">Damage Taken</span>
+                                  </div>
+
+                                  {/* ENEMY Column */}
+                                  <div className="flex flex-col items-center gap-2">
+                                      <span className="text-rose-400 font-bold text-xs">ENEMY</span>
+                                      {opDefenseResult === 'success' || opDefenseResult === 'backlash' ? (
+                                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center border-2 border-gray-600 opacity-50">
+                                              <Shield size={32} />
+                                          </div>
+                                      ) : opDefenseResult === 'fail' ? (
+                                          <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center border-2 border-green-500 text-green-500">
+                                              <Target size={32} />
+                                          </div>
+                                      ) : (
+                                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+                                              <Activity size={32} className="text-gray-500"/>
+                                          </div>
+                                      )}
+                                      <div className={`font-black text-xl ${opLastDamageTaken > 0 ? 'text-green-500' : 'text-gray-500'}`}>
+                                          {opLastDamageTaken > 0 ? `-${opLastDamageTaken}` : 'MISS'}
+                                      </div>
+                                      <span className="text-[10px] text-gray-400">Damage Dealt</span>
                                   </div>
                               </div>
 
-                              {/* Defense Log */}
-                              <div className="bg-black/30 p-3 rounded-xl border border-gray-700/50">
-                                  <div className="text-xs text-red-400 font-bold mb-1 uppercase tracking-wider">Your Defense</div>
-                                  <div className="text-sm text-gray-200">
-                                      {myDefenseResult === 'success' ? (
-                                          perfectParryTriggered ? `完美格擋！觸發反噬效果。` : `防禦成功！未受傷害。`
-                                      ) : myDefenseResult === 'fail' ? (
-                                          `防禦失敗，受到傷害。`
-                                      ) : (
-                                          `對手使用了技能。`
-                                      )}
+                              {/* Footer Status */}
+                              <div className="bg-black/40 p-3 text-center border-t border-gray-700">
+                                  <div className="flex items-center justify-center gap-2 text-yellow-400 animate-pulse">
+                                      <Hourglass size={16} />
+                                      <span className="text-xs font-bold uppercase tracking-wider">Next Round Starting...</span>
                                   </div>
                               </div>
                           </div>

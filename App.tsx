@@ -120,7 +120,11 @@ const App = () => {
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
   const [showModeration, setShowModeration] = useState(false);
-  const [showUpdateModal, setShowUpdateModal] = useState(true); // Default true to show on load
+  
+  // Update Announcement State (Check localStorage)
+  const [showUpdateModal, setShowUpdateModal] = useState(() => {
+      return !localStorage.getItem('hasSeenUpdate2.0');
+  });
   
   // Game States
   const [showWordChallenge, setShowWordChallenge] = useState(false);
@@ -477,7 +481,10 @@ const App = () => {
       
       {/* 2.0 Update Announcement Modal */}
       {showUpdateModal && (
-          <UpdateAnnouncementModal onClose={() => setShowUpdateModal(false)} />
+          <UpdateAnnouncementModal onClose={() => {
+              localStorage.setItem('hasSeenUpdate2.0', 'true');
+              setShowUpdateModal(false);
+          }} />
       )}
 
       {lightboxImage && (
