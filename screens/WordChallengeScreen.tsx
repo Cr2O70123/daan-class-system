@@ -10,7 +10,7 @@ interface WordChallengeScreenProps {
   words: Word[]; // Kept for prop compatibility
   onBack: () => void;
   onFinish: (result: GameResult) => void;
-  onUpdateHearts: (hearts: number) => void;
+  onUpdateHearts: (newPlays: number) => void;
 }
 
 const INITIAL_TIME = 30; // Seconds
@@ -128,7 +128,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   
   // Interaction State
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [feedback, setFeedback] = useState<'correct' | 'wrong' | 'timeout' | null>(null);
   const [showCorrectAnswer, setShowCorrectAnswer] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   
@@ -140,6 +140,8 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   const wordPool = WORD_DATABASE;
 
   const timerRef = useRef<number | null>(null);
+
+  const MAX_PLAYS = 15;
 
   // Initialize Data (Leaderboard)
   useEffect(() => {
@@ -189,15 +191,15 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
   };
 
   const handleStartGame = () => {
-      if (user.hearts <= 0) {
-          alert("今日遊玩次數已達上限，請明天再來挑戰！");
+      if (user.dailyPlays >= MAX_PLAYS) {
+          alert("今日遊玩次數已達 15 次上限，請明天再來挑戰！");
           return;
       }
       
       playSound('start');
 
-      // Update Play Count (Hearts)
-      onUpdateHearts(user.hearts - 1);
+      // Update Play Count (Increment)
+      onUpdateHearts(user.dailyPlays + 1);
 
       setGameState('playing');
       setTimeLeft(INITIAL_TIME);
@@ -222,7 +224,8 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                   playSound('tick');
               }
               if (prev <= 1) {
-                  endGame(true);
+                  // TIMEOUT LOGIC: End game, but show answer first
+                  handleTimeoutEnd();
                   return 0;
               }
               return prev - 1;
@@ -230,10 +233,20 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
       }, 1000);
   };
 
-  const endGame = (isTimeout = false) => {
+  const handleTimeoutEnd = () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      playSound(isTimeout ? 'timeout' : 'gameover');
-      setGameState('gameover');
+      playSound('timeout');
+      
+      // Reveal the correct answer for the current pending word
+      setFeedback('timeout');
+      setShowCorrectAnswer(true);
+      
+      // Note: We do NOT add to 'wrongWords' because the user didn't select wrong, just ran out of time.
+      // Or we can add it but mark it differently. For now, strict "not an error" logic as requested.
+      
+      setTimeout(() => {
+          setGameState('gameover');
+      }, 2000); // 2 second delay to see answer
   };
 
   const handleAnswer = (answer: string) => {
@@ -345,13 +358,15 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
     ? 'bg-green-100 dark:bg-green-900' 
     : feedback === 'wrong' 
         ? 'bg-red-100 dark:bg-red-900' 
-        : 'bg-gray-100 dark:bg-gray-900';
+        : feedback === 'timeout'
+            ? 'bg-gray-200 dark:bg-gray-800'
+            : 'bg-gray-100 dark:bg-gray-900';
         
   const allReviewed = wrongWords.length === 0 || wrongWords.every(w => reviewedIds.includes(w.id));
 
   // --- MENU ---
   if (gameState === 'menu') {
-      const remainingPlays = Math.max(0, user.hearts);
+      const canPlay = user.dailyPlays < MAX_PLAYS;
 
       return (
           <div className="fixed inset-0 z-50 flex flex-col bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden transition-colors">
@@ -371,7 +386,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                         <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-full border border-blue-100 dark:border-blue-800 flex items-center gap-1">
                             <Zap size={12} className="text-blue-500 fill-current" />
                             <span className="text-xs font-bold text-blue-600 dark:text-blue-400">
-                                {remainingPlays}/3
+                                {Math.max(0, MAX_PLAYS - user.dailyPlays)}/{MAX_PLAYS}
                             </span>
                         </div>
                   </div>
@@ -410,20 +425,20 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
 
                         <button 
                             onClick={handleStartGame}
-                            disabled={remainingPlays <= 0}
+                            disabled={!canPlay}
                             className={`w-full max-w-xs py-4 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
-                                remainingPlays > 0
+                                canPlay
                                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/30'
                                 : 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
                             }`}
                         >
-                            {remainingPlays > 0 ? (
+                            {canPlay ? (
                                 <><Play size={20} fill="currentColor"/> 開始挑戰</> 
                             ) : (
                                 <><Lock size={20}/> 明日再來</>
                             )}
                         </button>
-                        {remainingPlays <= 0 && <p className="text-xs text-gray-400 mt-4">每日挑戰次數將於午夜重置</p>}
+                        {!canPlay && <p className="text-xs text-gray-400 mt-4">每日遊玩次數已達上限 (15次)</p>}
                     </div>
                 ) : (
                     <div className="flex-1 w-full max-w-md mx-auto overflow-hidden flex flex-col">
@@ -541,6 +556,14 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                   <span className="bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 text-[10px] font-bold px-3 py-1 rounded-full mb-6">
                       LEVEL {level}
                   </span>
+                  
+                  {feedback === 'timeout' && (
+                      <div className="absolute top-1/3 text-center animate-in zoom-in">
+                          <div className="text-4xl font-black text-gray-500 dark:text-gray-400 mb-2">TIME'S UP</div>
+                          <div className="text-lg font-bold text-gray-600 dark:text-gray-300">Answer: <span className="text-green-500">{currentWord?.zh}</span></div>
+                      </div>
+                  )}
+
                   <h2 className="text-4xl font-black text-center mb-10 text-gray-800 dark:text-white drop-shadow-sm">{currentWord?.en}</h2>
                   
                   <div className="grid grid-cols-1 gap-3 w-full max-w-sm">
@@ -568,7 +591,7 @@ export const WordChallengeScreen: React.FC<WordChallengeScreenProps> = ({
                             <button
                                 key={idx}
                                 onClick={() => handleAnswer(opt)}
-                                disabled={isProcessing}
+                                disabled={isProcessing || feedback !== null}
                                 className={buttonClass}
                             >
                                 {opt}

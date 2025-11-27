@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-TW">
   <head>
@@ -24,30 +25,12 @@
       }
     </script>
     <style>
-      /* Custom scrollbar for cleaner look */
-      ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #c1c1c1; 
-        border-radius: 10px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #a8a8a8; 
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: #4b5563;
-      }
-      
-      /* Hide scrollbar for Chrome, Safari and Opera */
+      /* Global Scrollbar Hiding */
       .no-scrollbar::-webkit-scrollbar {
-          display: none;
+          display: none !important;
+          width: 0px;
+          background: transparent;
       }
-      /* Hide scrollbar for IE, Edge and Firefox */
       .no-scrollbar {
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
@@ -55,7 +38,7 @@
 
       body {
         background-color: #f3f4f6;
-        overscroll-behavior-y: none; /* Prevent native pull-to-refresh on some browsers to use ours */
+        overscroll-behavior-y: none;
       }
       .dark body {
         background-color: #111827;
@@ -63,8 +46,11 @@
 
       /* Safe Area Utility */
       .pt-safe {
-        /* Ensure a minimum padding of 24px + any safe area inset */
         padding-top: calc(env(safe-area-inset-top, 0px) + 24px);
+      }
+      
+      .pb-safe {
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
       }
     </style>
 <script type="importmap">

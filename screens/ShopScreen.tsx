@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo } from 'react';
 import { ShoppingBag, Star, Zap, Crown, Palette, Ghost, MessageCircle, LayoutGrid, Brush, ArrowDownNarrowWide, ArrowUpNarrowWide, Pin, Sparkles, Tag, Heart } from 'lucide-react';
 import { User, Product } from '../types';
@@ -24,14 +23,14 @@ const PRODUCTS: Product[] = [
       tag: '限定' 
   },
 
-  // --- Consumables (New) ---
+  // --- Consumables (Updated) ---
   { 
       id: 'item_heart_refill', 
       name: '能量飲料', 
-      price: 100, 
+      price: 20, // Updated Price
       color: 'bg-red-100 text-red-600', 
       icon: <Zap size={20} className="fill-red-600" />, 
-      description: '立即恢復 1 次遊玩次數', 
+      description: '恢復 5 次遊玩次數', 
       category: 'consumable',
       tag: '補給'
   },

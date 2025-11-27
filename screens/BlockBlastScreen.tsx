@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Trophy, Crown, Grid3X3, Zap, XCircle, RefreshCw, Volume2, VolumeX } from 'lucide-react';
-import { User, GameResult } from '../types';
-import { submitGameScore } from '../services/dataService';
+import { ArrowLeft, Trophy, Crown, Grid3X3, Zap, XCircle, RefreshCw, Volume2, VolumeX, BookOpen, X, AlertTriangle, Coins, Info } from 'lucide-react';
+import { User, GameResult, GameLeaderboardEntry } from '../types';
+import { submitGameScore, fetchGameLeaderboard } from '../services/dataService';
 
 // --- Constants & Types ---
 const BOARD_SIZE = 8;
-const TOUCH_OFFSET_Y = 70; // Slightly reduced offset for better control
+const TOUCH_OFFSET_Y = 80; 
+const MAX_PLAYS = 15;
 
 // Neon/Vibrant Colors
 const BLOCK_COLORS = [
@@ -28,37 +29,40 @@ type Shape = {
     matrix: number[][]; // 1 for block, 0 for empty
     id: string;
     color: string;
+    difficulty: 'easy' | 'medium' | 'hard';
 };
 
 // Define shapes with weights (Weighted Generation)
-const SHAPE_DEFINITIONS: { matrix: number[][], weight: number }[] = [
-    { matrix: [[1]], weight: 1 }, // Dot (Reduced chance)
-    { matrix: [[1, 1]], weight: 3 }, // H-Line 2
-    { matrix: [[1], [1]], weight: 3 }, // V-Line 2
-    { matrix: [[1, 1, 1]], weight: 4 }, // H-Line 3
-    { matrix: [[1], [1], [1]], weight: 4 }, // V-Line 3
-    { matrix: [[1, 1, 1, 1]], weight: 3 }, // H-Line 4
-    { matrix: [[1], [1], [1], [1]], weight: 3 }, // V-Line 4
-    { matrix: [[1, 1, 1, 1, 1]], weight: 1 }, // H-Line 5
-    { matrix: [[1], [1], [1], [1], [1]], weight: 1 }, // V-Line 5
-    { matrix: [[1, 1], [1, 1]], weight: 5 }, // Square 2x2 (Common)
-    { matrix: [[1, 1, 1], [1, 1, 1], [1, 1, 1]], weight: 2 }, // Square 3x3
-    { matrix: [[1, 1, 0], [0, 1, 1]], weight: 3 }, // Z
-    { matrix: [[0, 1, 1], [1, 1, 0]], weight: 3 }, // S
-    { matrix: [[1, 1, 1], [0, 1, 0]], weight: 4 }, // T
-    { matrix: [[1, 0], [1, 0], [1, 1]], weight: 4 }, // L
-    { matrix: [[0, 1], [0, 1], [1, 1]], weight: 4 }, // J
-    { matrix: [[1, 1], [1, 0]], weight: 5 }, // Small L
-    { matrix: [[1, 0, 0], [1, 0, 0], [1, 1, 1]], weight: 2 }, // Big L
-    { matrix: [[1, 1, 1], [1, 0, 1]], weight: 2 }, // U
-    { matrix: [[1, 0], [1, 1]], weight: 4 }, // Small corner
+const SHAPE_DEFINITIONS: { matrix: number[][], weight: number, difficulty: 'easy'|'medium'|'hard' }[] = [
+    { matrix: [[1]], weight: 2, difficulty: 'easy' }, // Dot
+    { matrix: [[1, 1]], weight: 4, difficulty: 'easy' }, // H-Line 2
+    { matrix: [[1], [1]], weight: 4, difficulty: 'easy' }, // V-Line 2
+    { matrix: [[1, 1, 1]], weight: 4, difficulty: 'easy' }, // H-Line 3
+    { matrix: [[1], [1], [1]], weight: 4, difficulty: 'easy' }, // V-Line 3
+    { matrix: [[1, 1], [1, 0]], weight: 5, difficulty: 'easy' }, // Small L
+    { matrix: [[1, 0], [1, 1]], weight: 5, difficulty: 'easy' }, // Small corner
+    
+    { matrix: [[1, 1, 1, 1]], weight: 3, difficulty: 'medium' }, // H-Line 4
+    { matrix: [[1], [1], [1], [1]], weight: 3, difficulty: 'medium' }, // V-Line 4
+    { matrix: [[1, 1], [1, 1]], weight: 5, difficulty: 'medium' }, // Square 2x2
+    { matrix: [[1, 1, 0], [0, 1, 1]], weight: 3, difficulty: 'medium' }, // Z
+    { matrix: [[0, 1, 1], [1, 1, 0]], weight: 3, difficulty: 'medium' }, // S
+    { matrix: [[1, 1, 1], [0, 1, 0]], weight: 4, difficulty: 'medium' }, // T
+    { matrix: [[1, 0], [1, 0], [1, 1]], weight: 4, difficulty: 'medium' }, // L
+    { matrix: [[0, 1], [0, 1], [1, 1]], weight: 4, difficulty: 'medium' }, // J
+
+    { matrix: [[1, 1, 1, 1, 1]], weight: 2, difficulty: 'hard' }, // H-Line 5
+    { matrix: [[1], [1], [1], [1], [1]], weight: 2, difficulty: 'hard' }, // V-Line 5
+    { matrix: [[1, 1, 1], [1, 1, 1], [1, 1, 1]], weight: 2, difficulty: 'hard' }, // Square 3x3
+    { matrix: [[1, 0, 0], [1, 0, 0], [1, 1, 1]], weight: 2, difficulty: 'hard' }, // Big L
+    { matrix: [[1, 1, 1], [1, 0, 1]], weight: 2, difficulty: 'hard' }, // U
 ];
 
 interface BlockBlastScreenProps {
   user: User;
   onBack: () => void;
   onFinish: (result: GameResult) => void;
-  onUpdateHearts: (hearts: number) => void;
+  onUpdateHearts: (newPlays: number) => void;
 }
 
 // --- Audio System (Web Audio API) ---
@@ -183,6 +187,17 @@ const vibrate = (pattern: number | number[] = 10) => {
     }
 };
 
+const getFrameStyle = (frameId?: string) => {
+    switch(frameId) {
+      case 'frame_gold': return 'ring-2 ring-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+      case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
+      case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
+      case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
+      case 'frame_beta': return 'ring-2 ring-amber-500 border-2 border-dashed border-yellow-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]';
+      default: return 'ring-2 ring-white/20';
+    }
+};
+
 export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack, onFinish, onUpdateHearts }) => {
     // --- State ---
     const [grid, setGrid] = useState<(string | null)[][]>(
@@ -193,6 +208,9 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const [gameOver, setGameOver] = useState(false);
     const [gameStarted, setGameStarted] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
+    const [activeTab, setActiveTab] = useState<'play' | 'rank'>('play');
+    const [leaderboard, setLeaderboard] = useState<GameLeaderboardEntry[]>([]);
+    const [showHelp, setShowHelp] = useState(false);
     
     const [clearingRows, setClearingRows] = useState<number[]>([]);
     const [clearingCols, setClearingCols] = useState<number[]>([]);
@@ -209,6 +227,15 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     } | null>(null);
 
     const gridRef = useRef<HTMLDivElement>(null);
+
+    // Load Leaderboard
+    useEffect(() => {
+        const loadRank = async () => {
+            const data = await fetchGameLeaderboard();
+            setLeaderboard(data);
+        };
+        loadRank();
+    }, [activeTab]);
 
     useEffect(() => {
         synth.isMuted = isMuted;
@@ -233,51 +260,137 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         return () => window.removeEventListener('resize', updateSize);
     }, [gameStarted]);
 
-    // --- Generation Logic (Weighted) ---
-    const generateNewShapes = () => {
-        const newShapes: Shape[] = [];
-        const totalWeight = SHAPE_DEFINITIONS.reduce((sum, item) => sum + item.weight, 0);
-
-        for (let i = 0; i < 3; i++) {
-            // Weighted Random
-            let randomNum = Math.random() * totalWeight;
-            let selectedDef = SHAPE_DEFINITIONS[0].matrix;
-            
-            for (const item of SHAPE_DEFINITIONS) {
-                if (randomNum < item.weight) {
-                    selectedDef = item.matrix;
-                    break;
+    // --- ALGORITHM: Smart Shape Generation ---
+    
+    const canPlace = (currentGrid: (string | null)[][], matrix: number[][], r: number, c: number) => {
+        for (let i = 0; i < matrix.length; i++) {
+            for (let j = 0; j < matrix[i].length; j++) {
+                if (matrix[i][j] === 1) {
+                    const newR = r + i;
+                    const newC = c + j;
+                    if (newR < 0 || newR >= BOARD_SIZE || newC < 0 || newC >= BOARD_SIZE) return false;
+                    if (currentGrid[newR][newC] !== null) return false;
                 }
-                randomNum -= item.weight;
             }
-
-            const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
-            newShapes.push({
-                matrix: selectedDef,
-                id: Math.random().toString(36).substr(2, 9),
-                color
-            });
         }
-        return newShapes;
+        return true;
+    };
+
+    const isShapePlaceable = (currentGrid: (string | null)[][], matrix: number[][]) => {
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                if (canPlace(currentGrid, matrix, r, c)) return true;
+            }
+        }
+        return false;
+    };
+
+    const getRandomShape = (difficultyFilter?: 'easy' | 'medium' | 'hard') => {
+        let pool = SHAPE_DEFINITIONS;
+        
+        // If strict difficulty is requested
+        if (difficultyFilter) {
+            pool = SHAPE_DEFINITIONS.filter(s => s.difficulty === difficultyFilter);
+            if (pool.length === 0) pool = SHAPE_DEFINITIONS; // Fallback
+        }
+
+        const totalWeight = pool.reduce((sum, item) => sum + item.weight, 0);
+        let randomNum = Math.random() * totalWeight;
+        
+        for (const item of pool) {
+            if (randomNum < item.weight) {
+                const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
+                return {
+                    matrix: item.matrix,
+                    id: Math.random().toString(36).substr(2, 9),
+                    color,
+                    difficulty: item.difficulty
+                };
+            }
+            randomNum -= item.weight;
+        }
+        // Fallback safety
+        return {
+            matrix: SHAPE_DEFINITIONS[0].matrix,
+            id: Date.now().toString(),
+            color: BLOCK_COLORS[0],
+            difficulty: 'easy' as const
+        };
+    };
+
+    // The Core Algorithm: Safety Generation
+    const generateNewShapes = (currentGrid: (string | null)[][], currentScore: number) => {
+        const newShapes: Shape[] = [];
+        
+        // 1. Determine Difficulty Mix based on Score
+        // Score < 500: Mostly Easy
+        // Score > 2000: Intro Hard
+        let difficultyBias: 'easy' | 'medium' | 'hard' = 'easy';
+        if (currentScore > 2000) difficultyBias = 'hard';
+        else if (currentScore > 500) difficultyBias = 'medium';
+
+        // 2. Look-ahead: Find shapes that CAN fit right now
+        // We check ALL definitions to find fitting ones
+        const fittingDefinitions = SHAPE_DEFINITIONS.filter(def => 
+            isShapePlaceable(currentGrid, def.matrix)
+        );
+
+        // 3. Generate 3 Shapes
+        // Rule: At least 1 shape MUST be playable (Safety Block)
+        
+        // Slot 1: The Safety Block
+        if (fittingDefinitions.length > 0) {
+            // Pick a fitting shape, preferably matching current difficulty bias if possible, else random fitting
+            const fittingAndBiased = fittingDefinitions.filter(d => d.difficulty === difficultyBias || d.difficulty === 'easy');
+            const pool = fittingAndBiased.length > 0 ? fittingAndBiased : fittingDefinitions;
+            
+            const selectedDef = pool[Math.floor(Math.random() * pool.length)];
+            const color = BLOCK_COLORS[Math.floor(Math.random() * BLOCK_COLORS.length)];
+            
+            newShapes.push({
+                matrix: selectedDef.matrix,
+                id: Math.random().toString(36),
+                color,
+                difficulty: selectedDef.difficulty
+            });
+        } else {
+            // If NO shape fits, the game is truly over. Just generate random (CheckGameOver will catch it).
+            newShapes.push(getRandomShape('easy'));
+        }
+
+        // Slot 2 & 3: Random based on difficulty bias
+        // At higher scores, we allow harder shapes, but we still mix in some easier ones to avoid frustration
+        for (let i = 0; i < 2; i++) {
+            // 20% chance to be strictly easier than current bias to help player
+            const forceEasy = Math.random() < 0.2;
+            const targetDiff = forceEasy ? 'easy' : difficultyBias;
+            newShapes.push(getRandomShape(targetDiff));
+        }
+
+        // Shuffle the array so the "safe" block isn't always first
+        return newShapes.sort(() => 0.5 - Math.random());
     };
 
     const startGame = () => {
-        if (user.hearts <= 0) {
-            alert("今日遊玩次數已達上限！");
+        if (user.dailyPlays >= MAX_PLAYS) {
+            alert("今日遊玩次數已達 15 次上限！");
             return;
         }
-        onUpdateHearts(user.hearts - 1);
+        // Increment plays
+        onUpdateHearts(user.dailyPlays + 1);
         
         synth.init();
         synth.playSFX('select');
         synth.startBGM();
 
-        setGrid(Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null)));
+        const emptyGrid = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+        setGrid(emptyGrid);
         setScore(0);
         setComboCount(0);
         setGameOver(false);
         setGameStarted(true);
-        setDockShapes(generateNewShapes());
+        // Initial generation on empty grid is always safe
+        setDockShapes(generateNewShapes(emptyGrid, 0));
         
         setTimeout(() => {
              if (gridRef.current) {
@@ -293,39 +406,20 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
         for (const shape of availableShapes) {
             if (!shape) continue;
-            for (let r = 0; r < BOARD_SIZE; r++) {
-                for (let c = 0; c < BOARD_SIZE; c++) {
-                    if (canPlace(currentGrid, shape.matrix, r, c)) {
-                        return false; 
-                    }
-                }
+            if (isShapePlaceable(currentGrid, shape.matrix)) {
+                return false; // Found at least one move
             }
         }
-        return true; 
+        return true; // No moves left
     }, []);
 
-    const canPlace = (currentGrid: (string | null)[][], matrix: number[][], r: number, c: number) => {
-        for (let i = 0; i < matrix.length; i++) {
-            for (let j = 0; j < matrix[i].length; j++) {
-                if (matrix[i][j] === 1) {
-                    const newR = r + i;
-                    const newC = c + j;
-                    if (newR < 0 || newR >= BOARD_SIZE || newC < 0 || newC >= BOARD_SIZE) return false;
-                    if (currentGrid[newR][newC] !== null) return false;
-                }
-            }
-        }
-        return true;
-    };
-
-    // --- Drag Logic (Improved) ---
+    // --- Drag Logic ---
 
     const handleDragStart = (e: React.MouseEvent | React.TouchEvent, index: number) => {
         if (gameOver) return;
         const shape = dockShapes[index];
         if (!shape) return;
 
-        // Ensure we get coordinates correctly
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
 
@@ -342,8 +436,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
         if (!draggingShape) return;
-        
-        // Prevent default to stop scrolling on mobile
         if (e.cancelable) e.preventDefault();
 
         const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
@@ -356,15 +448,12 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         if (!gridRef.current || boardCellSize === 0) return null;
         const rect = gridRef.current.getBoundingClientRect();
         
-        // Visual Center is where the finger is
         const visualCenterX = mouseX;
-        // Actual Block Center is visually offset upwards so finger doesn't cover it
         const visualCenterY = mouseY - TOUCH_OFFSET_Y;
 
         const shapeWidthPx = shape.matrix[0].length * boardCellSize;
         const shapeHeightPx = shape.matrix.length * boardCellSize;
 
-        // Calculate Top-Left of shape
         const shapeTopLeftX = visualCenterX - (shapeWidthPx / 2);
         const shapeTopLeftY = visualCenterY - (shapeHeightPx / 2);
 
@@ -396,7 +485,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
         if (draggingShape) {
             window.addEventListener('mousemove', handleDragMove);
             window.addEventListener('mouseup', handleDragEnd);
-            // Use { passive: false } to allow preventDefault for scroll locking
             window.addEventListener('touchmove', handleDragMove, { passive: false });
             window.addEventListener('touchend', handleDragEnd);
         }
@@ -473,8 +561,10 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const checkRegenAndGameOver = (currentGrid: (string|null)[][], currentDock: (Shape|null)[], newScore: number) => {
         let nextDock = currentDock;
+        
+        // If dock empty, regenerate SAFELY
         if (currentDock.every(s => s === null)) {
-            nextDock = generateNewShapes();
+            nextDock = generateNewShapes(currentGrid, newScore);
             setDockShapes(nextDock);
         }
         setScore(newScore);
@@ -495,7 +585,12 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     const handleSubmitScore = async () => {
         try {
             await submitGameScore(user, score);
-            await onFinish({ score, maxCombo: 0, correctCount: 0 }); 
+            // Calculate PT: 100 Score = 1 PT
+            // Bonus: > 5000 score = +50 PT extra
+            let pt = Math.floor(score / 100);
+            if (score >= 5000) pt += 50;
+            
+            await onFinish({ score, maxCombo: 0, correctCount: Math.floor(pt) }); 
             onBack();
         } catch(e) {
             alert("上傳失敗");
@@ -533,12 +628,9 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
 
     const renderGhost = () => {
         if (!draggingShape || !gridRef.current || boardCellSize === 0) return null;
-        
         const target = getDropTarget(draggingShape.x, draggingShape.y, draggingShape.shape);
         if (!target) return null;
-
         const { r, c } = target;
-
         if (!canPlace(grid, draggingShape.shape.matrix, r, c)) return null;
 
         const ghosts = [];
@@ -569,17 +661,8 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
     return (
         <div 
             className={`fixed inset-0 z-50 bg-[#1e1e2e] flex flex-col items-center select-none overflow-hidden transition-transform ${screenShake ? 'animate-[shake_0.3s_ease-in-out]' : ''}`} 
-            style={{ touchAction: 'none' }} // Critical for disabling browser gestures
+            style={{ touchAction: 'none' }}
         >
-            <style>{`
-                @keyframes shake {
-                    0%, 100% { transform: translate(0, 0); }
-                    25% { transform: translate(-5px, 5px); }
-                    50% { transform: translate(5px, -5px); }
-                    75% { transform: translate(-5px, -5px); }
-                }
-            `}</style>
-            
             {/* Header */}
             <div className="w-full bg-[#181825] p-4 pt-safe flex justify-between items-center shadow-lg z-10 border-b border-gray-800">
                 <button onClick={() => { synth.stopBGM(); onBack(); }} className="p-2 -ml-2 rounded-full hover:bg-gray-700 text-gray-400">
@@ -590,36 +673,90 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                     <span className="text-3xl font-black text-white font-mono leading-none">{score}</span>
                 </div>
                 <div className="flex gap-2">
+                    {!gameStarted && (
+                        <button onClick={() => setShowHelp(true)} className="text-gray-500 hover:text-white">
+                            <BookOpen size={20}/>
+                        </button>
+                    )}
                     <button onClick={() => setIsMuted(!isMuted)} className="text-gray-500 hover:text-white">
                         {isMuted ? <VolumeX size={20}/> : <Volume2 size={20}/>}
                     </button>
-                    <button onClick={startGame} className="text-gray-500 hover:text-white"><RefreshCw size={20}/></button>
+                    {gameStarted && (
+                        <button onClick={startGame} className="text-gray-500 hover:text-white"><RefreshCw size={20}/></button>
+                    )}
                 </div>
             </div>
 
             {!gameStarted ? (
                 // --- Start Menu ---
-                <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8 w-full max-w-sm animate-in fade-in zoom-in duration-300">
-                    <div className="text-center space-y-2">
-                        <div className="w-24 h-24 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.5)] mb-6 rotate-3 hover:rotate-6 transition-transform">
-                            <Grid3X3 size={48} className="text-white drop-shadow-md" />
-                        </div>
-                        <h1 className="text-4xl font-black text-white tracking-tight">BLOCK BLAST</h1>
-                        <p className="text-gray-400 font-medium">拖曳 • 填滿 • 消除</p>
+                <div className="flex-1 w-full max-w-md flex flex-col overflow-hidden">
+                    {/* Tabs */}
+                    <div className="flex bg-[#252535] p-1 mx-6 mt-4 rounded-xl">
+                        <button 
+                            onClick={() => setActiveTab('play')}
+                            className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === 'play' ? 'bg-[#3b82f6] text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            <Zap size={16} /> 挑戰
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('rank')}
+                            className={`flex-1 py-2.5 rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === 'rank' ? 'bg-[#3b82f6] text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            <Trophy size={16} /> 排行榜
+                        </button>
                     </div>
 
-                    <div className="w-full space-y-3">
-                         <button 
-                            onClick={startGame}
-                            className="w-full py-5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-2xl font-black text-xl shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-transform active:scale-95 border-b-4 border-blue-800"
-                         >
-                            <Zap size={24} className="fill-white" />
-                            開始遊戲
-                        </button>
-                        <p className="text-center text-xs text-gray-500 font-medium bg-gray-800/50 py-2 rounded-full">
-                            消耗 1 愛心 • 剩餘: {user.hearts}
-                        </p>
-                    </div>
+                    {activeTab === 'play' ? (
+                        <div className="flex-1 flex flex-col items-center justify-center p-6 space-y-8 animate-in fade-in zoom-in duration-300">
+                            <div className="text-center space-y-2">
+                                <div className="w-24 h-24 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-3xl mx-auto flex items-center justify-center shadow-[0_0_30px_rgba(6,182,212,0.5)] mb-6 rotate-3 hover:rotate-6 transition-transform">
+                                    <Grid3X3 size={48} className="text-white drop-shadow-md" />
+                                </div>
+                                <h1 className="text-4xl font-black text-white tracking-tight">BLOCK BLAST</h1>
+                                <p className="text-gray-400 font-medium">拖曳 • 填滿 • 消除</p>
+                            </div>
+
+                            <div className="w-full space-y-3">
+                                <button 
+                                    onClick={startGame}
+                                    className="w-full py-5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-2xl font-black text-xl shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2 transition-transform active:scale-95 border-b-4 border-blue-800"
+                                >
+                                    <Zap size={24} className="fill-white" />
+                                    開始遊戲
+                                </button>
+                                <p className="text-center text-xs text-gray-500 font-medium bg-gray-800/50 py-2 rounded-full">
+                                    消耗 1 愛心 • 剩餘: {Math.max(0, MAX_PLAYS - user.dailyPlays)}
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex-1 overflow-y-auto p-6 space-y-3 no-scrollbar">
+                            <h3 className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 flex items-center gap-2">
+                                <Crown size={14} className="text-yellow-500"/> 本週高分
+                            </h3>
+                            {leaderboard.length === 0 ? (
+                                <div className="text-center text-gray-500 py-10">暫無紀錄</div>
+                            ) : (
+                                leaderboard.map((entry, idx) => (
+                                    <div key={idx} className="bg-[#252535] p-3 rounded-xl flex items-center border border-gray-700/50">
+                                        <div className={`w-8 text-center font-black text-lg italic ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-500' : 'text-blue-300'}`}>
+                                            {entry.rank}
+                                        </div>
+                                        <div className={`w-10 h-10 rounded-full mx-3 ${entry.avatarColor} flex items-center justify-center font-bold text-white text-xs ${getFrameStyle(entry.avatarFrame)} overflow-hidden`}>
+                                            {entry.name[0]}
+                                        </div>
+                                        <div className="flex-1">
+                                            <span className="font-bold text-sm text-gray-200 block">{entry.name}</span>
+                                            <span className="text-[10px] text-gray-500">Score</span>
+                                        </div>
+                                        <div className="font-mono font-bold text-blue-400">
+                                            {entry.score}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    )}
                 </div>
             ) : (
                 // --- Game Board ---
@@ -655,11 +792,7 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                                 );
                             })
                         )}
-                        
-                        {/* Ghost Preview */}
                         {renderGhost()}
-
-                        {/* Combo Popup */}
                         {comboCount > 1 && (
                             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
                                 <div className="text-6xl font-black text-yellow-400 drop-shadow-[0_0_10px_rgba(234,179,8,0.8)] animate-bounce stroke-black italic">
@@ -697,7 +830,6 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                             style={{
                                 left: draggingShape.x,
                                 top: draggingShape.y,
-                                // Offset visual slightly up so finger doesn't cover it
                                 transform: `translate(-50%, -50%) translateY(-${TOUCH_OFFSET_Y}px)`, 
                             }}
                         >
@@ -716,17 +848,58 @@ export const BlockBlastScreen: React.FC<BlockBlastScreenProps> = ({ user, onBack
                                 <h2 className="text-2xl font-black text-white mb-2">無法移動!</h2>
                                 <div className="text-5xl font-mono font-black text-blue-400 mb-6 drop-shadow-lg">{score}</div>
                                 
+                                <div className="bg-blue-900/30 p-4 rounded-xl mb-6 text-left">
+                                    <h3 className="text-blue-300 font-bold text-xs mb-2 flex items-center gap-1">
+                                        <Coins size={12} /> PT 獎勵計算
+                                    </h3>
+                                    <ul className="text-xs text-gray-400 space-y-1">
+                                        <li>基礎：{Math.floor(score/100)} (每100分=1PT)</li>
+                                        {score >= 5000 && <li className="text-yellow-400">滿分加成：+50</li>}
+                                    </ul>
+                                </div>
+
                                 <button 
                                     onClick={handleSubmitScore}
                                     className="w-full py-4 bg-white text-gray-900 rounded-xl font-bold shadow-lg hover:scale-105 transition-transform flex items-center justify-center gap-2"
                                 >
                                     <Crown size={20} className="text-yellow-500 fill-current" />
-                                    領取獎勵 ({Math.floor(score/10)} PT)
+                                    領取獎勵
                                 </button>
-                                <p className="text-xs text-gray-500 mt-3">每 10 分獲得 1 PT</p>
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Help Modal */}
+            {showHelp && (
+                <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in">
+                    <div className="bg-[#252535] w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-700">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <BookOpen size={20} className="text-blue-400"/> 遊戲說明
+                            </h3>
+                            <button onClick={() => setShowHelp(false)} className="bg-gray-700 p-1 rounded-full text-white">
+                                <X size={16}/>
+                            </button>
+                        </div>
+                        <div className="space-y-4 text-sm text-gray-300">
+                            <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
+                                <h4 className="font-bold text-white mb-1 flex items-center gap-2"><Zap size={14} className="text-yellow-400"/> 智慧生成系統 v2.0</h4>
+                                <p className="text-xs leading-relaxed">
+                                    我們優化了方塊生成演算法！現在系統會確保每次生成的 3 個方塊中，<span className="text-green-400 font-bold">至少有 1 個</span>可以放入當前棋盤，告別無解死局。
+                                </p>
+                            </div>
+                            <div className="bg-gray-800/50 p-3 rounded-xl border border-gray-700">
+                                <h4 className="font-bold text-white mb-1 flex items-center gap-2"><Coins size={14} className="text-blue-400"/> PT 獲取規則</h4>
+                                <ul className="text-xs space-y-1 list-disc list-inside">
+                                    <li>基礎獎勵：<span className="text-white font-bold">每 100 分 = 1 PT</span></li>
+                                    <li>高分獎勵：單局超過 5000 分，額外獲得 <span className="text-yellow-400 font-bold">50 PT</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowHelp(false)} className="w-full mt-6 py-3 bg-blue-600 text-white rounded-xl font-bold">了解</button>
+                    </div>
                 </div>
             )}
         </div>

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle } from 'lucide-react';
-import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry, PkMistake } from '../types';
+import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle, Users, Copy, Play, Sparkles, Check, HeartCrack, Ban, Target, Bot, Repeat, Shuffle, Split, Flame, Lock } from 'lucide-react';
+import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry, PkMistake, PkGameMode, OverloadLevel } from '../types';
 import { WORD_DATABASE } from '../services/mockData';
 import { joinMatchmaking, leaveMatchmaking, joinGameRoom, leaveGameRoom, sendGameEvent } from '../services/pkService';
 import { fetchPkLeaderboard } from '../services/dataService';
@@ -10,9 +10,35 @@ interface PkGameScreenProps {
   user: User;
   onBack: () => void;
   onFinish: (result: PkResult) => void;
+  initialMode?: PkGameMode; // Allow entering directly into a mode
 }
 
-// --- Ranks System ---
+// --- Constants & Config ---
+const AI_NAMES = ['拼字大師兄', '手滑的約翰', '路過的字典精', '只會 A 到 Z', '單字終結者', '阿發 Doge', '全自動滿分機器'];
+const AI_AVATAR_COLORS = ['bg-purple-500', 'bg-indigo-500', 'bg-pink-500', 'bg-green-500', 'bg-gray-600'];
+
+const SKILL_NAMES: Record<SkillType, string> = {
+    HEAL: '治癒',
+    SHIELD: '護盾',
+    CRIT: '爆擊',
+    BLIND: '致盲',
+    MIRROR: '鏡像',
+    CHAOS: '混亂',
+    FIFTY_FIFTY: '孤注',
+    NONE: ''
+};
+
+const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
+    HEAL: '回復 150 HP',
+    SHIELD: '抵擋下一次傷害',
+    CRIT: '下一次攻擊傷害 x1.5',
+    BLIND: '遮蔽對手螢幕 3 秒',
+    MIRROR: '反彈本回合傷害 (消耗回合)',
+    CHAOS: '打亂對手選項並隱藏 2 秒',
+    FIFTY_FIFTY: '防禦時刪除兩個錯誤選項',
+    NONE: ''
+};
+
 const RANKS = [
     { name: '青銅', color: 'text-orange-700 border-orange-700', min: 0, bg: 'bg-orange-900/30' },
     { name: '白銀', color: 'text-gray-300 border-gray-400', min: 1000, bg: 'bg-gray-800/50' },
@@ -38,7 +64,7 @@ const getFrameStyle = (frameId?: string) => {
     }
 };
 
-const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill' | 'block' | 'card_flip' | 'tick') => {
+const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill' | 'block' | 'card_flip' | 'tick' | 'charge' | 'warning' | 'shatter') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
@@ -68,9 +94,28 @@ const playSound = (type: 'match' | 'attack' | 'damage' | 'win' | 'lose' | 'skill
         osc.frequency.setValueAtTime(800, now);
         gain.gain.setValueAtTime(0.05, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    } else if (type === 'charge') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.linearRampToValueAtTime(600, now + 0.5);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.5);
+    } else if (type === 'warning') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(400, now);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.setValueAtTime(0, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now + 0.2);
+        gain.gain.setValueAtTime(0, now + 0.3);
+    } else if (type === 'shatter') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
     }
     osc.start(now);
-    osc.stop(now + 0.3);
+    osc.stop(now + 0.5);
   } catch(e) {}
 };
 
@@ -79,37 +124,56 @@ const DAMAGE_PER_HIT = 150;
 const TOTAL_ROUNDS = 10;
 const TURN_TIME_LIMIT = 15; // Seconds
 
-type BattlePhase = 'menu' | 'matching' | 'connecting' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
+// Overload Scaling
+const CHARGE_LEVELS: Record<OverloadLevel, { cost: number, multiplier: number, name: string, color: string }> = {
+    1: { cost: 0, multiplier: 1, name: '安全 Lv1', color: 'bg-green-500' },
+    2: { cost: 100, multiplier: 1.5, name: '施壓 Lv2', color: 'bg-orange-500' },
+    3: { cost: 200, multiplier: 2.5, name: '梭哈 Lv3', color: 'bg-red-600' }
+};
 
-const RankOverviewModal = ({ onClose }: { onClose: () => void }) => (
-    <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-        <div className="bg-gray-900 w-full max-w-sm rounded-2xl border border-gray-700 overflow-hidden shadow-2xl">
-            <div className="p-4 border-b border-gray-800 flex justify-between items-center bg-gray-800">
-                <h3 className="font-bold text-white flex items-center gap-2"><Trophy size={18} className="text-yellow-500" /> 段位一覽</h3>
-                <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={20}/></button>
-            </div>
-            <div className="p-4 space-y-2">
-                {RANKS.map(rank => (
-                    <div key={rank.name} className="flex justify-between items-center p-3 rounded-lg bg-gray-800/50 border border-gray-700/50">
-                        <div className={`font-bold ${rank.color.split(' ')[0]}`}>{rank.name}</div>
-                        <div className="text-xs text-gray-400 font-mono">{rank.min}+ PT</div>
-                    </div>
-                ))}
+type BattlePhase = 'mode_select' | 'menu' | 'matching' | 'connecting' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
+
+const CustomRoomModal = ({ onClose, onJoin }: { onClose: () => void, onJoin: (code: string) => void }) => {
+    const [code, setCode] = useState('');
+    return (
+        <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl border border-gray-700">
+                <h3 className="text-lg font-bold text-white mb-4 text-center">加入私人房間</h3>
+                <input 
+                    type="number" 
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.slice(0, 6))}
+                    placeholder="輸入 6 位數房號"
+                    className="w-full bg-gray-900 text-white text-center text-2xl font-mono tracking-widest py-3 rounded-xl border border-gray-600 mb-4 focus:border-blue-500 outline-none"
+                />
+                <div className="flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl font-bold">取消</button>
+                    <button 
+                        onClick={() => code.length >= 4 && onJoin(code)} 
+                        disabled={code.length < 4}
+                        className="flex-1 py-3 bg-blue-600 disabled:bg-gray-600 text-white rounded-xl font-bold"
+                    >
+                        加入
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
-export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFinish }) => {
-  const [phase, setPhase] = useState<BattlePhase>('menu');
-  const [menuTab, setMenuTab] = useState<'lobby' | 'rank' | 'help'>('lobby');
+export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFinish, initialMode }) => {
+  const [phase, setPhase] = useState<BattlePhase>(initialMode ? 'menu' : 'mode_select');
+  const [gameMode, setGameMode] = useState<PkGameMode>(initialMode || 'CLASSIC');
+  
+  const [menuTab, setMenuTab] = useState<'lobby' | 'rank' | 'rules'>('lobby');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [isLoadingRank, setIsLoadingRank] = useState(false);
+  
   const [matchStatus, setMatchStatus] = useState("正在掃描對手訊號...");
-  const [showRankModal, setShowRankModal] = useState(false);
+  const [showRoomInput, setShowRoomInput] = useState(false);
+  const [showAiPrompt, setShowAiPrompt] = useState(false);
   
-  // Stable Room ID State - Key to fixing the connection drop
   const [roomId, setRoomId] = useState<string | null>(null);
-  
   const [opponent, setOpponent] = useState<PkPlayerState | null>(null);
   
   const [myHp, setMyHp] = useState(MAX_HP);
@@ -123,11 +187,22 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [incomingSkill, setIncomingSkill] = useState<SkillType>('NONE'); 
   const [defenseOptions, setDefenseOptions] = useState<string[]>([]); 
   const [blindEffect, setBlindEffect] = useState(false); 
+  const [chaosEffect, setChaosEffect] = useState(false); // For Overload Mode
+  
+  // Overload Specific State
+  const [selectedAttackCard, setSelectedAttackCard] = useState<BattleCard | null>(null);
+  const [chargeLevel, setChargeLevel] = useState<OverloadLevel>(1);
+  const [incomingCharge, setIncomingCharge] = useState<OverloadLevel>(1);
+  const [showChargePanel, setShowChargePanel] = useState(false);
+  const [isAdrenaline, setIsAdrenaline] = useState(false);
+  const [perfectParryTriggered, setPerfectParryTriggered] = useState(false);
   
   const [myActionSent, setMyActionSent] = useState(false);
   const [opActionReceived, setOpActionReceived] = useState(false);
+  
+  const [myLastAction, setMyLastAction] = useState<{type: 'WORD' | 'SKILL', id: string, charge?: number} | null>(null);
   const [myDefenseResult, setMyDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
-  const [opDefenseResult, setOpDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | null>(null);
+  const [opDefenseResult, setOpDefenseResult] = useState<'success' | 'fail' | 'skill_hit' | 'backlash' | null>(null);
   
   const [battleLog, setBattleLog] = useState<string>("");
   const [turnTimeLeft, setTurnTimeLeft] = useState(TURN_TIME_LIMIT);
@@ -136,57 +211,61 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   const timeoutFallbackRef = useRef<number | null>(null);
   const turnTimerRef = useRef<number | null>(null);
+  const aiAttackTimerRef = useRef<number | null>(null);
+  const aiDefendTimerRef = useRef<number | null>(null);
+  const roundSummaryTimerRef = useRef<number | null>(null); 
+  const answerStartTimeRef = useRef<number>(0);
 
   // --- 0. Data Loading ---
   useEffect(() => {
       if (phase === 'menu' && menuTab === 'rank') {
           const loadLeaderboard = async () => {
-              const data = await fetchPkLeaderboard();
-              const padded = [...data];
-              while(padded.length < 10) {
-                  padded.push({
-                      rank: padded.length + 1,
-                      name: '虛位以待',
-                      studentId: 'placeholder',
-                      points: 0,
-                      level: 0,
-                      avatarColor: 'bg-gray-800',
-                      avatarFrame: undefined
-                  });
-              }
-              setLeaderboard(padded);
+              setIsLoadingRank(true);
+              const data = await fetchPkLeaderboard(gameMode);
+              setLeaderboard(data);
+              setIsLoadingRank(false);
           };
           loadLeaderboard();
       }
-  }, [phase, menuTab]);
+  }, [phase, menuTab, gameMode]);
+
+  // Check Adrenaline
+  useEffect(() => {
+      if (gameMode === 'OVERLOAD' && myHp < MAX_HP * 0.3) {
+          setIsAdrenaline(true);
+      } else {
+          setIsAdrenaline(false);
+      }
+  }, [myHp, gameMode]);
 
   // --- 1. Matchmaking Logic ---
   useEffect(() => {
       if (phase === 'matching') {
           setMatchStatus("正在掃描對手訊號...");
+          setShowAiPrompt(false);
+
           joinMatchmaking(
               user,
               (op, foundRoomId, host) => {
+                  if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
                   setOpponent(op);
                   setMatchStatus("配對成功！連線中...");
                   playSound('match');
-                  
-                  // CRITICAL FIX: Set Room ID state to trigger the game connection effect
                   setRoomId(foundRoomId);
                   setPhase('connecting');
               },
               (status) => setMatchStatus(status)
           );
           
+          // AI Fallback Timer (15s)
           timeoutFallbackRef.current = window.setTimeout(() => {
               if (phase === 'matching') {
-                  setMatchStatus("無人回應，請稍後再試");
+                  setMatchStatus("似乎沒有真人玩家...");
+                  setShowAiPrompt(true);
               }
-          }, 20000);
+          }, 15000);
       }
 
-      // Cleanup: Leave matchmaking if we leave the matching phase
-      // Note: We do NOT leave game room here. Game room is managed by the roomId effect.
       return () => {
           if (phase === 'matching') {
               leaveMatchmaking();
@@ -195,45 +274,190 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       };
   }, [phase]);
 
-  // --- 2. Game Connection Logic (Separated) ---
+  // --- Auto-Advance Round Logic ---
   useEffect(() => {
-      if (roomId && user.studentId) {
-          // Leave matchmaking now that we have a room
+      if (phase === 'round_summary') {
+          if (roundSummaryTimerRef.current) clearTimeout(roundSummaryTimerRef.current);
+          roundSummaryTimerRef.current = window.setTimeout(() => {
+              if (round < TOTAL_ROUNDS && myHp > 0 && opHp > 0) {
+                  setRound(prev => prev + 1);
+                  startRound();
+              } else {
+                  setPhase('result');
+              }
+          }, 3500);
+      }
+      return () => { if (roundSummaryTimerRef.current) clearTimeout(roundSummaryTimerRef.current); };
+  }, [phase, round, myHp, opHp]);
+
+  const startAiMatch = () => {
+      const randomName = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
+      const randomColor = AI_AVATAR_COLORS[Math.floor(Math.random() * AI_AVATAR_COLORS.length)];
+      
+      const aiOpponent: PkPlayerState = {
+          studentId: 'ai_bot',
+          name: randomName,
+          avatarColor: randomColor,
+          level: Math.floor(Math.random() * 5) + 3,
+          status: 'playing',
+          joinedAt: Date.now(),
+          isAi: true
+      };
+
+      setOpponent(aiOpponent);
+      setMatchStatus("已連接至訓練機器人");
+      playSound('match');
+      setPhase('ready');
+      setTimeout(startRound, 2000);
+  };
+
+  // --- 2. Game Connection Logic (Realtime) ---
+  useEffect(() => {
+      if (roomId && user.studentId && opponent && !opponent.isAi) {
           leaveMatchmaking();
           if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
-
-          console.log("Initializing Game Connection to", roomId);
           
           joinGameRoom(
               roomId, 
               user.studentId, 
               handleGameEvent,
-              () => { // On Opponent Left
-                  console.log("Opponent Left via Presence");
-                  handleOpponentLeft();
-              },
-              () => { // On Room Ready (Both Players Connected)
-                  console.log("Room Ready - 2 Players Present!");
+              () => handleOpponentLeft(),
+              () => {
                   setPhase('ready');
                   setTimeout(startRound, 2000);
               }
           );
       }
-
       return () => {
-          // Only leave game room when component unmounts or roomId is cleared
-          if (roomId) {
-              leaveGameRoom();
-          }
+          if (roomId) leaveGameRoom();
       };
-  }, [roomId]); // Only re-run if roomId changes
+  }, [roomId, opponent]);
+
+  // --- AI Logic Engine ---
+  useEffect(() => {
+      if (!opponent?.isAi || phase === 'menu' || phase === 'result') return;
+      
+      if (!opActionReceived && (phase === 'selecting_attack' || phase === 'waiting_opponent')) {
+          if (aiAttackTimerRef.current) clearTimeout(aiAttackTimerRef.current);
+          const thinkTime = 2000 + Math.random() * 3000;
+          
+          aiAttackTimerRef.current = window.setTimeout(() => {
+              const random = Math.random();
+              const skills: SkillType[] = gameMode === 'OVERLOAD' 
+                ? ['HEAL', 'SHIELD', 'CRIT', 'BLIND', 'MIRROR', 'CHAOS', 'FIFTY_FIFTY'] 
+                : ['HEAL', 'SHIELD', 'CRIT', 'BLIND'];
+              
+              if (random > 0.8) {
+                  handleGameEvent({ type: 'SEND_ACTION', attackerId: 'ai_bot', skill: skills[Math.floor(Math.random()*skills.length)] });
+              } else {
+                  const word = WORD_DATABASE[Math.floor(Math.random() * WORD_DATABASE.length)];
+                  // AI Charge Logic
+                  let charge: OverloadLevel = 1;
+                  if (gameMode === 'OVERLOAD') {
+                      if (Math.random() > 0.7) charge = 2;
+                      if (Math.random() > 0.9) charge = 3;
+                  }
+                  handleGameEvent({ type: 'SEND_ACTION', attackerId: 'ai_bot', wordId: word.id, chargeLevel: charge });
+              }
+          }, thinkTime);
+      }
+      return () => { if (aiAttackTimerRef.current) clearTimeout(aiAttackTimerRef.current); };
+  }, [phase, opActionReceived, opponent, round]);
+
+  useEffect(() => {
+      if (!opponent?.isAi || phase === 'menu' || phase === 'result') return;
+
+      if (myActionSent && opDefenseResult === null && myLastAction?.type === 'WORD') {
+           if (aiDefendTimerRef.current) clearTimeout(aiDefendTimerRef.current);
+           const reactTime = 1500 + Math.random() * 2000;
+           
+           aiDefendTimerRef.current = window.setTimeout(() => {
+               // AI Defense Success Rate
+               let successRate = 0.4;
+               if (myLastAction?.charge === 3) successRate = 0.2; // High charge scares AI sometimes
+               if (isAdrenaline) successRate = 0.3;
+
+               const aiCorrect = Math.random() > (1 - successRate); 
+               
+               // Backlash logic for AI
+               let backlash = 0;
+               if (aiCorrect && gameMode === 'OVERLOAD' && myLastAction.charge) {
+                   backlash = CHARGE_LEVELS[myLastAction.charge as OverloadLevel].cost;
+               }
+
+               handleGameEvent({ 
+                   type: 'REPORT_RESULT', 
+                   defenderId: 'ai_bot', 
+                   damageTaken: aiCorrect ? 0 : 150, // Simplified damage for AI logic
+                   isCorrect: aiCorrect,
+                   backlashDamage: backlash
+               });
+           }, reactTime);
+      }
+      return () => { if (aiDefendTimerRef.current) clearTimeout(aiDefendTimerRef.current); };
+  }, [myActionSent, opDefenseResult, opponent, round, myLastAction]);
+
+
+  // --- Helper to Send Events ---
+  const triggerGameEvent = async (payload: PkGamePayload) => {
+      if (opponent?.isAi) { /* Local */ } else { await sendGameEvent(payload); }
+  };
 
   const handleStartMatch = () => {
       setPhase('matching');
   };
 
+  const handleCreateRoom = () => {
+      const newRoomId = Math.floor(100000 + Math.random() * 900000).toString();
+      const fullRoomId = `room_${newRoomId}`;
+      setRoomId(fullRoomId);
+      setOpponent(null); 
+      setMatchStatus(`等待玩家加入... 房號: ${newRoomId}`);
+      setPhase('connecting'); 
+      
+      joinGameRoom(
+          fullRoomId, 
+          user.studentId, 
+          handleGameEvent,
+          () => handleOpponentLeft(),
+          () => {
+              setOpponent({ name: "Player 2", studentId: "p2", avatarColor: "bg-gray-500", level: 1, status: 'playing', joinedAt: 0 }); 
+              sendGameEvent({ type: 'START_GAME', attackerId: JSON.stringify(user), gameMode }); 
+          }
+      );
+  };
+
+  const handleJoinRoom = (code: string) => {
+      setShowRoomInput(false);
+      const fullRoomId = `room_${code}`;
+      setRoomId(fullRoomId);
+      setMatchStatus("正在加入房間...");
+      setPhase('connecting');
+      
+      joinGameRoom(
+          fullRoomId, 
+          user.studentId, 
+          (payload) => {
+              handleGameEvent(payload);
+              if (payload.type === 'START_GAME' && payload.attackerId) {
+                  try {
+                      const hostProfile = JSON.parse(payload.attackerId);
+                      setOpponent({ ...hostProfile, status: 'playing', joinedAt: 0 });
+                      if (payload.gameMode) setGameMode(payload.gameMode);
+                      setPhase('ready');
+                      setTimeout(startRound, 2000);
+                  } catch(e) {}
+              }
+          },
+          () => handleOpponentLeft(),
+          () => {
+              sendGameEvent({ type: 'START_GAME', attackerId: JSON.stringify(user), gameMode });
+          }
+      );
+  };
+
   const handleOpponentLeft = () => {
-      if (phase === 'result') return; // Already ended
+      if (phase === 'result') return; 
       setEndReason('opponent_left');
       setOpHp(0);
       setPhase('result');
@@ -241,10 +465,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   const handleSurrender = async () => {
       if (confirm("確定要投降嗎？將會扣除積分。")) {
-          try {
-            await sendGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
-          } catch(e) { console.error(e); }
-          
+          await triggerGameEvent({ type: 'SURRENDER', winnerId: opponent?.studentId });
           setEndReason('surrender');
           setMyHp(0);
           setPhase('result');
@@ -252,7 +473,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   };
 
   const handleExit = () => {
-      setRoomId(null); // This will trigger leaveGameRoom via effect cleanup
+      setRoomId(null); 
       setOpponent(null);
       onBack();
   };
@@ -283,22 +504,33 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setBattleLog("時間到！");
       
       if (phase === 'selecting_attack') {
-          // Auto play first card
-          if (battleCards.length > 0) {
-              handleSelectCard(battleCards[0]);
+          // Auto select first card (safe default)
+          if (!myActionSent && battleCards.length > 0) {
+              // If overload mode and waiting for charge, force default Lv1
+              if (showChargePanel && selectedAttackCard) {
+                  confirmAttack(selectedAttackCard, 1);
+              } else {
+                  handleCardClick(battleCards[0]);
+                  // If it was a word card, immediate confirm lvl 1 in handleCardClick flow if needed
+                  // but handleCardClick opens panel. We need direct confirm.
+                  if (battleCards[0].type === 'WORD' && gameMode === 'OVERLOAD') {
+                      confirmAttack(battleCards[0], 1);
+                  }
+              }
           }
       } else if (phase === 'defending') {
-          // Auto fail
           if (incomingWord) {
-              const damageTaken = DAMAGE_PER_HIT;
+              const damageTaken = DAMAGE_PER_HIT * (gameMode === 'OVERLOAD' ? CHARGE_LEVELS[incomingCharge].multiplier : 1);
               setMyHp(prev => Math.max(0, prev - damageTaken));
               setMyDefenseResult('fail');
-              sendGameEvent({
+              
+              triggerGameEvent({
                   type: 'REPORT_RESULT',
                   defenderId: user.studentId,
                   damageTaken: damageTaken,
                   isCorrect: false
               });
+              
               setTimeout(() => setPhase('round_summary'), 1000);
           }
       }
@@ -321,7 +553,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           id: `word_${w.id}`
       }));
 
-      const skills: SkillType[] = ['HEAL', 'SHIELD', 'CRIT', 'BLIND'];
+      const skills: SkillType[] = gameMode === 'OVERLOAD' 
+        ? ['HEAL', 'SHIELD', 'CRIT', 'BLIND', 'MIRROR', 'CHAOS', 'FIFTY_FIFTY']
+        : ['HEAL', 'SHIELD', 'CRIT', 'BLIND'];
+        
       const randomSkill = skills[Math.floor(Math.random() * skills.length)];
       cards.push({
           type: 'SKILL',
@@ -340,58 +575,94 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setMyDefenseResult(null);
       setOpDefenseResult(null);
       setBlindEffect(false);
+      setChaosEffect(false);
+      setPerfectParryTriggered(false);
+      
+      setMyLastAction(null);
       setBattleLog(`Round ${round} / ${TOTAL_ROUNDS}`);
       
       setBattleCards(generateCards(round));
+      setSelectedAttackCard(null);
+      setShowChargePanel(false);
+      setChargeLevel(1);
+      
       setPhase('selecting_attack');
   };
 
-  const handleSelectCard = (card: BattleCard) => {
+  // 1. Click Card
+  const handleCardClick = (card: BattleCard) => {
       if (myActionSent) return;
       playSound('card_flip');
-      setMyActionSent(true);
       
+      if (card.type === 'SKILL') {
+          // Skills execute immediately (no charge needed usually, simplifying)
+          confirmAttack(card, 1);
+      } else if (gameMode === 'OVERLOAD') {
+          // Overload Mode: Open Charge Panel
+          setSelectedAttackCard(card);
+          setShowChargePanel(true);
+          // Auto set level 2 if Adrenaline
+          if (isAdrenaline) setChargeLevel(2);
+          else setChargeLevel(1);
+      } else {
+          // Classic Mode: Send immediately
+          confirmAttack(card, 1);
+      }
+  };
+
+  // 2. Confirm Attack
+  const confirmAttack = (card: BattleCard, charge: OverloadLevel) => {
+      setMyActionSent(true);
+      setShowChargePanel(false);
+      
+      // Pay HP cost (Overload)
+      if (gameMode === 'OVERLOAD' && !isAdrenaline) {
+          const cost = CHARGE_LEVELS[charge].cost;
+          if (cost > 0) {
+              setMyHp(prev => Math.max(1, prev - cost)); // Don't die from betting
+          }
+      }
+
+      setMyLastAction({ 
+          type: card.type, 
+          id: card.type === 'SKILL' ? (card.skill || 'NONE') : (card.word?.en || ''),
+          charge: charge
+      });
+
       if (card.type === 'SKILL') {
           if (card.skill === 'HEAL') {
               setMyHp(prev => Math.min(MAX_HP, prev + 150));
               setBattleLog("使用回復！HP +150");
               playSound('skill');
-          } else if (card.skill === 'SHIELD') {
-              setBattleLog("展開護盾！抵擋下一次攻擊");
-              playSound('skill');
           } else {
-              setBattleLog(`發動技能: ${card.skill}`);
+              setBattleLog(`發動技能: ${SKILL_NAMES[card.skill || 'NONE']}`);
               playSound('skill');
           }
           
-          sendGameEvent({
+          triggerGameEvent({
               type: 'SEND_ACTION',
               attackerId: user.studentId,
               skill: card.skill
           });
       } else {
-          setBattleLog(`發送攻擊：${card.word?.en}`);
-          playSound('attack');
+          setBattleLog(`發送攻擊：${card.word?.en} (Lv${charge})`);
+          playSound(charge === 3 ? 'charge' : 'attack');
           
           if (card.word && card.word.id) {
-              sendGameEvent({
+              triggerGameEvent({
                   type: 'SEND_ACTION',
                   attackerId: user.studentId,
-                  wordId: card.word.id
+                  wordId: card.word.id,
+                  chargeLevel: charge
               });
-          } else {
-              console.error("Error: Selected card has no word ID");
           }
       }
 
+      // State Transition
       if (opActionReceived) {
-          if (incomingWord) {
-              setPhase('defending');
-          } else if (incomingSkill !== 'NONE') {
-              setTimeout(() => setPhase('round_summary'), 1500);
-          } else {
-              setPhase('waiting_opponent');
-          }
+          if (incomingWord) setPhase('defending');
+          else if (incomingSkill !== 'NONE') setTimeout(() => setPhase('round_summary'), 1500);
+          else setPhase('waiting_opponent');
       } else {
           setPhase('waiting_opponent');
       }
@@ -400,17 +671,41 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const handleDefend = (selectedZh: string) => {
       if (!incomingWord) return;
       
+      const answerTime = (Date.now() - answerStartTimeRef.current) / 1000;
       const isCorrect = selectedZh === incomingWord.zh;
+      
+      // Overload Mechanics
       let damageTaken = 0;
+      let backlash = 0;
+      let isPerfect = false;
 
       if (isCorrect) {
           playSound('block');
           setBattleLog("防禦成功！");
           setMyDefenseResult('success');
-      } else {
-          damageTaken = DAMAGE_PER_HIT;
-          if (incomingSkill === 'CRIT') damageTaken = Math.floor(damageTaken * 1.5);
           
+          if (gameMode === 'OVERLOAD') {
+              // Calculate Backlash
+              const baseBet = CHARGE_LEVELS[incomingCharge].cost;
+              // Check Perfect Parry
+              if (answerTime <= 3) {
+                  isPerfect = true;
+                  setPerfectParryTriggered(true);
+                  playSound('shatter'); // Special sound
+                  backlash = baseBet * 2;
+              } else {
+                  backlash = baseBet;
+              }
+          }
+      } else {
+          // Fail
+          let baseDmg = DAMAGE_PER_HIT;
+          if (gameMode === 'OVERLOAD') {
+              baseDmg *= CHARGE_LEVELS[incomingCharge].multiplier;
+          }
+          if (incomingSkill === 'CRIT') baseDmg *= 1.5;
+          
+          damageTaken = Math.floor(baseDmg);
           setMyHp(prev => Math.max(0, prev - damageTaken));
           playSound('damage');
           setBattleLog("防禦失敗！");
@@ -423,11 +718,13 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           }]);
       }
 
-      sendGameEvent({
+      triggerGameEvent({
           type: 'REPORT_RESULT',
           defenderId: user.studentId,
           damageTaken: damageTaken,
-          isCorrect: isCorrect
+          isCorrect: isCorrect,
+          backlashDamage: backlash,
+          isPerfectParry: isPerfect
       });
 
       setTimeout(() => setPhase('round_summary'), 1000);
@@ -435,7 +732,18 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   // --- 4. Event Handling ---
   const handleGameEvent = (payload: PkGamePayload) => {
-      console.log("Game Event Received:", payload);
+      if (payload.type === 'START_GAME' && payload.attackerId) {
+          try {
+              const profile = JSON.parse(payload.attackerId);
+              if (profile.studentId !== user.studentId) {
+                  setOpponent({ ...profile, status: 'playing', joinedAt: 0 });
+                  if (payload.gameMode) setGameMode(payload.gameMode);
+                  setPhase('ready');
+                  setTimeout(startRound, 2000);
+              }
+          } catch(e) {}
+          return;
+      }
 
       if (payload.type === 'SURRENDER') {
           if (payload.winnerId === user.studentId) {
@@ -459,7 +767,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                   setIncomingSkill(payload.skill);
                   if (payload.skill === 'BLIND') {
                       setBlindEffect(true);
-                      setBattleLog("對手使用了閃光彈！");
+                      setBattleLog("對手使用了致盲！");
+                  }
+                  if (payload.skill === 'CHAOS') {
+                      setChaosEffect(true); // Triggers UI effect in defending phase
                   }
                   if (payload.skill === 'HEAL') {
                       setOpHp(prev => Math.min(MAX_HP, prev + 150));
@@ -476,8 +787,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               } else if (payload.wordId) {
                   const word = WORD_DATABASE.find(w => w.id === payload.wordId);
                   if (word) {
-                      console.log("Opponent attacked with:", word.en);
                       setIncomingWord(word);
+                      if (payload.chargeLevel) setIncomingCharge(payload.chargeLevel);
+                      
+                      // Generate options
                       const wrongs = WORD_DATABASE
                         .filter(w => w.id !== word.id)
                         .sort(() => 0.5 - Math.random())
@@ -487,11 +800,12 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                       setDefenseOptions(opts);
 
                       setPhase(prev => {
-                          if (prev === 'waiting_opponent') return 'defending';
+                          if (prev === 'waiting_opponent') {
+                              answerStartTimeRef.current = Date.now();
+                              return 'defending';
+                          }
                           return prev;
                       });
-                  } else {
-                      console.error("Unknown word ID received:", payload.wordId);
                   }
               }
           }
@@ -499,8 +813,12 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       else if (payload.type === 'REPORT_RESULT') {
           if (payload.defenderId !== user.studentId) {
               const damage = payload.damageTaken || 0;
+              const backlash = payload.backlashDamage || 0;
+              
               setOpHp(prev => Math.max(0, prev - damage));
-              setOpDefenseResult(damage === 0 ? 'success' : 'fail');
+              setMyHp(prev => Math.max(0, prev - backlash)); // Apply Backlash Self Damage
+              
+              setOpDefenseResult(damage === 0 ? (backlash > 0 ? 'backlash' : 'success') : 'fail');
               
               setPhase(prev => {
                   if (prev === 'waiting_opponent') return 'round_summary';
@@ -510,182 +828,218 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       }
   };
 
-  useEffect(() => {
-      if (phase === 'round_summary') {
-           const timer = setTimeout(nextRoundOrEnd, 3000);
-           return () => clearTimeout(timer);
-      }
-  }, [phase]);
+  // --- RENDER: Mode Select Phase ---
+  if (phase === 'mode_select') {
+      return (
+          <div className="fixed inset-0 z-[60] bg-gray-900 flex flex-col items-center justify-center p-6 space-y-6">
+              <h1 className="text-3xl font-black text-white mb-4">選擇對戰模式</h1>
+              
+              <button 
+                onClick={() => { setGameMode('CLASSIC'); setPhase('menu'); setMenuTab('lobby'); }}
+                className="w-full max-w-sm bg-gray-800 hover:bg-gray-700 border border-gray-600 p-6 rounded-3xl flex items-center gap-4 transition-all hover:scale-105 group"
+              >
+                  <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center group-hover:bg-blue-500 transition-colors">
+                      <Swords size={32} className="text-blue-400 group-hover:text-white"/>
+                  </div>
+                  <div className="text-left">
+                      <h3 className="text-xl font-bold text-white">經典對決</h3>
+                      <p className="text-gray-400 text-sm">標準單字 PK，考驗詞彙量</p>
+                  </div>
+              </button>
 
-  const nextRoundOrEnd = () => {
-      if (myHp <= 0 || opHp <= 0 || round >= TOTAL_ROUNDS) {
-          let win = false;
-          if (myHp > 0 && opHp <= 0) win = true;
-          else if (myHp > 0 && opHp > 0 && myHp > opHp) win = true;
-          else if (myHp === opHp) win = true; 
-          
-          playSound(win ? 'win' : 'lose');
-          setPhase('result');
-          
-          let score = win ? 100 : 20;
-          score += Math.floor(myHp / 10);
-          const ratingChange = win ? 25 : -10;
-          
-          onFinish({ 
-              isWin: win, 
-              score: score, 
-              ratingChange: ratingChange,
-              opponentName: opponent?.name || '',
-              mistakes: mistakes
-          });
-      } else {
-          setRound(prev => prev + 1);
-          startRound();
-      }
-  };
+              <button 
+                onClick={() => { setGameMode('OVERLOAD'); setPhase('menu'); setMenuTab('lobby'); }}
+                className="w-full max-w-sm bg-gradient-to-r from-red-900 to-rose-800 hover:from-red-800 hover:to-rose-700 border border-red-500/50 p-6 rounded-3xl flex items-center gap-4 transition-all hover:scale-105 group relative overflow-hidden"
+              >
+                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30"></div>
+                  <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center group-hover:bg-red-500 transition-colors z-10">
+                      <Zap size={32} className="text-red-300 group-hover:text-white animate-pulse"/>
+                  </div>
+                  <div className="text-left z-10">
+                      <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                          超載競技場 <span className="bg-yellow-500 text-black text-[10px] px-2 py-0.5 rounded font-black">NEW</span>
+                      </h3>
+                      <p className="text-red-200 text-sm">賭上 HP 的心理博弈，高風險高回報</p>
+                  </div>
+              </button>
 
-  // --- RENDER: Menu Phase ---
+              <button onClick={onBack} className="text-gray-500 mt-8 hover:text-white">返回</button>
+          </div>
+      )
+  }
+
+  // --- RENDER: Menu Phase (Specific Mode Lobby) ---
   if (phase === 'menu') {
+      const isOverload = gameMode === 'OVERLOAD';
       return (
           <div className="fixed inset-0 z-[60] flex flex-col bg-gray-900 text-white overflow-hidden">
-              {showRankModal && <RankOverviewModal onClose={() => setShowRankModal(false)} />}
+              {showRoomInput && <CustomRoomModal onClose={() => setShowRoomInput(false)} onJoin={handleJoinRoom} />}
               
               {/* Header */}
               <div className="p-4 pt-safe flex justify-between items-center bg-gray-900 border-b border-gray-800 z-10">
-                  <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-800 rounded-full transition-colors">
+                  <button onClick={() => setPhase('mode_select')} className="p-2 -ml-2 hover:bg-gray-800 rounded-full transition-colors">
                       <ArrowLeft size={24} className="text-gray-400" />
                   </button>
                   <div className="flex gap-2 items-center">
-                        <div className="px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700 flex items-center gap-2">
-                            <Swords size={16} className="text-rose-500" />
-                            <span className="text-sm font-bold text-gray-200">PK Battle</span>
+                        <div className={`px-3 py-1.5 rounded-full border flex items-center gap-2 ${isOverload ? 'bg-red-900/30 border-red-800 text-red-400' : 'bg-blue-900/30 border-blue-800 text-blue-400'}`}>
+                            {isOverload ? <Zap size={16} /> : <Swords size={16} />}
+                            <span className="text-sm font-bold">{isOverload ? '超載競技場' : '經典對決'}</span>
                         </div>
                   </div>
                   <div className="w-8"></div>
               </div>
 
-              {/* Tab Navigation */}
-              <div className="p-4 pb-0 bg-gray-900">
-                  <div className="flex bg-gray-800 p-1 rounded-xl border border-gray-700">
-                      <button onClick={() => setMenuTab('lobby')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${menuTab === 'lobby' ? 'bg-rose-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>大廳</button>
-                      <button onClick={() => setMenuTab('rank')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${menuTab === 'rank' ? 'bg-rose-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>排行榜</button>
-                      <button onClick={() => setMenuTab('help')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${menuTab === 'help' ? 'bg-rose-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}>說明</button>
-                  </div>
+              {/* Lobby Tabs */}
+              <div className="flex border-b border-gray-800 bg-gray-900/90 backdrop-blur z-10">
+                  <button 
+                    onClick={() => setMenuTab('lobby')} 
+                    className={`flex-1 py-3 font-bold text-sm transition-colors ${menuTab === 'lobby' ? (isOverload ? 'text-red-500 border-b-2 border-red-500' : 'text-blue-500 border-b-2 border-blue-500') : 'text-gray-500'}`}
+                  >
+                      出擊
+                  </button>
+                  <button 
+                    onClick={() => setMenuTab('rank')} 
+                    className={`flex-1 py-3 font-bold text-sm transition-colors ${menuTab === 'rank' ? (isOverload ? 'text-red-500 border-b-2 border-red-500' : 'text-blue-500 border-b-2 border-blue-500') : 'text-gray-500'}`}
+                  >
+                      排行榜
+                  </button>
+                  <button 
+                    onClick={() => setMenuTab('rules')} 
+                    className={`flex-1 py-3 font-bold text-sm transition-colors ${menuTab === 'rules' ? (isOverload ? 'text-red-500 border-b-2 border-red-500' : 'text-blue-500 border-b-2 border-blue-500') : 'text-gray-500'}`}
+                  >
+                      規則
+                  </button>
               </div>
 
-              <div className="flex-1 p-6 flex flex-col items-center justify-center relative">
+              {/* Menu Content */}
+              <div className="flex-1 overflow-y-auto p-6 relative">
+                  
                   {/* Background Decor */}
                   <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                      <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-rose-900/20 rounded-full blur-3xl"></div>
-                      <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-indigo-900/20 rounded-full blur-3xl"></div>
+                      <div className={`absolute top-1/4 left-1/4 w-64 h-64 rounded-full blur-3xl opacity-20 ${isOverload ? 'bg-red-600' : 'bg-blue-600'}`}></div>
                   </div>
 
                   {menuTab === 'lobby' && (
-                      <div className="w-full max-w-sm flex flex-col items-center animate-in fade-in zoom-in duration-300 z-10">
+                      <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300 relative z-10 h-full justify-center">
                           <div className="relative w-28 h-28 mb-6">
-                              <div className="absolute inset-0 bg-rose-500 rounded-full blur-xl opacity-30 animate-pulse"></div>
+                              <div className={`absolute inset-0 rounded-full blur-xl opacity-30 animate-pulse ${isOverload ? 'bg-red-500' : 'bg-blue-500'}`}></div>
                               <div className={`relative w-full h-full rounded-full ${user.avatarColor} ring-4 ring-gray-800 flex items-center justify-center overflow-hidden shadow-2xl ${getFrameStyle(user.avatarFrame)}`}>
                                   {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : <UserIcon size={50}/>}
                               </div>
-                              <button 
-                                onClick={() => setShowRankModal(true)}
-                                className={`absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full border bg-gray-900 text-[10px] font-bold whitespace-nowrap flex items-center gap-1 ${myRank.color}`}
-                              >
+                              <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full border bg-gray-900 text-[10px] font-bold whitespace-nowrap flex items-center gap-1 ${myRank.color}`}>
                                   <Crown size={10} /> {myRank.name}
-                              </button>
+                              </div>
                           </div>
                           
                           <div className="text-center mb-8">
-                              <h2 className="text-3xl font-black text-white mb-2 tracking-tight">知識對決</h2>
+                              <h2 className="text-3xl font-black text-white mb-2 tracking-tight">
+                                  {isOverload ? '準備好了嗎？' : '知識就是力量'}
+                              </h2>
                               <p className="text-gray-400 text-xs font-medium px-4 leading-relaxed">
-                                  實時匹配 • 策略卡牌 • 積分排位<br/>
-                                  展現你的詞彙量與戰術智慧
+                                  {isOverload ? '賭上你的 HP，給予對手致命一擊' : '累積勝場，提升段位'}
                               </p>
                           </div>
 
-                          <button 
-                              onClick={handleStartMatch}
-                              className="w-full py-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white rounded-2xl font-black text-lg shadow-lg shadow-rose-900/50 flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/10"
-                          >
-                              <Swords size={20} /> 開始配對
-                          </button>
+                          <div className="w-full max-w-sm space-y-3">
+                              <button 
+                                  onClick={handleStartMatch}
+                                  className={`w-full py-4 bg-gradient-to-r text-white rounded-2xl font-black text-lg shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 border border-white/10 ${isOverload ? 'from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500' : 'from-blue-600 to-indigo-600'}`}
+                              >
+                                  <Swords size={20} /> 快速配對
+                              </button>
+                              
+                              <div className="flex gap-3">
+                                  <button 
+                                      onClick={handleCreateRoom}
+                                      className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-bold text-sm shadow-md border border-gray-700 flex items-center justify-center gap-2"
+                                  >
+                                      <Users size={16} /> 創建房間
+                                  </button>
+                                  <button 
+                                      onClick={() => setShowRoomInput(true)}
+                                      className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-bold text-sm shadow-md border border-gray-700 flex items-center justify-center gap-2"
+                                  >
+                                      <Play size={16} /> 加入房間
+                                  </button>
+                              </div>
+                          </div>
                       </div>
                   )}
 
                   {menuTab === 'rank' && (
-                      <div className="w-full h-full flex flex-col animate-in slide-in-from-right z-10">
-                          <div className="flex justify-between items-center mb-4 px-2">
-                              <h3 className="font-bold text-gray-300 flex items-center gap-2">
-                                  <Trophy size={16} className="text-yellow-500" /> 賽季排行
-                              </h3>
-                              <button onClick={() => setShowRankModal(true)} className="text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1">
-                                  <Info size={12} /> 段位說明
-                              </button>
-                          </div>
-                          <div className="flex-1 overflow-y-auto space-y-2 pr-2 pb-20">
-                              {leaderboard.map((entry, idx) => {
-                                  const isPlaceholder = entry.studentId === 'placeholder';
-                                  return (
-                                    <div key={idx} className={`p-3 rounded-xl flex items-center border ${isPlaceholder ? 'bg-gray-800/30 border-dashed border-gray-800' : 'bg-gray-800 border-gray-700'}`}>
-                                        <div className={`w-8 text-center font-black text-lg ${idx < 3 ? 'text-yellow-500' : 'text-gray-600'}`}>{entry.rank}</div>
-                                        
-                                        {isPlaceholder ? (
-                                            <div className="flex-1 flex items-center gap-3 opacity-50">
-                                                <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center">
-                                                    <UserIcon size={16} className="text-gray-600" />
-                                                </div>
-                                                <div className="text-sm text-gray-500 font-bold">虛位以待...</div>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className={`w-10 h-10 rounded-full mx-3 ${entry.avatarColor} flex items-center justify-center font-bold text-xs overflow-hidden ${getFrameStyle(entry.avatarFrame)}`}>
-                                                    {entry.avatarImage ? <img src={entry.avatarImage} className="w-full h-full object-cover"/> : entry.name[0]}
-                                                </div>
-                                                <div className="flex-1">
-                                                    <span className="font-bold text-gray-200 block text-sm">{entry.name}</span>
-                                                    <span className="text-[10px] text-gray-500">{getRank(entry.points).name}</span>
-                                                </div>
-                                                <div className="font-mono font-bold text-rose-400 text-sm">{entry.points}</div>
-                                            </>
-                                        )}
-                                    </div>
-                                  );
-                              })}
-                          </div>
+                      <div className="max-w-md mx-auto space-y-3 animate-in slide-in-from-right relative z-10">
+                          <h3 className={`font-bold mb-4 flex items-center gap-2 ${isOverload ? 'text-red-400' : 'text-blue-400'}`}>
+                              <Trophy size={18} /> {isOverload ? '超載' : '經典'} 排行榜
+                          </h3>
+                          {isLoadingRank ? (
+                              <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-gray-500" /></div>
+                          ) : leaderboard.length === 0 ? (
+                              <div className="text-center py-10 text-gray-500">暫無數據</div>
+                          ) : (
+                              leaderboard.map((entry, idx) => (
+                                  <div key={idx} className="bg-gray-800/80 p-3 rounded-xl flex items-center border border-gray-700">
+                                      <div className={`w-8 text-center font-black text-lg italic ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-500' : 'text-gray-600'}`}>
+                                          {entry.rank}
+                                      </div>
+                                      <div className={`w-10 h-10 rounded-full mx-3 ${entry.avatarColor} flex items-center justify-center font-bold text-white text-xs ${getFrameStyle(entry.avatarFrame)} overflow-hidden`}>
+                                          {entry.avatarImage ? <img src={entry.avatarImage} className="w-full h-full object-cover"/> : entry.name[0]}
+                                      </div>
+                                      <div className="flex-1">
+                                          <span className="font-bold text-sm text-white block">{entry.name}</span>
+                                          <span className="text-[10px] text-gray-400">Rating</span>
+                                      </div>
+                                      <div className={`font-mono font-bold ${isOverload ? 'text-red-400' : 'text-blue-400'}`}>
+                                          {entry.points}
+                                      </div>
+                                  </div>
+                              ))
+                          )}
                       </div>
                   )}
 
-                  {menuTab === 'help' && (
-                      <div className="w-full h-full overflow-y-auto animate-in slide-in-from-right space-y-4 text-gray-300 text-sm z-10 pb-20">
-                          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
-                              <h4 className="text-white font-bold mb-3 flex items-center gap-2"><Zap size={16} className="text-yellow-400"/> 核心玩法</h4>
-                              <p className="leading-relaxed text-xs text-gray-400">
-                                  雙方每回合獲得 3 張單字卡與 1 張技能卡。<br/>
-                                  選擇 <span className="text-white font-bold">單字卡</span> 進行攻擊，對手需在時限內選出正確中文解釋進行防禦。<br/>
-                                  選擇 <span className="text-white font-bold">技能卡</span> 發動特殊效果，無須進行防禦判定。
-                              </p>
-                          </div>
-                          <div className="bg-gray-800 p-5 rounded-2xl border border-gray-700">
-                              <h4 className="text-white font-bold mb-3 flex items-center gap-2"><Shield size={16} className="text-blue-400"/> 技能說明</h4>
-                              <ul className="space-y-3 text-xs">
-                                  <li className="flex gap-3">
-                                      <span className="text-green-400 font-black bg-green-900/30 px-2 py-0.5 rounded">HEAL</span>
-                                      <span className="text-gray-400">回復 150 點生命值。</span>
-                                  </li>
-                                  <li className="flex gap-3">
-                                      <span className="text-blue-400 font-black bg-blue-900/30 px-2 py-0.5 rounded">SHIELD</span>
-                                      <span className="text-gray-400">展開護盾，抵擋下一次受到的傷害。</span>
-                                  </li>
-                                  <li className="flex gap-3">
-                                      <span className="text-yellow-400 font-black bg-yellow-900/30 px-2 py-0.5 rounded">CRIT</span>
-                                      <span className="text-gray-400">下次攻擊造成 1.5 倍傷害。</span>
-                                  </li>
-                                  <li className="flex gap-3">
-                                      <span className="text-purple-400 font-black bg-purple-900/30 px-2 py-0.5 rounded">BLIND</span>
-                                      <span className="text-gray-400">干擾對手視線 (遮蔽螢幕)。</span>
-                                  </li>
-                              </ul>
-                          </div>
+                  {menuTab === 'rules' && (
+                      <div className="max-w-md mx-auto space-y-6 animate-in slide-in-from-right relative z-10 pb-10">
+                          {isOverload ? (
+                              <>
+                                  <div className="bg-red-900/20 border border-red-800/50 p-4 rounded-xl">
+                                      <h3 className="font-bold text-red-400 mb-2 flex items-center gap-2"><Zap size={18}/> 核心機制：賭注</h3>
+                                      <p className="text-sm text-gray-300 leading-relaxed">
+                                          攻擊方可選擇 <span className="text-green-400">Lv1</span>、<span className="text-orange-400">Lv2</span> 或 <span className="text-red-500 font-bold">Lv3</span> 超載等級。等級越高，傷害越高，但需要「質押」自己的 HP。若對手防禦成功，你會受到反噬傷害！
+                                      </p>
+                                  </div>
+                                  <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+                                      <h3 className="font-bold text-yellow-400 mb-2 flex items-center gap-2"><Shield size={18}/> 完美格擋</h3>
+                                      <p className="text-sm text-gray-300 leading-relaxed">
+                                          防守方若在 <span className="text-white font-bold">3 秒內</span> 正確答題，觸發完美格擋，將對手的反噬傷害 <span className="text-yellow-400 font-bold">加倍</span>。
+                                      </p>
+                                  </div>
+                                  <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+                                      <h3 className="font-bold text-purple-400 mb-2 flex items-center gap-2"><Flame size={18}/> 腎上腺素</h3>
+                                      <p className="text-sm text-gray-300 leading-relaxed">
+                                          當 HP 低於 30% 時，進入絕地反擊狀態。所有攻擊免費升級為 <span className="text-orange-400">Lv2</span> 且不消耗 HP。
+                                      </p>
+                                  </div>
+                              </>
+                          ) : (
+                              <>
+                                  <div className="bg-blue-900/20 border border-blue-800/50 p-4 rounded-xl">
+                                      <h3 className="font-bold text-blue-400 mb-2 flex items-center gap-2"><Swords size={18}/> 基礎規則</h3>
+                                      <p className="text-sm text-gray-300 leading-relaxed">
+                                          雙方輪流攻擊與防守。攻擊方選擇單字卡，防守方需選出正確中文解釋。防守失敗扣除 HP，直到一方歸零。
+                                      </p>
+                                  </div>
+                                  <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+                                      <h3 className="font-bold text-indigo-400 mb-2 flex items-center gap-2"><Sparkles size={18}/> 技能卡</h3>
+                                      <p className="text-sm text-gray-300 leading-relaxed">
+                                          隨機出現技能卡：<br/>
+                                          - <span className="text-green-400">治癒</span>: 回復 HP<br/>
+                                          - <span className="text-blue-400">護盾</span>: 抵擋一次傷害<br/>
+                                          - <span className="text-yellow-400">爆擊</span>: 傷害 1.5 倍<br/>
+                                          - <span className="text-purple-400">致盲</span>: 遮蔽對手畫面
+                                      </p>
+                                  </div>
+                              </>
+                          )}
                       </div>
                   )}
               </div>
@@ -697,19 +1051,35 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   if (phase === 'matching' || phase === 'connecting') {
       return (
         <div className="fixed inset-0 z-[60] bg-gray-900 flex flex-col items-center justify-center">
+            
+            {showAiPrompt && (
+                <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl border border-gray-700 text-center animate-in zoom-in">
+                        <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Users size={32} className="text-gray-400" />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-2">似乎沒有對手...</h3>
+                        <p className="text-gray-400 text-sm mb-6">要挑戰 AI 機器人嗎？(不影響積分)</p>
+                        <div className="flex gap-3">
+                            <button onClick={handleExit} className="flex-1 py-3 bg-gray-700 text-white rounded-xl font-bold">離開</button>
+                            <button onClick={startAiMatch} className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold">挑戰 AI</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="relative w-64 h-64 flex items-center justify-center">
-                <div className="absolute inset-0 border border-rose-500/20 rounded-full animate-ping" style={{ animationDuration: '2s' }}></div>
-                <div className="absolute inset-10 border border-rose-500/40 rounded-full animate-ping" style={{ animationDuration: '2s', animationDelay: '0.5s' }}></div>
-                <div className="relative z-10 w-24 h-24 rounded-full bg-gray-800 border-2 border-rose-500/50 flex items-center justify-center overflow-hidden shadow-[0_0_30px_rgba(225,29,72,0.3)]">
+                <div className={`absolute inset-0 border rounded-full animate-ping ${gameMode==='OVERLOAD'?'border-red-500/20':'border-blue-500/20'}`} style={{ animationDuration: '2s' }}></div>
+                <div className="relative z-10 w-24 h-24 rounded-full bg-gray-800 border-2 border-gray-600 flex items-center justify-center overflow-hidden">
                     {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : <UserIcon size={40} className="text-gray-500"/>}
                 </div>
             </div>
             
-            <div className="mt-8 text-center">
-                 <h2 className="text-xl font-bold text-white animate-pulse tracking-widest mb-2">
-                     {phase === 'connecting' ? '建立戰場連線中...' : matchStatus}
+            <div className="mt-8 text-center px-6">
+                 <h2 className="text-xl font-bold text-white animate-pulse tracking-widest mb-2 break-all">
+                     {roomId && roomId.startsWith('room_') && !matchStatus.includes("配對成功") ? matchStatus : (phase === 'connecting' ? '建立戰場連線中...' : matchStatus)}
                  </h2>
-                 <div className="text-xs text-gray-500 font-mono">Matching Protocol v2.1</div>
+                 {phase === 'matching' && <p className="text-gray-400 text-xs mt-2">正在搜尋對手... (15秒後自動切換 AI)</p>}
             </div>
             
             {phase === 'matching' && (
@@ -750,48 +1120,25 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                  <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-3xl p-6 mb-6">
                      <div className="flex justify-between items-center">
                          <div className="text-center">
-                             <div className="w-14 h-14 rounded-full bg-gray-700 mx-auto mb-2 overflow-hidden border-2 border-gray-600">
+                             <div className="w-14 h-14 rounded-full bg-gray-700 mx-auto mb-2 overflow-hidden border-2 border-gray-600 flex items-center justify-center">
                                  {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : user.name[0]}
                              </div>
                              <div className="text-lg font-bold text-white">{myHp}</div>
                          </div>
                          <div className="text-2xl font-black text-gray-600">VS</div>
                          <div className="text-center">
-                             <div className="w-14 h-14 rounded-full bg-gray-700 mx-auto mb-2 overflow-hidden border-2 border-gray-600 opacity-80">
+                             <div className={`w-14 h-14 rounded-full bg-gray-700 mx-auto mb-2 overflow-hidden border-2 border-gray-600 opacity-80 flex items-center justify-center ${opponent?.isAi ? opponent.avatarColor : ''}`}>
                                  {opponent?.avatarImage ? <img src={opponent.avatarImage} className="w-full h-full object-cover"/> : (opponent?.name[0] || '?')}
                              </div>
                              <div className="text-lg font-bold text-gray-400">{opHp}</div>
                          </div>
                      </div>
-                     
-                     <div className="border-t border-gray-700 mt-4 pt-4 flex justify-between text-sm">
-                         <span className="text-gray-400 font-bold">積分變動</span>
-                         <span className={`font-mono font-black ${isWin ? "text-green-400" : "text-red-400"}`}>
-                             {isWin ? "+25" : "-10"}
-                         </span>
-                     </div>
                  </div>
-
-                 {mistakes.length > 0 && (
-                     <div className="bg-gray-800/50 backdrop-blur-md border border-red-500/30 rounded-3xl p-4 mb-6 text-left">
-                         <h4 className="text-red-400 font-bold text-sm mb-3 flex items-center gap-2">
-                             <AlertTriangle size={16} /> 錯誤複習
-                         </h4>
-                         <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                             {mistakes.map((m, idx) => (
-                                 <div key={idx} className="text-xs bg-black/30 p-2 rounded flex justify-between items-center">
-                                     <span className="text-white font-bold">{m.word.en}</span>
-                                     <span className="text-gray-400">{m.word.zh}</span>
-                                 </div>
-                             ))}
-                         </div>
-                     </div>
-                 )}
                  
                  <button 
                     onClick={() => {
                         onFinish({ isWin, score: 0, ratingChange: 0, opponentName: '' });
-                        setRoomId(null); // Ensure room is cleaned up
+                        setRoomId(null); 
                     }}
                     className="w-full py-4 bg-white text-black rounded-2xl font-black text-lg hover:scale-[1.02] transition-transform"
                  >
@@ -804,22 +1151,26 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
   // --- RENDER: Playing Phase ---
   return (
-      <div className="fixed inset-0 z-[60] bg-gray-900 flex flex-col overflow-hidden font-sans">
+      <div className={`fixed inset-0 z-[60] bg-gray-900 flex flex-col overflow-hidden font-sans transition-colors duration-500 ${isAdrenaline ? 'border-4 border-red-600/50' : ''}`}>
           
+          {/* Adrenaline FX */}
+          {isAdrenaline && <div className="absolute inset-0 bg-red-900/10 pointer-events-none animate-pulse z-0"></div>}
+
           {/* Top Bar: Opponent */}
           <div className="bg-gray-800/90 p-4 pt-safe flex items-center gap-4 border-b border-gray-700 shadow-lg z-20 relative">
               <button onClick={handleSurrender} className="absolute top-safe right-4 z-30 text-gray-500 hover:text-red-500">
                   <Flag size={18} />
               </button>
 
-              <div className={`relative w-12 h-12 rounded-full ${opponent?.avatarColor} flex-shrink-0 overflow-hidden border-2 border-rose-500/50`}>
+              <div className={`relative w-12 h-12 rounded-full ${opponent?.avatarColor} flex-shrink-0 overflow-hidden border-2 border-gray-600 flex items-center justify-center`}>
                   {opponent?.avatarImage ? <img src={opponent.avatarImage} className="w-full h-full object-cover"/> : (opponent?.name[0] || '?')}
                   {opDefenseResult === 'fail' && <div className="absolute inset-0 bg-red-500/80 flex items-center justify-center font-black text-white text-xs animate-ping">HIT</div>}
+                  {opDefenseResult === 'backlash' && <div className="absolute inset-0 bg-purple-500/80 flex items-center justify-center font-black text-white text-xs animate-ping">反噬</div>}
               </div>
               <div className="flex-1 min-w-0 pr-8">
                   <div className="flex justify-between items-end mb-1.5">
-                      <span className="font-bold text-gray-200 text-sm truncate">{opponent?.name}</span>
-                      <span className="text-xs font-mono text-rose-400">{opHp} HP</span>
+                      <span className="font-bold text-gray-200 text-sm truncate">{opponent?.name} {opponent?.isAi && '(AI)'}</span>
+                      <span className="text-xs font-mono text-rose-400">{opHp}/{MAX_HP}</span>
                   </div>
                   <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                       <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${(opHp / MAX_HP) * 100}%` }}></div>
@@ -831,10 +1182,18 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           <div className="flex-1 flex flex-col relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
               <div className="absolute inset-0 bg-gradient-to-b from-gray-900 via-transparent to-gray-900 opacity-90"></div>
               
+              {/* Blind Effect */}
+              {blindEffect && (
+                  <div className="absolute inset-0 z-30 bg-white flex items-center justify-center flex-col animate-in fade-in duration-500">
+                      <EyeOff size={80} className="text-gray-900 mb-4" />
+                      <span className="text-gray-900 font-black text-3xl">BLINDED</span>
+                  </div>
+              )}
+
               {/* Center Info */}
               <div className="absolute top-6 w-full text-center z-10">
-                  <div className="inline-block bg-black/60 backdrop-blur px-4 py-1 rounded-full border border-white/10 text-xs font-mono text-gray-400 tracking-widest">
-                      ROUND {round} / {TOTAL_ROUNDS}
+                  <div className={`inline-block px-4 py-1 rounded-full border border-white/10 text-xs font-mono tracking-widest ${isAdrenaline ? 'bg-red-900/80 text-white animate-bounce' : 'bg-black/60 text-gray-400'}`}>
+                      {isAdrenaline ? 'ADRENALINE ACTIVE' : `ROUND ${round} / ${TOTAL_ROUNDS}`}
                   </div>
                   
                   {/* Turn Timer */}
@@ -857,34 +1216,40 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                   {phase === 'ready' && <h1 className="text-7xl font-black text-white italic tracking-tighter animate-bounce">FIGHT</h1>}
 
                   {/* Attack Phase: Cards */}
-                  {phase === 'selecting_attack' && (
+                  {phase === 'selecting_attack' && !showChargePanel && (
                       <div className="w-full max-w-sm grid grid-cols-2 gap-3 animate-in slide-in-from-bottom duration-300">
                           {battleCards.map((card) => (
                               <button 
                                 key={card.id}
-                                onClick={() => handleSelectCard(card)}
+                                onClick={() => handleCardClick(card)}
                                 className={`
-                                    relative h-36 rounded-2xl p-3 flex flex-col justify-center items-center text-center border-b-4 active:border-b-0 active:translate-y-1 transition-all
+                                    relative h-36 rounded-2xl p-3 flex flex-col justify-center items-center text-center border-2 shadow-lg active:scale-95 transition-all
                                     ${card.type === 'SKILL' 
-                                        ? 'bg-gradient-to-br from-violet-600 to-indigo-700 border-indigo-900 shadow-indigo-500/20' 
-                                        : 'bg-gray-800 border-gray-950 hover:bg-gray-700 shadow-black/40'
+                                        ? 'bg-gray-800 border-indigo-500 hover:bg-gray-750' 
+                                        : 'bg-white border-gray-300 hover:bg-gray-50'
                                     }
-                                    shadow-lg
                                 `}
                               >
                                   {card.type === 'SKILL' ? (
                                       <>
-                                        <div className="bg-white/10 p-2 rounded-full mb-2">
-                                            <Zap size={24} className="text-yellow-300" />
+                                        <div className="bg-indigo-900/50 p-2.5 rounded-full mb-2 border border-indigo-500/30">
+                                            {card.skill === 'HEAL' && <Heart size={24} className="text-green-400" />}
+                                            {card.skill === 'SHIELD' && <Shield size={24} className="text-blue-400" />}
+                                            {card.skill === 'CRIT' && <Swords size={24} className="text-yellow-400" />}
+                                            {card.skill === 'BLIND' && <EyeOff size={24} className="text-purple-400" />}
+                                            {card.skill === 'MIRROR' && <Split size={24} className="text-cyan-400" />}
+                                            {card.skill === 'CHAOS' && <Shuffle size={24} className="text-rose-400" />}
+                                            {card.skill === 'FIFTY_FIFTY' && <Bot size={24} className="text-orange-400" />}
                                         </div>
-                                        <span className="font-black text-white text-lg tracking-wide">{card.skill}</span>
-                                        <span className="text-[10px] text-indigo-200 mt-1 font-medium">SKILL CARD</span>
+                                        <span className="font-bold text-white text-lg tracking-wide">{SKILL_NAMES[card.skill || 'NONE']}</span>
+                                        <span className="text-[10px] text-gray-400 mt-1">{SKILL_DESCRIPTIONS[card.skill || 'NONE']}</span>
+                                        <div className="absolute top-2 right-2 text-[10px] font-bold text-indigo-400 bg-indigo-900/50 px-1.5 py-0.5 rounded">SKILL</div>
                                       </>
                                   ) : (
                                       <>
-                                        <span className="font-black text-white text-xl mb-2 leading-tight">{card.word?.en}</span>
-                                        <span className="text-xs text-gray-400 bg-black/30 px-2 py-1 rounded">{card.word?.zh}</span>
-                                        <div className="absolute top-2 right-2 text-[10px] font-bold text-gray-600">Lv.{card.word?.level}</div>
+                                        <span className="font-black text-gray-800 text-xl mb-2 leading-tight">{card.word?.en}</span>
+                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{card.word?.zh}</span>
+                                        <div className="absolute top-2 right-2 text-[10px] font-bold text-gray-400">Lv.{card.word?.level}</div>
                                       </>
                                   )}
                               </button>
@@ -892,16 +1257,44 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                       </div>
                   )}
 
+                  {/* Charge Panel (Overload Only) */}
+                  {showChargePanel && selectedAttackCard && (
+                      <div className="w-full max-w-sm bg-gray-800 p-6 rounded-3xl border border-gray-600 shadow-2xl animate-in zoom-in">
+                          <h3 className="text-center font-bold text-white mb-4">設定超載等級</h3>
+                          <div className="space-y-3 mb-6">
+                              {[1, 2, 3].map((lvl) => {
+                                  const info = CHARGE_LEVELS[lvl as OverloadLevel];
+                                  const cost = isAdrenaline ? 0 : info.cost; // Free upgrade in Adrenaline
+                                  const isSelected = chargeLevel === lvl;
+                                  
+                                  return (
+                                      <button 
+                                        key={lvl}
+                                        onClick={() => setChargeLevel(lvl as OverloadLevel)}
+                                        className={`w-full p-4 rounded-xl flex justify-between items-center transition-all ${isSelected ? `${info.color} text-white ring-2 ring-white scale-105` : 'bg-gray-700 text-gray-300'}`}
+                                      >
+                                          <div className="flex items-center gap-3">
+                                              <div className="font-black text-lg">{info.name}</div>
+                                              {isAdrenaline && lvl === 2 && <span className="text-[10px] bg-white text-red-600 px-1 rounded font-bold">FREE</span>}
+                                          </div>
+                                          <div className="text-xs font-mono text-right">
+                                              <div>Dmg x{info.multiplier}</div>
+                                              <div>Bet -{cost} HP</div>
+                                          </div>
+                                      </button>
+                                  )
+                              })}
+                          </div>
+                          <div className="flex gap-3">
+                              <button onClick={() => setShowChargePanel(false)} className="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl font-bold">取消</button>
+                              <button onClick={() => confirmAttack(selectedAttackCard, chargeLevel)} className="flex-1 py-3 bg-white text-black rounded-xl font-bold hover:bg-gray-200">發射</button>
+                          </div>
+                      </div>
+                  )}
+
                   {/* Defend Phase */}
                   {phase === 'defending' && (incomingWord || incomingSkill !== 'NONE') && (
                       <div className="w-full max-w-sm animate-in zoom-in duration-200 relative">
-                          {blindEffect && (
-                              <div className="absolute -inset-10 bg-white/95 z-20 flex items-center justify-center flex-col">
-                                  <EyeOff size={64} className="text-gray-900 mb-4" />
-                                  <span className="text-gray-900 font-black text-2xl">BLINDED</span>
-                              </div>
-                          )}
-
                           {incomingSkill !== 'NONE' ? (
                               <div className="text-center py-10">
                                   <div className="w-20 h-20 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-ping">
@@ -911,8 +1304,17 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                               </div>
                           ) : (
                               <>
-                                <div className="bg-rose-600 text-white p-6 rounded-2xl text-center mb-6 shadow-[0_0_30px_rgba(225,29,72,0.4)] border border-rose-400/50">
-                                    <div className="text-[10px] font-bold opacity-80 mb-2 tracking-widest uppercase">Incoming Attack</div>
+                                {/* Danger Warning for High Charge */}
+                                {gameMode === 'OVERLOAD' && incomingCharge >= 2 && (
+                                    <div className={`absolute -top-12 left-0 right-0 text-center font-black tracking-[0.5em] animate-pulse ${incomingCharge === 3 ? 'text-red-500 text-2xl' : 'text-orange-400'}`}>
+                                        {incomingCharge === 3 ? '⚠ DANGER ⚠' : 'WARNING'}
+                                    </div>
+                                )}
+
+                                <div className={`bg-rose-600 text-white p-6 rounded-2xl text-center mb-6 shadow-[0_0_30px_rgba(225,29,72,0.4)] border ${incomingCharge === 3 ? 'border-red-500 border-4 animate-pulse' : 'border-rose-400/50'}`}>
+                                    <div className="text-[10px] font-bold opacity-80 mb-2 tracking-widest uppercase">
+                                        Incoming Attack {gameMode === 'OVERLOAD' && `(Lv${incomingCharge})`}
+                                    </div>
                                     <h2 className="text-4xl font-black tracking-tight">{incomingWord?.en}</h2>
                                 </div>
                                 
@@ -921,6 +1323,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                                         <button
                                             key={idx}
                                             onClick={() => handleDefend(opt)}
+                                            style={{ opacity: chaosEffect ? 0 : 1, transition: 'opacity 2s' }} // Chaos Effect
                                             className="bg-white text-gray-900 font-bold py-4 rounded-xl hover:bg-gray-100 active:scale-95 transition-all shadow-lg text-lg"
                                         >
                                             {opt}
@@ -939,23 +1342,40 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                       </div>
                   )}
 
+                  {/* Round Summary */}
                   {phase === 'round_summary' && (
-                      <div className="bg-gray-800/95 backdrop-blur border border-gray-600 p-8 rounded-3xl text-center animate-in zoom-in shadow-2xl w-full max-w-xs">
-                          <h2 className="text-xl font-bold mb-6 text-white flex items-center justify-center gap-2">
-                              <Swords size={20} /> 回合結算
+                      <div className="bg-gray-800/95 backdrop-blur border border-gray-600 p-6 rounded-3xl text-center animate-in zoom-in shadow-2xl w-full max-w-xs">
+                          <h2 className="text-lg font-bold mb-6 text-white flex items-center justify-center gap-2">
+                              <Swords size={20} className="text-gray-400" /> 本回合結算
                           </h2>
                           <div className="space-y-4">
-                              <div className="bg-gray-900/50 p-3 rounded-xl flex justify-between items-center">
-                                  <span className="text-gray-400 text-sm">進攻結果</span>
-                                  <span className={`font-black text-lg ${opDefenseResult === 'fail' ? 'text-green-400' : 'text-gray-500'}`}>
-                                      {opDefenseResult === 'fail' ? 'HIT' : 'BLOCKED'}
-                                  </span>
+                              {/* My Attack Result */}
+                              <div className="bg-gray-900/50 p-4 rounded-xl flex justify-between items-center border border-gray-700">
+                                  <span className="text-gray-400 text-sm font-bold">攻擊</span>
+                                  <div className="flex items-center gap-2">
+                                      {opDefenseResult === 'backlash' ? (
+                                          <span className="text-red-400 font-bold text-sm flex items-center gap-1"><HeartCrack size={14}/> 遭反噬</span>
+                                      ) : opDefenseResult === 'fail' ? (
+                                          <span className="text-green-400 font-bold text-sm flex items-center gap-1"><CheckCircle size={14}/> 命中</span>
+                                      ) : (
+                                          <span className="text-gray-500 font-bold text-sm">被防禦</span>
+                                      )}
+                                  </div>
                               </div>
-                              <div className="bg-gray-900/50 p-3 rounded-xl flex justify-between items-center">
-                                  <span className="text-gray-400 text-sm">防禦結果</span>
-                                  <span className={`font-black text-lg ${myDefenseResult === 'success' ? 'text-blue-400' : 'text-red-500'}`}>
-                                      {myDefenseResult === 'success' ? 'PERFECT' : myDefenseResult === 'skill_hit' ? 'SKILL' : 'FAIL'}
-                                  </span>
+                              
+                              {/* My Defense Result */}
+                              <div className="bg-gray-900/50 p-4 rounded-xl flex justify-between items-center border border-gray-700">
+                                  <span className="text-gray-400 text-sm font-bold">防禦</span>
+                                  <div className="flex items-center gap-2">
+                                      {myDefenseResult === 'success' ? (
+                                          <>
+                                            <span className="text-blue-400 font-bold text-sm">成功</span>
+                                            {perfectParryTriggered && <span className="text-yellow-400 text-xs font-black">PERFECT</span>}
+                                          </>
+                                      ) : (
+                                          <span className="text-red-500 font-bold text-sm">失敗</span>
+                                      )}
+                                  </div>
                               </div>
                           </div>
                       </div>
@@ -967,14 +1387,15 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           <div className="bg-gray-800/90 p-4 pb-8 flex items-center gap-4 border-t border-gray-700 shadow-[0_-4px_20px_rgba(0,0,0,0.3)] z-20">
               <div className="flex-1 min-w-0 text-right">
                   <div className="flex justify-end items-end mb-1.5 gap-2">
-                      <span className="text-xs font-mono text-blue-400">{myHp}/{MAX_HP}</span>
+                      {isAdrenaline && <Flame size={16} className="text-red-500 animate-pulse" />}
+                      <span className={`text-xs font-mono ${isAdrenaline ? 'text-red-500 font-bold' : 'text-blue-400'}`}>{myHp}/{MAX_HP}</span>
                       <span className="font-bold text-blue-400 text-sm">YOU</span>
                   </div>
                   <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${(myHp / MAX_HP) * 100}%` }}></div>
+                      <div className={`h-full transition-all duration-500 ${isAdrenaline ? 'bg-red-600' : 'bg-blue-500'}`} style={{ width: `${(myHp / MAX_HP) * 100}%` }}></div>
                   </div>
               </div>
-              <div className={`relative w-14 h-14 rounded-full ${user.avatarColor} flex-shrink-0 overflow-hidden border-2 border-white shadow-[0_0_15px_rgba(59,130,246,0.4)]`}>
+              <div className={`relative w-14 h-14 rounded-full ${user.avatarColor} flex-shrink-0 overflow-hidden border-2 border-white shadow-[0_0_15px_rgba(59,130,246,0.4)] flex items-center justify-center`}>
                   {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : user.name[0]}
                   {myDefenseResult === 'fail' && <div className="absolute inset-0 bg-red-500/80 flex items-center justify-center font-black text-white text-xs animate-ping">HIT</div>}
               </div>

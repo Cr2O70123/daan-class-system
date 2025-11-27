@@ -1,6 +1,7 @@
+
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap, Key } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap, Key, Image as ImageIcon } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
 import { getDailyPasscode } from '../services/authService';
 
@@ -10,6 +11,7 @@ interface ProfileScreenProps {
   onNavigateToModeration: () => void;
   onNavigateToLeaderboard: () => void;
   onOpenCheckIn: () => void;
+  onOpenExams: () => void; // New prop for opening exams
   onLogout: () => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -55,6 +57,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     onNavigateToModeration, 
     onNavigateToLeaderboard,
     onOpenCheckIn,
+    onOpenExams,
     onLogout, 
     isDarkMode, 
     toggleDarkMode,
@@ -68,17 +71,36 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [avatarImage, setAvatarImage] = useState<string | undefined>(user.avatarImage);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [activeHistoryTab, setActiveHistoryTab] = useState<'questions' | 'answers' | 'resources' | 'inventory'>('questions');
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
   
   const progressPercent = calculateProgress(user.points);
 
+  // Avatar Upload - Immediately updates user state
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setAvatarImage(reader.result as string);
-        setUser({ ...user, avatarImage: reader.result as string });
+        const newImage = reader.result as string;
+        setAvatarImage(newImage);
+        // Immediate Global Update
+        setUser({ ...user, avatarImage: newImage });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Background Upload - Immediately updates user state
+  const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const newBg = reader.result as string;
+        // Immediate Global Update
+        setUser({ ...user, profileBackgroundImage: newBg });
       };
       reader.readAsDataURL(file);
     }
@@ -232,28 +254,52 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
       {/* Header Profile Section - Added pt-safe */}
       <div className="bg-white dark:bg-gray-800 pb-6 rounded-b-[2rem] shadow-sm mb-6 overflow-hidden transition-colors pt-safe">
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 h-32 relative">
-            <div className="absolute top-0 left-0 w-full h-full opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-400 via-transparent to-transparent"></div>
+        
+        {/* Profile Cover with Background Image Support */}
+        <div className="h-40 relative group">
+            {user.profileBackgroundImage ? (
+                <div 
+                    className="absolute top-0 left-0 w-full h-full bg-cover bg-center transition-all duration-500"
+                    style={{ backgroundImage: `url(${user.profileBackgroundImage})` }}
+                />
+            ) : (
+                <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-slate-800 to-slate-900">
+                    <div className="absolute top-0 left-0 w-full h-full opacity-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-400 via-transparent to-transparent"></div>
+                </div>
+            )}
+            
+            {/* Gradient Overlay for text readability */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+
+            {/* Edit Cover Button */}
+            <button 
+                onClick={() => bgInputRef.current?.click()}
+                className="absolute top-4 right-4 p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100"
+                title="更換封面"
+            >
+                <ImageIcon size={18} />
+            </button>
+            <input type="file" ref={bgInputRef} className="hidden" accept="image/*" onChange={handleBgUpload} />
         </div>
         
         <div className="px-6 relative">
-            <div className="flex flex-col items-center -mt-12">
+            <div className="flex flex-col items-center -mt-14">
                 {/* Avatar */}
-                <div className="mb-3 relative group w-24 h-24">
+                <div className="mb-3 relative group w-28 h-28">
                     <div 
-                        className={`w-full h-full rounded-full ${user.avatarColor} text-white text-4xl font-bold flex items-center justify-center ${getFrameStyle(user.avatarFrame)} overflow-hidden bg-cover bg-center shadow-lg`}
-                        onClick={() => fileInputRef.current?.click()}
+                        className={`w-full h-full rounded-full ${user.avatarColor} text-white text-4xl font-bold flex items-center justify-center ${getFrameStyle(user.avatarFrame)} overflow-hidden bg-cover bg-center shadow-2xl border-4 border-white dark:border-gray-800 cursor-pointer`}
+                        onClick={() => avatarInputRef.current?.click()}
                     >
-                        {avatarImage ? (
-                            <img src={avatarImage} alt="avatar" className="w-full h-full object-cover" />
+                        {user.avatarImage ? (
+                            <img src={user.avatarImage} alt="avatar" className="w-full h-full object-cover" />
                         ) : (
                             user.name.charAt(0) || 'U'
                         )}
                     </div>
                     
-                    {/* Camera Button */}
+                    {/* Camera Button (Avatar) */}
                     <div 
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={() => avatarInputRef.current?.click()}
                         className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm cursor-pointer z-10"
                     >
                         <Camera className="text-white drop-shadow-md" size={32} />
@@ -262,16 +308,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     {/* Random Color Button */}
                     <button 
                         onClick={handleRandomColor}
-                        className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-700 p-1.5 rounded-full shadow-md border border-gray-100 dark:border-gray-600 text-gray-500 hover:text-blue-500 z-20"
+                        className="absolute -bottom-1 -right-1 bg-white dark:bg-gray-700 p-2 rounded-full shadow-md border border-gray-100 dark:border-gray-600 text-gray-500 hover:text-blue-500 z-20"
                         title="隨機顏色"
                     >
                         <RefreshCw size={14} />
                     </button>
                 </div>
                 
-                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+                <input type="file" ref={avatarInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                 
-                <h2 className={`text-xl font-bold mt-2 ${user.nameColor || 'text-gray-800 dark:text-white'}`}>{user.name}</h2>
+                <h2 className={`text-2xl font-bold mt-1 ${user.nameColor || 'text-gray-800 dark:text-white'}`}>{user.name}</h2>
                 <div className="flex items-center gap-2 mt-1 mb-2">
                     <span className="text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded font-bold">
                         Lv.{user.level}
@@ -295,7 +341,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </div>
                 
                 {/* Stats & Actions Grid */}
-                <div className={`grid ${user.isAdmin || user.studentId === '1204233' ? 'grid-cols-4' : 'grid-cols-3'} gap-3 w-full mt-2`}>
+                <div className={`grid ${user.isAdmin || user.studentId === '1204233' ? 'grid-cols-4' : 'grid-cols-4'} gap-3 w-full mt-2`}>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-3 text-center">
                         <div className="text-xl font-bold text-blue-600 dark:text-blue-400">{user.points}</div>
                         <div className="text-[10px] text-blue-400 dark:text-blue-300 font-bold">積分</div>
@@ -314,10 +360,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                         </div>
                         <div className="text-[10px] text-yellow-500 dark:text-yellow-300 font-bold">班級榜單</div>
                     </button>
+
+                    <button onClick={onOpenExams} className="bg-purple-50 dark:bg-purple-900/20 rounded-2xl p-3 text-center hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors">
+                        <div className="text-xl font-bold text-purple-600 dark:text-purple-400 flex items-center justify-center gap-1">
+                            <FileText size={20} />
+                        </div>
+                        <div className="text-[10px] text-purple-500 dark:text-purple-300 font-bold">考試行程</div>
+                    </button>
                     
                     {/* Admin Button - Only visible if isAdmin is true */}
                     {user.isAdmin && (
-                         <button onClick={onNavigateToModeration} className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-3 text-center hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                         <button onClick={onNavigateToModeration} className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-3 text-center hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors col-span-4 mt-2">
                             <div className="text-xl font-bold text-red-600 dark:text-red-400 flex items-center justify-center gap-1">
                                 <ShieldAlert size={20} />
                             </div>

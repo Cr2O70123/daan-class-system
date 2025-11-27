@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
-import { RefreshCw, Save, Check } from 'lucide-react';
+import { RefreshCw, Save, Check, AlertCircle } from 'lucide-react';
 
 interface SettingsScreenProps {
   user: User;
@@ -16,6 +17,7 @@ const AVATAR_COLORS = [
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, setUser }) => {
   const [name, setName] = useState(user.name);
   const [isSaved, setIsSaved] = useState(false);
+  const [error, setError] = useState('');
 
   const handleRandomAvatar = () => {
     const randomColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
@@ -23,7 +25,45 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, setUser })
   };
 
   const handleSave = () => {
-    setUser({ ...user, name });
+    if (!name.trim()) {
+        setError("名稱不能為空");
+        return;
+    }
+
+    // Check if name actually changed
+    if (name === user.name) {
+        // Just saving other settings if any, no cost
+        setIsSaved(true);
+        setTimeout(() => setIsSaved(false), 2000);
+        return;
+    }
+
+    // Nickname Change Logic
+    const now = Date.now();
+    const ONE_HOUR = 3600 * 1000;
+    const lastChange = user.lastNicknameChange || 0;
+
+    if (now - lastChange < ONE_HOUR) {
+        const remaining = Math.ceil((ONE_HOUR - (now - lastChange)) / 60000);
+        setError(`改名冷卻中，請等待 ${remaining} 分鐘`);
+        return;
+    }
+
+    if (user.points < 50) {
+        setError("積分不足，改名需消耗 50 PT");
+        return;
+    }
+
+    // Apply changes
+    const newPoints = user.points - 50;
+    setUser({ 
+        ...user, 
+        name, 
+        points: newPoints,
+        lastNicknameChange: now
+    });
+    
+    setError('');
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
   };
@@ -65,6 +105,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, setUser })
                 className="w-full bg-gray-50 text-gray-800 border border-gray-200 rounded-lg p-3 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
                 placeholder="輸入你的名字"
               />
+              <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1">
+                  <InfoIcon size={10} /> 改名消耗 50 PT (冷卻 1 小時)
+              </p>
             </div>
 
             <div>
@@ -77,6 +120,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, setUser })
               />
             </div>
 
+            {error && (
+                <div className="bg-red-50 text-red-600 text-xs p-3 rounded-lg flex items-center gap-2">
+                    <AlertCircle size={14} />
+                    {error}
+                </div>
+            )}
+
             <button 
               onClick={handleSave}
               className={`w-full font-bold py-3 px-4 rounded-lg mt-4 flex items-center justify-center gap-2 transition-all duration-300 ${
@@ -86,7 +136,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, setUser })
               }`}
             >
               {isSaved ? <Check size={18} /> : <Save size={18} />}
-              {isSaved ? '已儲存' : '儲存變更'}
+              {isSaved ? '已儲存' : '儲存變更 (50 PT)'}
             </button>
           </div>
         </div>
@@ -94,3 +144,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ user, setUser })
     </div>
   );
 };
+
+const InfoIcon = ({size}:{size:number}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+);

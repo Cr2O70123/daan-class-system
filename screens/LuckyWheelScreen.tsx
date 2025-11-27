@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowLeft, Coins, Sparkles, AlertCircle, Info, X, AlertTriangle, Lock } from 'lucide-react';
+import { ArrowLeft, Coins, Sparkles, AlertCircle, Info, X, AlertTriangle, Lock, CheckCircle } from 'lucide-react';
 import { User } from '../types';
 import { updateUserInDb } from '../services/authService';
 
@@ -59,27 +59,77 @@ const playSound = (type: 'tick' | 'win') => {
     } catch(e) {}
 };
 
-const DisclaimerModal = ({ onClose }: { onClose: () => void }) => (
-    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
-        <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border-2 border-red-500">
-            <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
-                <AlertTriangle size={32} />
+// --- Strict Disclaimer Modal (Reused Logic) ---
+const DisclaimerModal = ({ onClose }: { onClose: () => void }) => {
+    const [timeLeft, setTimeLeft] = useState(5);
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setTimeLeft((prev) => {
+                if (prev <= 0) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return prev - 0.1;
+            });
+        }, 100);
+        return () => clearInterval(timer);
+    }, []);
+
+    const progress = Math.min(100, ((5 - timeLeft) / 5) * 100);
+    const isLocked = timeLeft > 0;
+
+    return (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="bg-zinc-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border-4 border-red-600 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-2 bg-gray-800">
+                    <div className="h-full bg-red-600 transition-all duration-100 ease-linear" style={{ width: `${progress}%` }}></div>
+                </div>
+
+                <div className="w-20 h-20 bg-red-900/50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 animate-pulse border-2 border-red-600/50">
+                    <AlertTriangle size={40} />
+                </div>
+                
+                <h2 className="text-2xl font-black text-white mb-4 tracking-wider">博弈風險警告</h2>
+                
+                <div className="text-left bg-black/40 p-4 rounded-xl border border-red-900/50 mb-6 space-y-3">
+                    <p className="text-gray-300 text-sm leading-relaxed">
+                        <span className="text-red-500 font-bold block mb-1">⚠ 每日限制</span>
+                        本遊戲包含機率性中獎機制。為防止過度沉迷，<span className="text-red-400 font-bold">每日強制限定轉 {MAX_DAILY_SPINS} 次</span>。
+                    </p>
+                    <p className="text-gray-300 text-sm leading-relaxed">
+                        <span className="text-red-500 font-bold block mb-1">⚠ 積分風險</span>
+                        每次轉動皆需消耗積分，且<span className="text-red-400 font-bold">不保證</span>獲獎。請自行評估風險。
+                    </p>
+                </div>
+
+                <button 
+                    onClick={onClose}
+                    disabled={isLocked}
+                    className={`w-full py-4 rounded-xl font-bold transition-all relative overflow-hidden group ${
+                        isLocked 
+                            ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
+                            : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/50'
+                    }`}
+                >
+                    {isLocked ? (
+                        <span>請閱讀警語 ({Math.ceil(timeLeft)}s)</span>
+                    ) : (
+                        <span className="flex items-center justify-center gap-2">
+                            <CheckCircle size={18} /> 我已了解，進入遊戲
+                        </span>
+                    )}
+                    {isLocked && (
+                        <div 
+                            className="absolute bottom-0 left-0 top-0 bg-gray-700/30 transition-all duration-100 ease-linear" 
+                            style={{ width: `${progress}%` }} 
+                        />
+                    )}
+                </button>
             </div>
-            <h2 className="text-xl font-black text-gray-800 dark:text-white mb-2">理性娛樂與限制說明</h2>
-            <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed mb-6 text-left">
-                1. 本遊戲包含機率性中獎機制。<br/>
-                2. <span className="font-bold text-red-500">每日強制限定轉 {MAX_DAILY_SPINS} 次</span>，以防止過度刷分與沉迷。<br/>
-                3. 次數將於每日午夜 00:00 重置。<br/>
-            </p>
-            <button 
-                onClick={onClose}
-                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
-            >
-                我已了解，進入遊戲
-            </button>
         </div>
-    </div>
-);
+    );
+};
 
 export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack, onSpinEnd }) => {
   const [isSpinning, setIsSpinning] = useState(false);
@@ -88,9 +138,16 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
   const [showProbabilities, setShowProbabilities] = useState(false);
   const [showDisclaimer, setShowDisclaimer] = useState(true);
   
+  // Local state to track spins in this session immediately
+  const [sessionSpins, setSessionSpins] = useState(0);
+  
   // Spin Limits Logic
   const todayStr = new Date().toDateString();
-  const spinsToday = user.lastWheelDate === todayStr ? (user.dailyWheelSpins || 0) : 0;
+  
+  // Use user prop but add local session spins to avoid race condition where prop hasn't updated yet
+  const dbSpinsToday = user.lastWheelDate === todayStr ? (user.dailyWheelSpins || 0) : 0;
+  const spinsToday = dbSpinsToday + sessionSpins;
+  
   const remainingSpins = Math.max(0, MAX_DAILY_SPINS - spinsToday);
 
   const totalWeight = PRIZES.reduce((sum, item) => sum + item.weight, 0);
@@ -137,6 +194,7 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
         alert("積分不足！需要 20 PT");
         return;
     }
+    // Re-check logic inside handler to be safe
     if (remainingSpins <= 0) {
         alert("今日次數已用盡，請明天再來！");
         return;
@@ -145,18 +203,18 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
 
     setIsSpinning(true);
     setLastPrize(null);
+    
+    // IMPORTANT: Increment local spin count IMMEDIATELY to update UI and block button
+    setSessionSpins(prev => prev + 1);
 
-    // Update User Spin Count immediately to prevent spam
-    const newSpins = spinsToday + 1;
+    // Update User Spin Count in DB
+    const newSpinsTotal = dbSpinsToday + 1; // Base calculation on DB value passed in props + 1
+    
     const updatedUser = { 
         ...user, 
-        dailyWheelSpins: newSpins, 
+        dailyWheelSpins: newSpinsTotal, 
         lastWheelDate: todayStr 
     };
-    // We don't have direct access to setUser here easily without prop drilling, 
-    // but we can rely on onSpinEnd to sync eventually, OR call updateDb.
-    // For visual feedback, we rely on local state re-render if parent updates.
-    // NOTE: In a real app, lock the button.
 
     // Weighted Random Selection
     let randomNum = Math.random() * totalWeight;
@@ -200,17 +258,8 @@ export const LuckyWheelScreen: React.FC<LuckyWheelScreenProps> = ({ user, onBack
         setIsSpinning(false);
         setLastPrize(selectedPrize);
         
-        // Update DB with new spin count AND points result
-        // Note: onSpinEnd handles points update. We need to ensure spin count is also saved.
-        // Ideally onSpinEnd does both or we do it here.
-        // To keep it simple and safe, we pass the cost. The parent handles points.
-        // We should ideally update the user object passed down.
-        
-        // Hack: Pass a signal to parent to increment spin count
-        // But simpler: update DB here for spin count? No, let's assume parent handles "cost" logic.
-        
-        // Actually, update the DB for spin count here is safest.
         try {
+             // Save spin count to DB
              await updateUserInDb(updatedUser);
         } catch(e) { console.error(e); }
 

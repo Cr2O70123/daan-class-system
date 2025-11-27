@@ -46,10 +46,12 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             name: name,
             points: initialPoints,
             lifetime_points: initialPoints, // Initialize XP same as starting points
-            hearts: 3,
-            last_heart_reset: new Date().toDateString(),
+            hearts: 0, // Legacy field, might be unused now but kept for DB schema
+            daily_plays: 0, // New field
+            last_heart_reset: new Date().toDateString(), // Using this for daily reset
             inventory: [],
             avatar_image: null,
+            profile_background_image: null,
             is_banned: false,
             consecutive_check_in_days: 0,
             last_check_in_date: null,
@@ -93,6 +95,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         avatarColor: user.avatar_color || 'bg-purple-500', 
         avatarImage: user.avatar_image || undefined,
         avatarFrame: user.avatar_frame || undefined,
+        profileBackgroundImage: user.profile_background_image || undefined,
         points: user.points,
         lifetimePoints: xp, // Store XP
         level: calculateLevel(xp), // Calculate level based on XP
@@ -100,12 +103,17 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         inventory: inventory,
         settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
         nameColor: user.name_color || undefined,
-        hearts: user.hearts ?? 3, // Default to 3 if null
-        lastHeartReset: user.last_heart_reset || new Date().toDateString(),
+        
+        // Game System
+        dailyPlays: user.daily_plays || 0,
+        lastDailyReset: user.last_heart_reset || new Date().toDateString(), // Mapping DB column
         
         // Check-in
         lastCheckInDate: user.last_check_in_date,
         checkInStreak: user.consecutive_check_in_days || 0,
+
+        // Personalization
+        lastNicknameChange: user.last_nickname_change,
 
         isBanned: user.is_banned,
         banExpiresAt: user.ban_expires_at,
@@ -164,6 +172,7 @@ export const checkSession = async (): Promise<User | null> => {
         avatarColor: user.avatar_color || 'bg-purple-500',
         avatarImage: user.avatar_image || undefined,
         avatarFrame: user.avatar_frame || undefined,
+        profileBackgroundImage: user.profile_background_image || undefined,
         points: user.points,
         lifetimePoints: xp,
         level: calculateLevel(xp),
@@ -171,12 +180,14 @@ export const checkSession = async (): Promise<User | null> => {
         inventory: inventory,
         settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
         nameColor: user.name_color || undefined,
-        hearts: user.hearts ?? 3,
-        lastHeartReset: user.last_heart_reset || new Date().toDateString(),
         
-        // Check-in
+        dailyPlays: user.daily_plays || 0,
+        lastDailyReset: user.last_heart_reset || new Date().toDateString(),
+        
         lastCheckInDate: user.last_check_in_date,
         checkInStreak: user.consecutive_check_in_days || 0,
+
+        lastNicknameChange: user.last_nickname_change,
 
         isBanned: user.is_banned,
         banExpiresAt: user.ban_expires_at,
@@ -197,13 +208,18 @@ export const updateUserInDb = async (user: User) => {
     }
 
     const updatePayload = {
+        name: user.name,
         points: user.points,
         lifetime_points: user.lifetimePoints, // Ensure XP is saved
-        hearts: user.hearts,
-        last_heart_reset: user.lastHeartReset,
+        
+        // Game Limits (Mapped to DB columns)
+        daily_plays: user.dailyPlays,
+        last_heart_reset: user.lastDailyReset,
+        
         avatar_image: user.avatarImage,
         avatar_frame: user.avatarFrame, 
-        name_color: user.nameColor,     
+        name_color: user.nameColor, 
+        profile_background_image: user.profileBackgroundImage, // New Field
         inventory: user.inventory,
         avatar_color: user.avatarColor,
         settings: user.settings,
@@ -211,6 +227,9 @@ export const updateUserInDb = async (user: User) => {
         // Check-in
         last_check_in_date: user.lastCheckInDate,
         consecutive_check_in_days: user.checkInStreak,
+
+        // Personalization
+        last_nickname_change: user.lastNicknameChange,
 
         // Push
         push_client_id: user.pushClientId,

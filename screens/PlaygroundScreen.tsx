@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle } from 'lucide-react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
@@ -9,12 +9,14 @@ interface PlaygroundScreenProps {
   onOpenResistorGame: () => void;
   onOpenLuckyWheel?: () => void;
   onOpenBlockBlast?: () => void;
-  onOpenPkGame?: () => void;
+  onOpenPkGame?: (mode?: 'CLASSIC' | 'OVERLOAD') => void;
   onOpenOhmsLaw?: () => void; // Mapped to BaseConverter
-  onOpenLogicGate?: () => void; // New prop for Logic Gate
+  onOpenVocabPractice?: () => void; // New
+  onOpenDrawGuess?: () => void; // New
+  onOpenHighLow?: () => void; // New Gambling Game
 }
 
-type ViewState = 'HOME' | 'LEARN' | 'PUZZLE' | 'TOOLS';
+type ViewState = 'HOME' | 'LEARN' | 'PUZZLE' | 'TOOLS' | 'GAMBLE';
 
 const CategoryCard = ({ title, icon, color, count, onClick }: { title: string, icon: React.ReactNode, color: string, count: string, onClick: () => void }) => (
     <button 
@@ -48,7 +50,7 @@ const SubPageHeader = ({ title, onBack }: { title: string, onBack: () => void })
 const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[] }: any) => (
     <div 
         onClick={onClick}
-        className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden cursor-pointer active:scale-[0.98] transition-all flex gap-4 items-center"
+        className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden transition-all flex gap-4 items-center ${onClick ? 'cursor-pointer active:scale-[0.98]' : 'opacity-75 cursor-not-allowed'}`}
     >
         <div className={`w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center ${colorClass} text-white shadow-md`}>
             {icon}
@@ -57,7 +59,7 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[] }: any) => (
             <div className="flex justify-between items-start">
                 <h4 className="font-bold text-gray-800 dark:text-white text-lg mb-1 truncate">{title}</h4>
                 {tags.length > 0 && (
-                    <span className="text-[9px] font-bold px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 rounded-full">
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${tags[0] === 'Coming Soon' ? 'bg-gray-200 text-gray-500' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                         {tags[0]}
                     </span>
                 )}
@@ -69,16 +71,17 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[] }: any) => (
     </div>
 );
 
-export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConverter?: () => void, onOpenLogicGate?: () => void }> = ({ 
+export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({ 
     onOpenWordChallenge, 
     onOpenResistorGame, 
     onOpenLuckyWheel, 
     onOpenBlockBlast, 
     onOpenPkGame,
     onOpenOhmsLaw,
-    user,
-    // @ts-ignore
-    onOpenLogicGate 
+    onOpenVocabPractice,
+    onOpenDrawGuess,
+    onOpenHighLow,
+    user
 }) => {
   const [view, setView] = useState<ViewState>('HOME');
 
@@ -86,7 +89,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* Featured Hero Card - PK Battle */}
           <div 
-              onClick={onOpenPkGame}
+              onClick={() => onOpenPkGame && onOpenPkGame()}
               className="relative w-full aspect-[16/9] bg-gray-900 rounded-[2rem] overflow-hidden shadow-xl cursor-pointer group active:scale-[0.98] transition-all border border-gray-800"
           >
               {/* Background with Gradient & Pattern */}
@@ -105,9 +108,9 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
                   </div>
                   
                   <div>
-                      <h2 className="text-3xl font-black text-white mb-1 italic tracking-tight drop-shadow-md">知識對決 PK</h2>
+                      <h2 className="text-3xl font-black text-white mb-1 italic tracking-tight drop-shadow-md">PK 競技場</h2>
                       <p className="text-indigo-200 text-xs font-medium max-w-[80%]">
-                          全新段位賽季！攻守交換機制，使用技能卡牌擊敗對手。
+                          新增 <span className="text-yellow-400 font-bold">超載競技場</span> 模式！賭上 HP 的心理博弈，全新技能等你體驗。
                       </p>
                   </div>
               </div>
@@ -119,19 +122,27 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
 
           {/* Categories Grid */}
           <div className="grid gap-3">
-              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider ml-1">遊戲分類</h3>
+              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider ml-1">功能分類</h3>
               
               <CategoryCard 
-                  title="益智與運氣" 
+                  title="休閒益智" 
                   count="3 款遊戲"
                   icon={<Puzzle size={24} />} 
                   color="bg-gradient-to-br from-orange-400 to-pink-500"
                   onClick={() => setView('PUZZLE')}
               />
+
+              <CategoryCard 
+                  title="博弈娛樂" 
+                  count="2 款遊戲"
+                  icon={<Dices size={24} />} 
+                  color="bg-gradient-to-br from-purple-600 to-indigo-600"
+                  onClick={() => setView('GAMBLE')}
+              />
               
               <CategoryCard 
                   title="學習挑戰" 
-                  count="2 款遊戲"
+                  count="4 款應用"
                   icon={<GraduationCap size={24} />} 
                   color="bg-gradient-to-br from-blue-400 to-indigo-600"
                   onClick={() => setView('LEARN')}
@@ -139,7 +150,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
               
               <CategoryCard 
                   title="實用工具箱" 
-                  count="2 款工具"
+                  count="1 款工具"
                   icon={<Wrench size={24} />} 
                   color="bg-gradient-to-br from-gray-600 to-gray-800"
                   onClick={() => setView('TOOLS')}
@@ -154,8 +165,8 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
       <div className="bg-white dark:bg-gray-800 p-6 pt-safe rounded-b-[2rem] shadow-sm mb-6 sticky top-0 z-20">
         <div className="flex items-center justify-between mt-2">
             <div>
-                <h1 className="text-2xl font-black text-gray-800 dark:text-white">娛樂大廳</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400 font-bold">Arcade & Tools</p>
+                <h1 className="text-2xl font-black text-gray-800 dark:text-white">更多功能</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400 font-bold">Utilities & Games</p>
             </div>
             <div className="bg-indigo-50 dark:bg-indigo-900/30 p-2 rounded-xl">
                 <Gamepad2 size={24} className="text-indigo-600 dark:text-indigo-400" />
@@ -168,7 +179,15 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
 
           {view === 'PUZZLE' && (
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
-                  <SubPageHeader title="益智與運氣" onBack={() => setView('HOME')} />
+                  <SubPageHeader title="休閒益智" onBack={() => setView('HOME')} />
+                  <GameItem 
+                      title="畫畫接龍" 
+                      desc="多人即時繪圖聊天室，發揮創意猜題互動。" 
+                      icon={<PenTool size={24} />} 
+                      colorClass="bg-pink-500"
+                      onClick={onOpenDrawGuess}
+                      tags={['社交']}
+                  />
                   <GameItem 
                       title="方塊爆破" 
                       desc="經典消除遊戲，無限模式挑戰最高分。" 
@@ -178,21 +197,37 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
                       tags={['殺時間']}
                   />
                   <GameItem 
+                      title="PK 競技場" 
+                      desc="含「經典對決」與「超載競技場」雙模式。" 
+                      icon={<Swords size={24} />} 
+                      colorClass="bg-rose-600"
+                      onClick={() => onOpenPkGame && onOpenPkGame()}
+                      tags={['對戰']}
+                  />
+              </div>
+          )}
+
+          {view === 'GAMBLE' && (
+              <div className="space-y-4 animate-in slide-in-from-right duration-300">
+                  <SubPageHeader title="博弈娛樂" onBack={() => setView('HOME')} />
+                  <div className="bg-red-50 border border-red-100 rounded-xl p-3 mb-4 text-xs text-red-600 flex items-center gap-2">
+                      <Zap size={14} /> 注意：博弈遊戲可能會導致積分歸零，請量力而為。
+                  </div>
+                  <GameItem 
                       title="幸運轉盤" 
                       desc="每日限轉 3 次！消耗積分贏取 500 PT 大獎。" 
                       icon={<Coins size={24} />} 
                       colorClass="bg-yellow-500"
                       onClick={onOpenLuckyWheel}
-                      tags={['博弈']}
+                      tags={['運氣']}
                   />
-                  {/* Re-list PK here too for discoverability */}
                   <GameItem 
-                      title="知識對決 PK" 
-                      desc="真人實時對戰，累積積分提升段位。" 
-                      icon={<Swords size={24} />} 
-                      colorClass="bg-rose-600"
-                      onClick={onOpenPkGame}
-                      tags={['對戰']}
+                      title="高低博弈 (High Low)" 
+                      desc="猜測下一張牌的大小，連續猜對獎金翻倍！" 
+                      icon={<Dices size={24} />} 
+                      colorClass="bg-indigo-600"
+                      onClick={onOpenHighLow}
+                      tags={['NEW', '高風險']}
                   />
               </div>
           )}
@@ -201,12 +236,20 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="學習挑戰" onBack={() => setView('HOME')} />
                   <GameItem 
-                      title="單字挑戰" 
-                      desc="快速回答單字，累積 Combo 衝擊排行榜！" 
+                      title="單字練習 (純練習)" 
+                      desc="不扣分不限時，分組記憶，含發音與例句。" 
                       icon={<BookOpen size={24} />} 
+                      colorClass="bg-green-500"
+                      onClick={onOpenVocabPractice}
+                      tags={['自修']}
+                  />
+                  <GameItem 
+                      title="單字挑戰賽" 
+                      desc="快速回答單字，累積 Combo 衝擊排行榜！" 
+                      icon={<Trophy size={24} />} 
                       colorClass="bg-blue-500"
                       onClick={onOpenWordChallenge}
-                      tags={['英文']}
+                      tags={['競賽']}
                   />
                   <GameItem 
                       title="電阻色碼" 
@@ -215,6 +258,14 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
                       colorClass="bg-orange-500"
                       onClick={onOpenResistorGame}
                       tags={['電子學']}
+                  />
+                  <GameItem 
+                      title="AI 萬能家教" 
+                      desc="遇到難題？隨時呼叫 AI 助教為您解惑。" 
+                      icon={<Bot size={24} />} 
+                      colorClass="bg-violet-500"
+                      onClick={null}
+                      tags={['Coming Soon']}
                   />
               </div>
           )}
@@ -229,14 +280,6 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps & { onOpenBaseConv
                       colorClass="bg-gray-700"
                       onClick={onOpenOhmsLaw} // BaseConverter
                       tags={['必備']}
-                  />
-                  <GameItem 
-                      title="邏輯閘實驗室" 
-                      desc="視覺化邏輯閘模擬 (AND, OR, NOT...)。" 
-                      icon={<Cpu size={24} />} 
-                      colorClass="bg-indigo-600"
-                      onClick={onOpenLogicGate} // LogicGate
-                      tags={['模擬']}
                   />
               </div>
           )}

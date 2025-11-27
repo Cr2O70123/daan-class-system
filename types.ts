@@ -5,8 +5,9 @@ export enum Tab {
   HOME = 'HOME',
   ASK = 'ASK', // Hidden from nav, triggered by FAB
   RESOURCE = 'RESOURCE', 
-  PLAYGROUND = 'PLAYGROUND', // New: Replaces Exam in Nav
-  EXAM = 'EXAM', // Kept for data structure but moved out of main nav
+  AI_TUTOR = 'AI_TUTOR', 
+  PLAYGROUND = 'PLAYGROUND', 
+  EXAM = 'EXAM', 
   STORE = 'STORE',
   LEADERBOARD = 'LEADERBOARD', 
   PROFILE = 'PROFILE', 
@@ -32,6 +33,7 @@ export interface User {
   avatarColor: string;
   avatarImage?: string; 
   avatarFrame?: string;
+  profileBackgroundImage?: string; // New: Profile Cover Image
   points: number; // Current Currency
   lifetimePoints?: number; // Total XP for Leveling (Never decreases)
   level: number;
@@ -40,9 +42,13 @@ export interface User {
   settings?: AppSettings;
   nameColor?: string;
   
-  // Game System
-  hearts: number; // Max 3
-  lastHeartReset: string; // Date string to track daily reset
+  // Game System (New Unified Limit)
+  dailyPlays: number; // Count up to 15
+  lastDailyReset: string; // Date string to track daily reset
+  // hearts: number; // Deprecated
+
+  // Personalization
+  lastNicknameChange?: number; // Timestamp
 
   // Lucky Wheel System (New)
   dailyWheelSpins?: number; // Track spins used today
@@ -173,7 +179,10 @@ export interface Word {
   id: number;
   en: string;
   zh: string;
-  level: WordLevel; 
+  level: WordLevel;
+  example?: string; // New
+  definition?: string; // New
+  partOfSpeech?: string; // New (v., n., adj.)
 }
 
 export interface GameResult {
@@ -209,9 +218,11 @@ export interface PkPlayerState {
     status: 'idle' | 'matched' | 'playing';
     roomId?: string;
     joinedAt: number; // Timestamp for FIFO queue
+    isAi?: boolean; // New: Flag for AI players
 }
 
-export type SkillType = 'HEAL' | 'SHIELD' | 'CRIT' | 'BLIND' | 'NONE';
+// Skills (Updated for Overload Arena)
+export type SkillType = 'HEAL' | 'SHIELD' | 'CRIT' | 'BLIND' | 'MIRROR' | 'CHAOS' | 'FIFTY_FIFTY' | 'NONE';
 
 export interface BattleCard {
     type: 'WORD' | 'SKILL';
@@ -220,18 +231,27 @@ export interface BattleCard {
     id: string; // Unique ID for selection
 }
 
+export type PkGameMode = 'CLASSIC' | 'OVERLOAD';
+export type OverloadLevel = 1 | 2 | 3;
+
 export interface PkGamePayload {
     type: 'START_GAME' | 'SEND_ACTION' | 'REPORT_RESULT' | 'GAME_OVER' | 'SURRENDER' | 'OPPONENT_LEFT';
     
+    // START_GAME
+    attackerId?: string; // JSON of user profile or 'ai_bot'
+    gameMode?: PkGameMode; // New
+
     // SEND_ACTION (Attack Phase)
-    attackerId?: string;
     wordId?: number; // If word attack
     skill?: SkillType; // If skill used
+    chargeLevel?: OverloadLevel; // New: For Overload Mode
     
     // REPORT_RESULT (Defense Phase Result)
     defenderId?: string;
     damageTaken?: number; 
     isCorrect?: boolean;
+    isPerfectParry?: boolean; // New: For Overload Mode
+    backlashDamage?: number; // New: For Overload Mode (Damage returned to attacker)
 
     // GAME_OVER / SURRENDER
     winnerId?: string;
@@ -261,4 +281,41 @@ export interface ResistorTask {
   displayValue: string; // "4.7 kΩ"
   bands: number; // 4 or 5
   correctColors: string[]; // ['Yellow', 'Violet', 'Red', 'Gold']
+}
+
+// --- Draw & Guess Types ---
+export interface DrawPoint {
+    x: number;
+    y: number;
+}
+
+export interface DrawStroke {
+    points: DrawPoint[];
+    color: string;
+    width: number;
+    isEraser?: boolean;
+}
+
+export interface DrawEvent {
+    type: 'DRAW_START' | 'DRAW_MOVE' | 'DRAW_END' | 'CLEAR' | 'UNDO';
+    payload?: any;
+    userId?: string;
+}
+
+export interface ChatMsg {
+    id: string;
+    sender: string;
+    text: string;
+    isSystem?: boolean;
+}
+
+// --- New: Visual Vocab Types ---
+export type DrawDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
+
+export interface DrawGuessWord {
+    en: string;
+    zh: string;
+    difficulty: DrawDifficulty;
+    category: string; // 'General', 'Food', 'Pokemon' etc.
+    points: number; // 1, 2, or 3
 }

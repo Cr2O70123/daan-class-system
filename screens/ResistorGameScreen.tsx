@@ -9,8 +9,10 @@ interface ResistorGameScreenProps {
   user: User;
   onBack: () => void;
   onFinish: (result: GameResult) => void;
-  onUpdateHearts: (hearts: number) => void;
+  onUpdateHearts: (newPlays: number) => void;
 }
+
+const MAX_PLAYS = 15;
 
 // Reuse sound logic
 const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | 'click') => {
@@ -73,11 +75,13 @@ export const ResistorGameScreen: React.FC<ResistorGameScreenProps> = ({ user, on
   const timerRef = useRef<number | null>(null);
 
   const startGame = () => {
-    if (user.hearts <= 0) {
-        alert("今日遊玩次數已達上限！");
+    if (user.dailyPlays >= MAX_PLAYS) {
+        alert("今日遊玩次數已達 15 次上限！");
         return;
     }
-    onUpdateHearts(user.hearts - 1);
+    // Increment plays
+    onUpdateHearts(user.dailyPlays + 1);
+    
     playSound('start');
     
     setGameState('playing');
@@ -280,7 +284,7 @@ export const ResistorGameScreen: React.FC<ResistorGameScreenProps> = ({ user, on
                   </div>
                   
                   <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-full text-blue-600 dark:text-blue-400 font-bold text-xs flex items-center gap-2">
-                       <Zap size={14} /> 剩餘遊玩次數: {user.hearts}/3
+                       <Zap size={14} /> 剩餘遊玩次數: {Math.max(0, MAX_PLAYS - user.dailyPlays)}/{MAX_PLAYS}
                   </div>
               </div>
           </div>

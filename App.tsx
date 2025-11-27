@@ -21,7 +21,10 @@ import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
 import { BlockBlastScreen } from './screens/BlockBlastScreen'; 
 import { PkGameScreen } from './screens/PkGameScreen';
 import { BaseConverterScreen } from './screens/BaseConverterScreen'; 
-import { LogicGateScreen } from './screens/LogicGateScreen'; 
+import { AiTutorScreen } from './screens/AiTutorScreen'; 
+import { VocabPracticeScreen } from './screens/VocabPracticeScreen';
+import { DrawGuessScreen } from './screens/DrawGuessScreen';
+import { HighLowGameScreen } from './screens/HighLowGameScreen'; // New Import
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult } from './types';
 import { RefreshCw, X, Bell } from 'lucide-react';
@@ -123,10 +126,12 @@ const App = () => {
   const [showLuckyWheel, setShowLuckyWheel] = useState(false);
   const [showBlockBlast, setShowBlockBlast] = useState(false); 
   const [showPkGame, setShowPkGame] = useState(false);
+  const [showVocabPractice, setShowVocabPractice] = useState(false);
+  const [showDrawGuess, setShowDrawGuess] = useState(false);
+  const [showHighLowGame, setShowHighLowGame] = useState(false); // New Game
   
   // Tools States
   const [showBaseConverter, setShowBaseConverter] = useState(false);
-  const [showLogicGate, setShowLogicGate] = useState(false);
   
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showNotificationScreen, setShowNotificationScreen] = useState(false);
@@ -138,8 +143,10 @@ const App = () => {
       setShowLuckyWheel(false);
       setShowBlockBlast(false);
       setShowPkGame(false);
+      setShowVocabPractice(false);
+      setShowDrawGuess(false);
+      setShowHighLowGame(false);
       setShowBaseConverter(false);
-      setShowLogicGate(false);
       setShowLeaderboardOverlay(false);
       setSelectedQuestion(null);
       setSelectedResource(null);
@@ -158,10 +165,12 @@ const App = () => {
           if (showLuckyWheel) { setShowLuckyWheel(false); return; }
           if (showBlockBlast) { setShowBlockBlast(false); return; }
           if (showPkGame) { setShowPkGame(false); return; }
+          if (showVocabPractice) { setShowVocabPractice(false); return; }
+          if (showDrawGuess) { setShowDrawGuess(false); return; }
+          if (showHighLowGame) { setShowHighLowGame(false); return; }
           if (showWordChallenge) { setShowWordChallenge(false); return; }
           if (showResistorGame) { setShowResistorGame(false); return; }
           if (showBaseConverter) { setShowBaseConverter(false); return; }
-          if (showLogicGate) { setShowLogicGate(false); return; }
           if (selectedQuestion) { setSelectedQuestion(null); return; }
           if (selectedResource) { setSelectedResource(null); return; }
           if (showLeaderboardOverlay) { setShowLeaderboardOverlay(false); return; }
@@ -171,7 +180,7 @@ const App = () => {
 
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
-  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showPkGame, showWordChallenge, showResistorGame, showBaseConverter, showLogicGate, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
+  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showPkGame, showVocabPractice, showDrawGuess, showHighLowGame, showWordChallenge, showResistorGame, showBaseConverter, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
 
   const pushHistory = () => {
       window.history.pushState({ overlay: true }, '');
@@ -226,8 +235,15 @@ const App = () => {
 
   const checkDailyReset = async (currentUser: User) => {
     const today = new Date().toDateString();
-    if (currentUser.lastHeartReset !== today) {
-        const updatedUser = { ...currentUser, hearts: 3, lastHeartReset: today, dailyWheelSpins: 0, lastWheelDate: today };
+    if (currentUser.lastDailyReset !== today) {
+        // Reset daily plays to 0 on a new day
+        const updatedUser = { 
+            ...currentUser, 
+            dailyPlays: 0, 
+            lastDailyReset: today, 
+            dailyWheelSpins: 0, 
+            lastWheelDate: today 
+        };
         try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
     }
   };
@@ -322,8 +338,9 @@ const App = () => {
       };
 
       if (product.category === 'consumable' && product.id === 'item_heart_refill') {
-          updatedUser = { ...updatedUser, hearts: (user.hearts || 0) + 1 };
-          await updateUserInDb(updatedUser); setUser(updatedUser); alert("購買成功！"); return;
+          // Energy Drink restores 5 plays (reduces daily plays count)
+          updatedUser = { ...updatedUser, dailyPlays: Math.max(0, user.dailyPlays - 5) };
+          await updateUserInDb(updatedUser); setUser(updatedUser); alert("補充成功！遊玩次數 +5"); return;
       }
       
       const isStackable = product.category === 'tool';
@@ -366,6 +383,25 @@ const App = () => {
       } catch(e) {
           console.error("Failed to update points from wheel", e);
       }
+  };
+
+  const handleFinishHighLow = async (netPoints: number) => {
+      if (!user) return;
+      const currentLifetimePoints = user.lifetimePoints ?? user.points;
+      // Only wins contribute to lifetime points
+      const newLifetime = netPoints > 0 ? currentLifetimePoints + netPoints : currentLifetimePoints;
+      
+      const updatedUser: User = {
+          ...user,
+          points: user.points + netPoints,
+          lifetimePoints: newLifetime,
+          level: calculateLevel(newLifetime)
+      };
+      
+      try {
+          await updateUserInDb(updatedUser);
+          setUser(updatedUser);
+      } catch(e) {}
   };
 
   const handleFinishChallenge = async (result: GameResult) => {
@@ -461,7 +497,7 @@ const App = () => {
             words={WORD_DATABASE}
             onBack={() => setShowWordChallenge(false)}
             onFinish={handleFinishChallenge}
-            onUpdateHearts={async (hearts) => { const u = { ...user, hearts }; setUser(u); await updateUserInDb(u); }}
+            onUpdateHearts={async (newPlays) => { const u = { ...user, dailyPlays: newPlays }; setUser(u); await updateUserInDb(u); }}
         />
       )}
       
@@ -470,7 +506,7 @@ const App = () => {
               user={user}
               onBack={() => setShowResistorGame(false)}
               onFinish={handleFinishChallenge}
-              onUpdateHearts={async (hearts) => { const u = { ...user, hearts }; setUser(u); await updateUserInDb(u); }}
+              onUpdateHearts={async (newPlays) => { const u = { ...user, dailyPlays: newPlays }; setUser(u); await updateUserInDb(u); }}
           />
       )}
 
@@ -479,7 +515,7 @@ const App = () => {
               user={user}
               onBack={() => setShowBlockBlast(false)}
               onFinish={handleFinishChallenge}
-              onUpdateHearts={async (hearts) => { const u = { ...user, hearts }; setUser(u); await updateUserInDb(u); }}
+              onUpdateHearts={async (newPlays) => { const u = { ...user, dailyPlays: newPlays }; setUser(u); await updateUserInDb(u); }}
           />
       )}
       
@@ -491,21 +527,39 @@ const App = () => {
           />
       )}
 
-      {/* --- TOOLS SCREENS --- */}
-      {showBaseConverter && (
-          <BaseConverterScreen onBack={() => setShowBaseConverter(false)} />
+      {showVocabPractice && (
+          <VocabPracticeScreen 
+              onBack={() => setShowVocabPractice(false)}
+          />
       )}
 
-      {showLogicGate && (
-          <LogicGateScreen onBack={() => setShowLogicGate(false)} />
+      {showDrawGuess && (
+          <DrawGuessScreen 
+              user={user}
+              onBack={() => setShowDrawGuess(false)}
+          />
       )}
 
+      {/* --- GAMBLING SCREENS --- */}
       {showLuckyWheel && (
           <LuckyWheelScreen 
             user={user}
             onBack={() => setShowLuckyWheel(false)}
             onSpinEnd={handleWheelSpin}
           />
+      )}
+
+      {showHighLowGame && (
+          <HighLowGameScreen 
+              user={user}
+              onBack={() => setShowHighLowGame(false)}
+              onFinish={handleFinishHighLow}
+          />
+      )}
+
+      {/* --- TOOLS SCREENS --- */}
+      {showBaseConverter && (
+          <BaseConverterScreen onBack={() => setShowBaseConverter(false)} />
       )}
 
       {/* Overlays */}
@@ -549,7 +603,7 @@ const App = () => {
                    <h2 className="font-bold text-lg text-gray-800 dark:text-white">全班等級排名</h2>
                    <button onClick={() => setShowLeaderboardOverlay(false)} className="text-blue-600 font-bold px-4 py-1">返回</button>
                </div>
-               <div className="flex-1 overflow-hidden"><LeaderboardScreen currentUser={user} /></div>
+               <div className="flex-1 overflow-hidden no-scrollbar"><LeaderboardScreen currentUser={user} /></div>
           </div>
       ) : showModeration ? (
           <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 overflow-y-auto">
@@ -577,8 +631,17 @@ const App = () => {
                         onNavigateToPlayground={() => handleTabChange(Tab.PLAYGROUND)}
                         onOpenLeaderboard={() => { pushHistory(); setShowLeaderboardOverlay(true); }}
                         onOpenCheckIn={() => { pushHistory(); setShowCheckInModal(true); }}
+                        onNavigateToAiTutor={() => handleTabChange(Tab.AI_TUTOR)} 
                         onRefresh={loadData}
                         onImageClick={(url) => { pushHistory(); setLightboxImage(url); }}
+                        onOpenPkGame={(mode) => { 
+                            pushHistory(); 
+                            setShowPkGame(true); 
+                            // Note: We might need to pass mode to PkGameScreen if props allowed, 
+                            // currently PkGameScreen handles mode selection internally mostly, 
+                            // but let's assume PkGameScreen can take an initialMode if we were to fully implement deep linking.
+                            // For now, it just opens the screen.
+                        }}
                     />
                 )}
                 {currentTab === Tab.RESOURCE && (
@@ -610,10 +673,14 @@ const App = () => {
                         onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }}
                         onOpenPkGame={() => { pushHistory(); setShowPkGame(true); }}
                         onOpenOhmsLaw={() => { pushHistory(); setShowBaseConverter(true); }}
-                        // @ts-ignore
-                        onOpenLogicGate={() => { pushHistory(); setShowLogicGate(true); }}
+                        onOpenVocabPractice={() => { pushHistory(); setShowVocabPractice(true); }}
+                        onOpenDrawGuess={() => { pushHistory(); setShowDrawGuess(true); }}
+                        onOpenHighLow={() => { pushHistory(); setShowHighLowGame(true); }}
                     />
                 )}
+                
+                {currentTab === Tab.AI_TUTOR && <AiTutorScreen />}
+
                 {currentTab === Tab.EXAM && <ExamScreen exams={exams} onAddExam={handleAddExam} onDeleteExam={()=>{}} />}
                 {currentTab === Tab.STORE && <ShopScreen user={user} onBuy={handleBuyProduct} />}
                 {currentTab === Tab.PROFILE && (
@@ -622,6 +689,7 @@ const App = () => {
                         onNavigateToModeration={() => { pushHistory(); setShowModeration(true); }}
                         onNavigateToLeaderboard={() => { pushHistory(); setShowLeaderboardOverlay(true); }}
                         onOpenCheckIn={() => { pushHistory(); setShowCheckInModal(true); }}
+                        onOpenExams={() => { pushHistory(); setCurrentTab(Tab.EXAM); }} 
                         onLogout={() => { logout(); setUser(null); }}
                         isDarkMode={user.settings?.darkMode || false}
                         toggleDarkMode={async () => { const s = { ...user.settings!, darkMode: !user.settings?.darkMode }; const u = { ...user, settings: s }; setUser(u); await updateUserInDb(u); }}

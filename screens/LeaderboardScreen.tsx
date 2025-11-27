@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState } from 'react';
 import { Trophy, Medal, Loader2, RefreshCw, Crown, TrendingUp, Flame, Moon, UserPlus } from 'lucide-react';
 import { User, LeaderboardEntry } from '../types';
@@ -97,7 +96,7 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
           </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar">
         {isLoading ? (
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
                 <Loader2 size={32} className="animate-spin mb-2" />

@@ -312,9 +312,13 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     }));
 };
 
-// --- PK Leaderboard (New) ---
+// --- PK Leaderboard (Updated) ---
 
-export const fetchPkLeaderboard = async (): Promise<LeaderboardEntry[]> => {
+export const fetchPkLeaderboard = async (mode: 'CLASSIC' | 'OVERLOAD' = 'CLASSIC'): Promise<LeaderboardEntry[]> => {
+    // Note: In a real app, you would have separate columns or tables for 'pk_rating_classic' and 'pk_rating_overload'.
+    // For now, we simulate different rankings based on the same 'pk_rating' field but potentially filtered or sorted differently if needed.
+    // Here we just return the same field for simplicity, but the architecture allows passing the mode.
+    
     const { data, error } = await supabase
         .from('users')
         .select('name, student_id, pk_rating, avatar_color, avatar_image, avatar_frame')
@@ -331,8 +335,8 @@ export const fetchPkLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         rank: index + 1,
         name: u.name,
         studentId: u.student_id,
-        points: u.pk_rating || 0, // Use points field to store Rating for display
-        level: 0, // Not needed
+        points: u.pk_rating || 0, 
+        level: 0, 
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
         avatarFrame: u.avatar_frame,
