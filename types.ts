@@ -55,7 +55,8 @@ export interface User {
   lastWheelDate?: string; // Track date of last spin
 
   // PK Rank System (New)
-  pkRating?: number; // ELO-like rating for PK
+  pkRating?: number; // Classic Mode Rating
+  pkRatingOverload?: number; // Overload Mode Rating
 
   // Check-in System
   lastCheckInDate?: string;
@@ -205,6 +206,7 @@ export interface PkResult {
   opponentName: string;
   mistakes?: PkMistake[]; // New: For review
   reason?: 'normal' | 'surrender' | 'opponent_left' | 'timeout'; // New
+  mode?: PkGameMode; // Return the mode played
 }
 
 export interface PkPlayerState {

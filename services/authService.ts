@@ -55,7 +55,8 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             is_banned: false,
             consecutive_check_in_days: 0,
             last_check_in_date: null,
-            pk_rating: 0 // Default PK Rating
+            pk_rating: 0, // Default PK Rating
+            pk_rating_overload: 0 // Default Overload PK Rating
         };
 
         const { data: createdUser, error: createError } = await supabase
@@ -122,7 +123,8 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         pushClientId: user.push_client_id,
         
         // PK Rating
-        pkRating: user.pk_rating || 0
+        pkRating: user.pkRating || user.pk_rating || 0,
+        pkRatingOverload: user.pkRatingOverload || user.pk_rating_overload || 0
     };
 
     // Persist session
@@ -194,7 +196,8 @@ export const checkSession = async (): Promise<User | null> => {
 
         pushClientId: user.push_client_id,
         
-        pkRating: user.pk_rating || 0
+        pkRating: user.pk_rating || 0,
+        pkRatingOverload: user.pk_rating_overload || 0
     };
 };
 
@@ -219,7 +222,7 @@ export const updateUserInDb = async (user: User) => {
         avatar_image: user.avatarImage,
         avatar_frame: user.avatarFrame, 
         name_color: user.nameColor, 
-        profile_background_image: user.profileBackgroundImage, // New Field
+        profile_background_image: user.profileBackgroundImage, 
         inventory: user.inventory,
         avatar_color: user.avatarColor,
         settings: user.settings,
@@ -234,8 +237,9 @@ export const updateUserInDb = async (user: User) => {
         // Push
         push_client_id: user.pushClientId,
         
-        // PK Rating
-        pk_rating: user.pkRating
+        // PK Rating (Updated for respective modes)
+        pk_rating: user.pkRating,
+        pk_rating_overload: user.pkRatingOverload
     };
 
     const { error } = await supabase

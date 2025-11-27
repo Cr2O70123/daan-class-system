@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle, Users, Copy, Play, Sparkles, Check, HeartCrack, Ban, Target, Bot, Repeat, Shuffle, Split, Flame, Lock } from 'lucide-react';
+import { ArrowLeft, Zap, Shield, Swords, Skull, Crown, User as UserIcon, Loader2, Send, Heart, EyeOff, BookOpen, BarChart, Trophy, X, Info, HelpCircle, Flag, Timer, AlertTriangle, CheckCircle, Users, Copy, Play, Sparkles, Check, HeartCrack, Ban, Target, Bot, Repeat, Shuffle, Split, Flame, Lock, Medal, Star } from 'lucide-react';
 import { User, PkResult, Word, PkPlayerState, PkGamePayload, BattleCard, SkillType, LeaderboardEntry, PkMistake, PkGameMode, OverloadLevel } from '../types';
 import { WORD_DATABASE } from '../services/mockData';
 import { joinMatchmaking, leaveMatchmaking, joinGameRoom, leaveGameRoom, sendGameEvent } from '../services/pkService';
@@ -40,13 +40,13 @@ const SKILL_DESCRIPTIONS: Record<SkillType, string> = {
 };
 
 const RANKS = [
-    { name: '青銅', color: 'text-orange-700 border-orange-700', min: 0, bg: 'bg-orange-900/30' },
-    { name: '白銀', color: 'text-gray-300 border-gray-400', min: 1000, bg: 'bg-gray-800/50' },
-    { name: '黃金', color: 'text-yellow-400 border-yellow-500', min: 2000, bg: 'bg-yellow-900/30' },
-    { name: '白金', color: 'text-cyan-400 border-cyan-400', min: 3000, bg: 'bg-cyan-900/30' },
-    { name: '鑽石', color: 'text-blue-400 border-blue-500', min: 4000, bg: 'bg-blue-900/30' },
-    { name: '星耀', color: 'text-purple-400 border-purple-500', min: 5000, bg: 'bg-purple-900/30' },
-    { name: '傳說', color: 'text-rose-500 border-rose-500', min: 6000, bg: 'bg-rose-900/30' },
+    { name: '青銅', color: 'text-orange-700', icon: Medal, min: 0, bg: 'bg-orange-50 dark:bg-orange-900/20', border: 'border-orange-300' },
+    { name: '白銀', color: 'text-slate-400', icon: Shield, min: 1000, bg: 'bg-slate-50 dark:bg-slate-800/50', border: 'border-slate-300' },
+    { name: '黃金', color: 'text-yellow-500', icon: Crown, min: 2000, bg: 'bg-yellow-50 dark:bg-yellow-900/20', border: 'border-yellow-400' },
+    { name: '白金', color: 'text-cyan-500', icon: Zap, min: 3000, bg: 'bg-cyan-50 dark:bg-cyan-900/20', border: 'border-cyan-400' },
+    { name: '鑽石', color: 'text-blue-500', icon: Sparkles, min: 4000, bg: 'bg-blue-50 dark:bg-blue-900/20', border: 'border-blue-400' },
+    { name: '大師', color: 'text-purple-500', icon: Swords, min: 5000, bg: 'bg-purple-50 dark:bg-purple-900/20', border: 'border-purple-400' },
+    { name: '傳說', color: 'text-rose-500', icon: Flame, min: 6000, bg: 'bg-rose-50 dark:bg-rose-900/20', border: 'border-rose-400' },
 ];
 
 const getRank = (points: number) => {
@@ -133,6 +133,35 @@ const CHARGE_LEVELS: Record<OverloadLevel, { cost: number, multiplier: number, n
 
 type BattlePhase = 'mode_select' | 'menu' | 'matching' | 'connecting' | 'ready' | 'selecting_attack' | 'waiting_opponent' | 'defending' | 'round_summary' | 'result';
 
+// --- Rank Info Modal ---
+const RankInfoModal = ({ onClose }: { onClose: () => void }) => {
+    return (
+        <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-gray-700 max-h-[80vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Trophy size={20} className="text-yellow-500" /> 段位說明
+                    </h3>
+                    <button onClick={onClose} className="p-1 hover:bg-gray-700 rounded-full"><X size={20} className="text-gray-400"/></button>
+                </div>
+                <div className="space-y-3">
+                    {RANKS.map((rank, idx) => (
+                        <div key={idx} className="flex items-center gap-3 p-3 bg-gray-700/50 rounded-xl border border-gray-600">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${rank.bg} border ${rank.border}`}>
+                                <rank.icon size={20} className={rank.color} />
+                            </div>
+                            <div className="flex-1">
+                                <div className={`font-bold ${rank.color}`}>{rank.name}</div>
+                                <div className="text-xs text-gray-400">積分 {rank.min}+</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const CustomRoomModal = ({ onClose, onJoin }: { onClose: () => void, onJoin: (code: string) => void }) => {
     const [code, setCode] = useState('');
     return (
@@ -168,6 +197,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [menuTab, setMenuTab] = useState<'lobby' | 'rank' | 'rules'>('lobby');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isLoadingRank, setIsLoadingRank] = useState(false);
+  const [showRankInfo, setShowRankInfo] = useState(false);
   
   const [matchStatus, setMatchStatus] = useState("正在掃描對手訊號...");
   const [showRoomInput, setShowRoomInput] = useState(false);
@@ -179,8 +209,10 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   const [myHp, setMyHp] = useState(MAX_HP);
   const [opHp, setOpHp] = useState(MAX_HP);
   const [round, setRound] = useState(1);
-  const myRating = user.pkRating || 0;
-  const myRank = getRank(myRating);
+  
+  // Calculate Rank based on current mode
+  const currentModeRating = gameMode === 'OVERLOAD' ? (user.pkRatingOverload || 0) : (user.pkRating || 0);
+  const myRank = getRank(currentModeRating);
   
   const [battleCards, setBattleCards] = useState<BattleCard[]>([]); 
   const [incomingWord, setIncomingWord] = useState<Word | null>(null); 
@@ -874,6 +906,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       return (
           <div className="fixed inset-0 z-[60] flex flex-col bg-gray-900 text-white overflow-hidden">
               {showRoomInput && <CustomRoomModal onClose={() => setShowRoomInput(false)} onJoin={handleJoinRoom} />}
+              {showRankInfo && <RankInfoModal onClose={() => setShowRankInfo(false)} />}
               
               {/* Header */}
               <div className="p-4 pt-safe flex justify-between items-center bg-gray-900 border-b border-gray-800 z-10">
@@ -921,13 +954,13 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
                   {menuTab === 'lobby' && (
                       <div className="flex flex-col items-center animate-in fade-in zoom-in duration-300 relative z-10 h-full justify-center">
-                          <div className="relative w-28 h-28 mb-6">
+                          <div className="relative w-28 h-28 mb-6" onClick={() => setShowRankInfo(true)}>
                               <div className={`absolute inset-0 rounded-full blur-xl opacity-30 animate-pulse ${isOverload ? 'bg-red-500' : 'bg-blue-500'}`}></div>
                               <div className={`relative w-full h-full rounded-full ${user.avatarColor} ring-4 ring-gray-800 flex items-center justify-center overflow-hidden shadow-2xl ${getFrameStyle(user.avatarFrame)}`}>
                                   {user.avatarImage ? <img src={user.avatarImage} className="w-full h-full object-cover"/> : <UserIcon size={50}/>}
                               </div>
-                              <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full border bg-gray-900 text-[10px] font-bold whitespace-nowrap flex items-center gap-1 ${myRank.color}`}>
-                                  <Crown size={10} /> {myRank.name}
+                              <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full border bg-gray-900 text-[10px] font-bold whitespace-nowrap flex items-center gap-1 shadow-lg cursor-pointer ${myRank.color} ${myRank.border}`}>
+                                  <myRank.icon size={10} /> {myRank.name}
                               </div>
                           </div>
                           
@@ -938,6 +971,9 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                               <p className="text-gray-400 text-xs font-medium px-4 leading-relaxed">
                                   {isOverload ? '賭上你的 HP，給予對手致命一擊' : '累積勝場，提升段位'}
                               </p>
+                              <div className="mt-2 text-xs font-mono text-gray-500">
+                                  Rating: {currentModeRating}
+                              </div>
                           </div>
 
                           <div className="w-full max-w-sm space-y-3">
@@ -968,31 +1004,42 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
                   {menuTab === 'rank' && (
                       <div className="max-w-md mx-auto space-y-3 animate-in slide-in-from-right relative z-10">
-                          <h3 className={`font-bold mb-4 flex items-center gap-2 ${isOverload ? 'text-red-400' : 'text-blue-400'}`}>
-                              <Trophy size={18} /> {isOverload ? '超載' : '經典'} 排行榜
-                          </h3>
+                          <div className="flex justify-between items-center mb-4">
+                              <h3 className={`font-bold flex items-center gap-2 ${isOverload ? 'text-red-400' : 'text-blue-400'}`}>
+                                  <Trophy size={18} /> {isOverload ? '超載' : '經典'} 排行榜
+                              </h3>
+                              <button onClick={() => setShowRankInfo(true)} className="text-xs text-gray-400 hover:text-white flex items-center gap-1">
+                                  <Info size={14}/> 段位說明
+                              </button>
+                          </div>
+                          
                           {isLoadingRank ? (
                               <div className="text-center py-10"><Loader2 className="animate-spin mx-auto text-gray-500" /></div>
                           ) : leaderboard.length === 0 ? (
                               <div className="text-center py-10 text-gray-500">暫無數據</div>
                           ) : (
-                              leaderboard.map((entry, idx) => (
-                                  <div key={idx} className="bg-gray-800/80 p-3 rounded-xl flex items-center border border-gray-700">
-                                      <div className={`w-8 text-center font-black text-lg italic ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-500' : 'text-gray-600'}`}>
-                                          {entry.rank}
+                              leaderboard.map((entry, idx) => {
+                                  const entryRank = getRank(entry.points);
+                                  return (
+                                      <div key={idx} className="bg-gray-800/80 p-3 rounded-xl flex items-center border border-gray-700">
+                                          <div className={`w-8 text-center font-black text-lg italic ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-orange-500' : 'text-gray-600'}`}>
+                                              {entry.rank}
+                                          </div>
+                                          <div className={`w-10 h-10 rounded-full mx-3 ${entry.avatarColor} flex items-center justify-center font-bold text-white text-xs ${getFrameStyle(entry.avatarFrame)} overflow-hidden`}>
+                                              {entry.avatarImage ? <img src={entry.avatarImage} className="w-full h-full object-cover"/> : entry.name[0]}
+                                          </div>
+                                          <div className="flex-1">
+                                              <span className="font-bold text-sm text-white block">{entry.name}</span>
+                                              <span className={`text-[10px] font-bold ${entryRank.color} flex items-center gap-1`}>
+                                                  <entryRank.icon size={10} /> {entryRank.name}
+                                              </span>
+                                          </div>
+                                          <div className={`font-mono font-bold ${isOverload ? 'text-red-400' : 'text-blue-400'}`}>
+                                              {entry.points}
+                                          </div>
                                       </div>
-                                      <div className={`w-10 h-10 rounded-full mx-3 ${entry.avatarColor} flex items-center justify-center font-bold text-white text-xs ${getFrameStyle(entry.avatarFrame)} overflow-hidden`}>
-                                          {entry.avatarImage ? <img src={entry.avatarImage} className="w-full h-full object-cover"/> : entry.name[0]}
-                                      </div>
-                                      <div className="flex-1">
-                                          <span className="font-bold text-sm text-white block">{entry.name}</span>
-                                          <span className="text-[10px] text-gray-400">Rating</span>
-                                      </div>
-                                      <div className={`font-mono font-bold ${isOverload ? 'text-red-400' : 'text-blue-400'}`}>
-                                          {entry.points}
-                                      </div>
-                                  </div>
-                              ))
+                                  );
+                              })
                           )}
                       </div>
                   )}
@@ -1137,7 +1184,8 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                  
                  <button 
                     onClick={() => {
-                        onFinish({ isWin, score: 0, ratingChange: 0, opponentName: '' });
+                        // Pass the mode played to handle correct rating update
+                        onFinish({ isWin, score: 0, ratingChange: isWin ? 50 : -20, opponentName: '', mode: gameMode });
                         setRoomId(null); 
                     }}
                     className="w-full py-4 bg-white text-black rounded-2xl font-black text-lg hover:scale-[1.02] transition-transform"

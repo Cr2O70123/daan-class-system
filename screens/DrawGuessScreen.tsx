@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Eraser, Trash2, Palette, Send, MessageCircle, PenTool, Play, Clock, Crown, PlusCircle, Sparkles, User as UserIcon, Users, Copy, Info, CheckCircle2, HelpCircle } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
-import { User, DrawPoint, ChatMsg, DrawGuessWord } from '../types';
+import { User, DrawPoint, ChatMsg, DrawGuessWord, DrawDifficulty } from '../types';
 import { getDrawChoices, submitUserWord } from '../services/visualVocabService';
 
 interface DrawGuessScreenProps {
@@ -178,7 +178,13 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
                       if (phase === 'DRAWING') broadcastState({ phase: 'ENDED', timer: 0, winner: null }); 
                       else if (phase === 'SELECTING') {
                           // Auto select random if timeout
-                          const word = wordChoices[0] || { en: 'Timeout', zh: '超時', difficulty: 'EASY' };
+                          const word: DrawGuessWord = wordChoices[0] || { 
+                              en: 'Timeout', 
+                              zh: '超時', 
+                              difficulty: 'EASY' as DrawDifficulty, // Fix: Cast string to Literal Type 
+                              category: 'System', 
+                              points: 0 
+                          };
                           handleSelectWord(word);
                       }
                       return 0;
@@ -335,7 +341,7 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
   const handleSubmitWord = async () => {
       if (!submitEn || !submitZh) return;
       await submitUserWord(submitEn, submitZh);
-      alert("感謝您的投稿！獲得 50 PT 獎勵！");
+      alert("感謝您的投稿！獲得 2 PT 獎勵！"); // Updated to 2 PT as requested
       setShowSubmitModal(false);
       setSubmitEn('');
       setSubmitZh('');

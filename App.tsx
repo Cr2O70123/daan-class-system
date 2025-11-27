@@ -17,6 +17,7 @@ import { ResistorGameScreen } from './screens/ResistorGameScreen';
 import { PlaygroundScreen } from './screens/PlaygroundScreen';
 import { NotificationScreen } from './screens/NotificationScreen';
 import { CheckInModal } from './components/CheckInModal';
+import { UpdateAnnouncementModal } from './components/UpdateAnnouncementModal'; // New Import
 import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
 import { BlockBlastScreen } from './screens/BlockBlastScreen'; 
 import { PkGameScreen } from './screens/PkGameScreen';
@@ -24,7 +25,7 @@ import { BaseConverterScreen } from './screens/BaseConverterScreen';
 import { AiTutorScreen } from './screens/AiTutorScreen'; 
 import { VocabPracticeScreen } from './screens/VocabPracticeScreen';
 import { DrawGuessScreen } from './screens/DrawGuessScreen';
-import { HighLowGameScreen } from './screens/HighLowGameScreen'; // New Import
+import { HighLowGameScreen } from './screens/HighLowGameScreen'; 
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult } from './types';
 import { RefreshCw, X, Bell } from 'lucide-react';
@@ -119,6 +120,7 @@ const App = () => {
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
   const [showModeration, setShowModeration] = useState(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(true); // Default true to show on load
   
   // Game States
   const [showWordChallenge, setShowWordChallenge] = useState(false);
@@ -126,9 +128,10 @@ const App = () => {
   const [showLuckyWheel, setShowLuckyWheel] = useState(false);
   const [showBlockBlast, setShowBlockBlast] = useState(false); 
   const [showPkGame, setShowPkGame] = useState(false);
+  const [pkGameMode, setPkGameMode] = useState<'CLASSIC' | 'OVERLOAD'>('CLASSIC'); // Track PK mode
   const [showVocabPractice, setShowVocabPractice] = useState(false);
   const [showDrawGuess, setShowDrawGuess] = useState(false);
-  const [showHighLowGame, setShowHighLowGame] = useState(false); // New Game
+  const [showHighLowGame, setShowHighLowGame] = useState(false); 
   
   // Tools States
   const [showBaseConverter, setShowBaseConverter] = useState(false);
@@ -427,15 +430,26 @@ const App = () => {
       
       const earnedPt = result.score; // Score is PT
       const ratingChange = result.ratingChange || 0;
-      const newRating = Math.max(0, (user.pkRating || 0) + ratingChange); // No negative rating
+      
+      // Determine which rating to update based on the mode played
+      const modePlayed = result.mode || pkGameMode; // Use result mode if available, fallback to state
+      
+      let updatedUser: User = { ...user };
+      
+      if (modePlayed === 'OVERLOAD') {
+          const newRating = Math.max(0, (user.pkRatingOverload || 0) + ratingChange);
+          updatedUser = { ...updatedUser, pkRatingOverload: newRating };
+      } else {
+          const newRating = Math.max(0, (user.pkRating || 0) + ratingChange);
+          updatedUser = { ...updatedUser, pkRating: newRating };
+      }
 
       const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt;
-      const updatedUser: User = { 
-          ...user, 
+      updatedUser = { 
+          ...updatedUser, 
           points: user.points + earnedPt,
           lifetimePoints: newLifetime,
-          level: calculateLevel(newLifetime),
-          pkRating: newRating
+          level: calculateLevel(newLifetime)
       };
       
       try { 
@@ -460,6 +474,11 @@ const App = () => {
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       
+      {/* 2.0 Update Announcement Modal */}
+      {showUpdateModal && (
+          <UpdateAnnouncementModal onClose={() => setShowUpdateModal(false)} />
+      )}
+
       {lightboxImage && (
           <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center" onClick={() => setLightboxImage(null)}>
               <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full"><X size={24}/></button>
@@ -524,6 +543,7 @@ const App = () => {
               user={user}
               onBack={() => setShowPkGame(false)}
               onFinish={handleFinishPk}
+              initialMode={pkGameMode} // Pass default if needed
           />
       )}
 
@@ -635,12 +655,9 @@ const App = () => {
                         onRefresh={loadData}
                         onImageClick={(url) => { pushHistory(); setLightboxImage(url); }}
                         onOpenPkGame={(mode) => { 
+                            if(mode) setPkGameMode(mode);
                             pushHistory(); 
                             setShowPkGame(true); 
-                            // Note: We might need to pass mode to PkGameScreen if props allowed, 
-                            // currently PkGameScreen handles mode selection internally mostly, 
-                            // but let's assume PkGameScreen can take an initialMode if we were to fully implement deep linking.
-                            // For now, it just opens the screen.
                         }}
                     />
                 )}
@@ -671,7 +688,12 @@ const App = () => {
                         onOpenResistorGame={() => { pushHistory(); setShowResistorGame(true); }}
                         onOpenLuckyWheel={() => { pushHistory(); setShowLuckyWheel(true); }}
                         onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }}
-                        onOpenPkGame={() => { pushHistory(); setShowPkGame(true); }}
+                        onOpenPkGame={(mode) => { 
+                            if(mode) setPkGameMode(mode);
+                            else setPkGameMode('CLASSIC'); // Default if not specified
+                            pushHistory(); 
+                            setShowPkGame(true); 
+                        }}
                         onOpenOhmsLaw={() => { pushHistory(); setShowBaseConverter(true); }}
                         onOpenVocabPractice={() => { pushHistory(); setShowVocabPractice(true); }}
                         onOpenDrawGuess={() => { pushHistory(); setShowDrawGuess(true); }}

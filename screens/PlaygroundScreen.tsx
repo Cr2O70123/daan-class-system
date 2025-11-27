@@ -47,7 +47,7 @@ const SubPageHeader = ({ title, onBack }: { title: string, onBack: () => void })
     </div>
 );
 
-const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[] }: any) => (
+const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: any) => (
     <div 
         onClick={onClick}
         className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden transition-all flex gap-4 items-center ${onClick ? 'cursor-pointer active:scale-[0.98]' : 'opacity-75 cursor-not-allowed'}`}
@@ -67,6 +67,12 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[] }: any) => (
             <p className="text-xs text-gray-500 dark:text-gray-400 leading-tight line-clamp-2">
                 {desc}
             </p>
+            {limit && (
+                <div className="mt-2 inline-flex items-center gap-1 bg-yellow-50 dark:bg-yellow-900/20 px-2 py-0.5 rounded-md border border-yellow-200 dark:border-yellow-800">
+                    <Zap size={10} className="text-yellow-600 dark:text-yellow-400 fill-current"/>
+                    <span className="text-[9px] font-bold text-yellow-700 dark:text-yellow-300">{limit}</span>
+                </div>
+            )}
         </div>
     </div>
 );
@@ -84,6 +90,8 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
     user
 }) => {
   const [view, setView] = useState<ViewState>('HOME');
+  const MAX_PLAYS = 15;
+  const remainingPlays = Math.max(0, MAX_PLAYS - user.dailyPlays);
 
   const renderHome = () => (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -195,6 +203,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       colorClass="bg-cyan-500"
                       onClick={onOpenBlockBlast}
                       tags={['殺時間']}
+                      limit={`每日剩餘: ${remainingPlays}/${MAX_PLAYS}`}
                   />
                   <GameItem 
                       title="PK 競技場" 
@@ -220,6 +229,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       colorClass="bg-yellow-500"
                       onClick={onOpenLuckyWheel}
                       tags={['運氣']}
+                      limit={`每日剩餘: ${Math.max(0, 3 - (user.lastWheelDate === new Date().toDateString() ? user.dailyWheelSpins || 0 : 0))}/3`}
                   />
                   <GameItem 
                       title="高低博弈 (High Low)" 
@@ -250,6 +260,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       colorClass="bg-blue-500"
                       onClick={onOpenWordChallenge}
                       tags={['競賽']}
+                      limit={`每日剩餘: ${remainingPlays}/${MAX_PLAYS}`}
                   />
                   <GameItem 
                       title="電阻色碼" 
@@ -258,6 +269,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       colorClass="bg-orange-500"
                       onClick={onOpenResistorGame}
                       tags={['電子學']}
+                      limit={`每日剩餘: ${remainingPlays}/${MAX_PLAYS}`}
                   />
                   <GameItem 
                       title="AI 萬能家教" 
