@@ -168,10 +168,12 @@ const CustomRoomModal = ({ onClose, onJoin }: { onClose: () => void, onJoin: (co
         <div className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-gray-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl border border-gray-700">
                 <h3 className="text-lg font-bold text-white mb-4 text-center">加入私人房間</h3>
+                {/* Changed type to text to allow leading zeros and prevent auto-formatting issues */}
                 <input 
-                    type="number" 
+                    type="text" 
+                    inputMode="numeric"
                     value={code}
-                    onChange={(e) => setCode(e.target.value.slice(0, 6))}
+                    onChange={(e) => setCode(e.target.value.slice(0, 6).replace(/[^0-9]/g, ''))}
                     placeholder="輸入 6 位數房號"
                     className="w-full bg-gray-900 text-white text-center text-2xl font-mono tracking-widest py-3 rounded-xl border border-gray-600 mb-4 focus:border-blue-500 outline-none"
                 />
@@ -480,6 +482,9 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   };
 
   const handleJoinRoom = (code: string) => {
+      // Clean up previous matchmaking attempts
+      leaveMatchmaking();
+      
       setShowRoomInput(false);
       const fullRoomId = `room_${code}`;
       setRoomId(fullRoomId);
@@ -503,6 +508,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           },
           () => handleOpponentLeft(),
           () => {
+              // Joiner also sends START_GAME to identify themselves to the host
               sendGameEvent({ type: 'START_GAME', attackerId: JSON.stringify(user), gameMode });
           }
       );
@@ -893,6 +899,49 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               });
           }
       }
+  };
+
+  // --- Helpers for Summary Text ---
+  const getSummaryDescription = () => {
+      // Case 1: Both used skills (Rare but possible with instant skills like Heal)
+      // However, usually one attacks with word.
+      // If Incoming Skill exists, opponent used a skill.
+      // If My Last Action was Skill, I used a skill.
+      
+      const myMove = myLastAction?.type === 'SKILL' ? `發動${SKILL_NAMES[myLastAction.id as SkillType]}` : '發起攻擊';
+      const opMove = incomingSkill !== 'NONE' ? `發動${SKILL_NAMES[incomingSkill]}` : '發起攻擊';
+
+      // 1. Both used skills (e.g. Heal vs Heal, or Heal vs Blind)
+      if (myLastAction?.type === 'SKILL' && incomingSkill !== 'NONE') {
+          return `雙方都在調整狀態... 你${myMove}，對手${opMove}。`;
+      }
+
+      // 2. I attacked, Opponent defended (or used defensive skill)
+      if (myLastAction?.type === 'WORD') {
+          // Check opponent result
+          if (opDefenseResult === 'fail') return '你攻擊成功！對手防禦失敗，受到傷害。';
+          if (opDefenseResult === 'backlash') return '你的攻擊被完美格擋！受到反噬傷害。';
+          return '你的攻擊被化解了。對手防禦成功。';
+      }
+
+      // 3. Opponent attacked, I defended
+      if (incomingWord) {
+          if (myDefenseResult === 'fail') return '防禦失敗！你受到了傷害。';
+          if (perfectParryTriggered) return '完美格擋！將傷害加倍反彈給對手。';
+          return '防禦成功！成功抵擋了對手的攻擊。';
+      }
+      
+      // 4. Skill vs Attack scenarios
+      if (myLastAction?.type === 'SKILL') {
+          // I used skill, opponent likely attacked or defended nothing?
+          // Actually if I used skill, I don't attack. Opponent might have attacked me.
+          if (incomingWord) {
+             return `你${myMove}，但需面對對手的攻擊！`;
+          }
+          return `你${myMove}。`;
+      }
+
+      return '回合結束';
   };
 
   // --- RENDER: Mode Select Phase ---
@@ -1430,7 +1479,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                       <div className="w-full max-w-sm animate-in zoom-in duration-300">
                           <div className="bg-gray-800/90 backdrop-blur border-2 border-gray-600 rounded-3xl overflow-hidden shadow-2xl relative">
                               <div className="bg-gray-900/50 p-4 text-center border-b border-gray-700">
-                                  <h2 className="text-xl font-black text-white tracking-widest uppercase">Round Recap</h2>
+                                  <h2 className="text-xl font-black text-white tracking-widest uppercase">回合結算</h2>
                               </div>
                               
                               <div className="p-6 grid grid-cols-2 gap-4 relative">
@@ -1439,7 +1488,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
 
                                   {/* YOU Column */}
                                   <div className="flex flex-col items-center gap-2">
-                                      <span className="text-blue-400 font-bold text-xs">YOU</span>
+                                      <span className="text-blue-400 font-bold text-xs">我方</span>
                                       {myDefenseResult === 'success' ? (
                                           <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center border-2 border-blue-500 text-blue-400">
                                               <Shield size={32} />
@@ -1454,14 +1503,14 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                                           </div>
                                       )}
                                       <div className={`font-black text-xl ${myLastDamageTaken > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                                          {myLastDamageTaken > 0 ? `-${myLastDamageTaken}` : 'SAFE'}
+                                          {myLastDamageTaken > 0 ? `-${myLastDamageTaken}` : '安全'}
                                       </div>
-                                      <span className="text-[10px] text-gray-400">Damage Taken</span>
+                                      <span className="text-[10px] text-gray-400">受到傷害</span>
                                   </div>
 
                                   {/* ENEMY Column */}
                                   <div className="flex flex-col items-center gap-2">
-                                      <span className="text-rose-400 font-bold text-xs">ENEMY</span>
+                                      <span className="text-rose-400 font-bold text-xs">對手</span>
                                       {opDefenseResult === 'success' || opDefenseResult === 'backlash' ? (
                                           <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center border-2 border-gray-600 opacity-50">
                                               <Shield size={32} />
@@ -1476,17 +1525,18 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                                           </div>
                                       )}
                                       <div className={`font-black text-xl ${opLastDamageTaken > 0 ? 'text-green-500' : 'text-gray-500'}`}>
-                                          {opLastDamageTaken > 0 ? `-${opLastDamageTaken}` : 'MISS'}
+                                          {opLastDamageTaken > 0 ? `-${opLastDamageTaken}` : '未命中'}
                                       </div>
-                                      <span className="text-[10px] text-gray-400">Damage Dealt</span>
+                                      <span className="text-[10px] text-gray-400">造成傷害</span>
                                   </div>
                               </div>
 
-                              {/* Footer Status */}
+                              {/* Footer Status & Description */}
                               <div className="bg-black/40 p-3 text-center border-t border-gray-700">
-                                  <div className="flex items-center justify-center gap-2 text-yellow-400 animate-pulse">
+                                  <p className="text-xs text-gray-300 font-bold mb-2 animate-pulse">{getSummaryDescription()}</p>
+                                  <div className="flex items-center justify-center gap-2 text-yellow-400">
                                       <Hourglass size={16} />
-                                      <span className="text-xs font-bold uppercase tracking-wider">Next Round Starting...</span>
+                                      <span className="text-xs font-bold uppercase tracking-wider">下回合準備中...</span>
                                   </div>
                               </div>
                           </div>
@@ -1510,7 +1560,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
                   <div className="flex justify-end items-end mb-1.5 gap-2">
                       {isAdrenaline && <Flame size={16} className="text-red-500 animate-pulse" />}
                       <span className={`text-xs font-mono ${isAdrenaline ? 'text-red-500 font-bold' : 'text-blue-400'}`}>{myHp}/{MAX_HP}</span>
-                      <span className="font-bold text-blue-400 text-sm">YOU</span>
+                      <span className="font-bold text-blue-400 text-sm">我方</span>
                   </div>
                   <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
                       <div className={`h-full transition-all duration-500 ${isAdrenaline ? 'bg-red-600' : 'bg-blue-500'}`} style={{ width: `${(myHp / MAX_HP) * 100}%` }}></div>

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Rocket, CheckCircle2, Clock, Crown, Palette, Layout, Gamepad2, Zap, Swords, ShoppingBag, Image as ImageIcon, BookOpen } from 'lucide-react';
 
 interface UpdateAnnouncementModalProps {
@@ -7,23 +7,6 @@ interface UpdateAnnouncementModalProps {
 }
 
 export const UpdateAnnouncementModal: React.FC<UpdateAnnouncementModalProps> = ({ onClose }) => {
-  const [timeLeft, setTimeLeft] = useState(8);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const isLocked = timeLeft > 0;
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-500">
       <div className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col max-h-[85vh]">
@@ -101,24 +84,12 @@ export const UpdateAnnouncementModal: React.FC<UpdateAnnouncementModalProps> = (
         <div className="p-4 bg-white dark:bg-gray-900 border-t border-slate-100 dark:border-slate-800 shrink-0">
             <button 
                 onClick={onClose}
-                disabled={isLocked}
-                className={`w-full py-4 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 ${
-                    isLocked 
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed' 
-                        : 'bg-slate-800 text-white shadow-lg hover:bg-slate-700 active:scale-95'
-                }`}
+                className="w-full py-4 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-2 bg-slate-800 text-white shadow-lg hover:bg-slate-700 active:scale-95"
             >
-                {isLocked ? (
-                    <span className="flex items-center gap-2">
-                        <Clock size={18} className="animate-spin" />
-                        請閱讀公告 ({timeLeft}s)
-                    </span>
-                ) : (
-                    <span className="flex items-center gap-2">
-                        <CheckCircle2 size={20} />
-                        進入系統
-                    </span>
-                )}
+                <span className="flex items-center gap-2">
+                    <CheckCircle2 size={20} />
+                    進入系統
+                </span>
             </button>
         </div>
 
