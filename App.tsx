@@ -57,6 +57,9 @@ const getFrameStyle = (frameId?: string) => {
 // Security Constant: Max points allowed per transaction
 const MAX_POINT_GAIN_PER_ACTION = 500;
 
+// EMERGENCY LOCKDOWN FLAG
+const IS_MAINTENANCE_MODE = true;
+
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
     const xp = user.lifetimePoints ?? user.points;
     const progress = (xp % 500) / 5; 
@@ -259,6 +262,11 @@ const App = () => {
   };
 
   const handleCheckIn = async () => {
+    if (IS_MAINTENANCE_MODE) {
+        alert("系統安全性升級中，暫停簽到功能。");
+        return;
+    }
+    
     if (!user) return;
     const today = new Date().toDateString();
     const lastDate = user.lastCheckInDate;
@@ -324,11 +332,17 @@ const App = () => {
       try {
           await createReply(user, qid, content, image);
           await loadData();
-          const reward = 5;
-          const newLifetime = (user.lifetimePoints ?? user.points) + reward;
-          const updatedUser = { ...user, points: user.points + reward, lifetimePoints: newLifetime, level: calculateLevel(newLifetime) };
-          await updateUserInDb(updatedUser);
-          setUser(updatedUser);
+          
+          if (IS_MAINTENANCE_MODE) {
+              alert("回覆成功 (積分系統維護中，本次不計分)");
+          } else {
+              const reward = 5;
+              const newLifetime = (user.lifetimePoints ?? user.points) + reward;
+              const updatedUser = { ...user, points: user.points + reward, lifetimePoints: newLifetime, level: calculateLevel(newLifetime) };
+              await updateUserInDb(updatedUser);
+              setUser(updatedUser);
+          }
+          
           const uQ = await fetchQuestions();
           const tQ = uQ.find(q => q.id === qid);
           if (tQ) setSelectedQuestion(tQ);
@@ -366,6 +380,11 @@ const App = () => {
   };
 
   const handleWheelSpin = async (prize: number, cost: number) => {
+      if (IS_MAINTENANCE_MODE) {
+          alert("系統維護中，無法進行積分結算。");
+          return;
+      }
+      
       if (!user) return;
       
       // Calculate new values
@@ -396,6 +415,11 @@ const App = () => {
   };
 
   const handleFinishHighLow = async (netPoints: number) => {
+      if (IS_MAINTENANCE_MODE) {
+          alert("系統維護中，無法進行積分結算。");
+          return;
+      }
+
       if (!user) return;
       const currentLifetimePoints = user.lifetimePoints ?? user.points;
       // Only wins contribute to lifetime points
@@ -415,6 +439,14 @@ const App = () => {
   };
 
   const handleFinishChallenge = async (result: GameResult) => {
+    if (IS_MAINTENANCE_MODE) {
+        alert("系統維護中，暫停積分結算功能。");
+        setShowWordChallenge(false);
+        setShowResistorGame(false);
+        setShowBlockBlast(false);
+        return;
+    }
+
     if (!user) return;
     
     // SECURITY: Cap points per game to prevent cheating
@@ -437,6 +469,12 @@ const App = () => {
   
   // PK Result Handler - Update Rating
   const handleFinishPk = async (result: PkResult) => {
+      if (IS_MAINTENANCE_MODE) {
+          alert("系統維護中，暫停積分與排名結算。");
+          setShowPkGame(false);
+          return;
+      }
+
       if (!user) return;
       
       // SECURITY: Cap points
@@ -480,6 +518,11 @@ const App = () => {
   };
   const handleAddExam = async (s: string, t: string, d: string, tm: string) => { if(user) await createExam(user, s, t, d, tm); loadData(); };
   const handleDeleteContent = async (type: any, id: number) => { /* ... */ };
+
+  // --- Maintenance Mode Alert Helper ---
+  const alertMaintenance = () => {
+      alert("系統正在進行安全性維護，相關功能暫時關閉。");
+  };
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="animate-spin"/></div>;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
@@ -666,11 +709,15 @@ const App = () => {
                         onAskClick={() => { pushHistory(); setCurrentTab(Tab.ASK); }}
                         onNavigateToPlayground={() => handleTabChange(Tab.PLAYGROUND)}
                         onOpenLeaderboard={() => { pushHistory(); setShowLeaderboardOverlay(true); }}
-                        onOpenCheckIn={() => { pushHistory(); setShowCheckInModal(true); }}
+                        onOpenCheckIn={() => { 
+                            if(IS_MAINTENANCE_MODE) { alert("簽到系統維護中"); return; }
+                            pushHistory(); setShowCheckInModal(true); 
+                        }}
                         onNavigateToAiTutor={() => handleTabChange(Tab.AI_TUTOR)} 
                         onRefresh={loadData}
                         onImageClick={(url) => { pushHistory(); setLightboxImage(url); }}
                         onOpenPkGame={(mode) => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
                             setPkGameMode(mode);
                             pushHistory(); 
                             setShowPkGame(true); 
@@ -700,19 +747,41 @@ const App = () => {
                 {currentTab === Tab.PLAYGROUND && (
                     <PlaygroundScreen 
                         user={user}
-                        onOpenWordChallenge={() => { pushHistory(); setShowWordChallenge(true); }}
-                        onOpenResistorGame={() => { pushHistory(); setShowResistorGame(true); }}
-                        onOpenLuckyWheel={() => { pushHistory(); setShowLuckyWheel(true); }}
-                        onOpenBlockBlast={() => { pushHistory(); setShowBlockBlast(true); }}
+                        onOpenWordChallenge={() => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
+                            pushHistory(); setShowWordChallenge(true); 
+                        }}
+                        onOpenResistorGame={() => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
+                            pushHistory(); setShowResistorGame(true); 
+                        }}
+                        onOpenLuckyWheel={() => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
+                            pushHistory(); setShowLuckyWheel(true); 
+                        }}
+                        onOpenBlockBlast={() => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
+                            pushHistory(); setShowBlockBlast(true); 
+                        }}
                         onOpenPkGame={(mode) => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
                             setPkGameMode(mode);
                             pushHistory(); 
                             setShowPkGame(true); 
                         }}
                         onOpenOhmsLaw={() => { pushHistory(); setShowBaseConverter(true); }}
-                        onOpenVocabPractice={() => { pushHistory(); setShowVocabPractice(true); }}
-                        onOpenDrawGuess={() => { pushHistory(); setShowDrawGuess(true); }}
-                        onOpenHighLow={() => { pushHistory(); setShowHighLowGame(true); }}
+                        onOpenVocabPractice={() => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
+                            pushHistory(); setShowVocabPractice(true); 
+                        }}
+                        onOpenDrawGuess={() => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
+                            pushHistory(); setShowDrawGuess(true); 
+                        }}
+                        onOpenHighLow={() => { 
+                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
+                            pushHistory(); setShowHighLowGame(true); 
+                        }}
                     />
                 )}
                 
@@ -725,7 +794,10 @@ const App = () => {
                         user={user} setUser={async (u) => { setUser(u); await updateUserInDb(u); }}
                         onNavigateToModeration={() => { pushHistory(); setShowModeration(true); }}
                         onNavigateToLeaderboard={() => { pushHistory(); setShowLeaderboardOverlay(true); }}
-                        onOpenCheckIn={() => { pushHistory(); setShowCheckInModal(true); }}
+                        onOpenCheckIn={() => { 
+                            if(IS_MAINTENANCE_MODE) { alert("簽到系統維護中"); return; }
+                            pushHistory(); setShowCheckInModal(true); 
+                        }}
                         onOpenExams={() => { pushHistory(); setCurrentTab(Tab.EXAM); }} 
                         onLogout={() => { logout(); setUser(null); }}
                         isDarkMode={user.settings?.darkMode || false}

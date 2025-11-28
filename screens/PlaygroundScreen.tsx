@@ -61,7 +61,7 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: an
                 {tags.length > 0 && (
                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                         tags[0] === 'Coming Soon' ? 'bg-gray-200 text-gray-500' : 
-                        tags[0] === '維修中' ? 'bg-red-500 text-white animate-pulse shadow-red-500/50 shadow-sm' :
+                        tags[0] === '維護中' ? 'bg-red-500 text-white animate-pulse shadow-red-500/50 shadow-sm' :
                         'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                     }`}>
                         {tags[0]}
@@ -102,7 +102,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
           {/* Featured Hero Card - PK Battle */}
           <div 
               onClick={() => onOpenPkGame && onOpenPkGame()}
-              className="relative w-full aspect-[16/9] bg-gray-900 rounded-[2rem] overflow-hidden shadow-xl cursor-pointer group active:scale-[0.98] transition-all border border-gray-800"
+              className="relative w-full aspect-[16/9] bg-gray-900 rounded-[2rem] overflow-hidden shadow-xl cursor-pointer group active:scale-[0.98] transition-all border border-gray-800 grayscale-[0.8] cursor-not-allowed"
           >
               {/* Background with Gradient & Pattern */}
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-black"></div>
@@ -111,8 +111,8 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               {/* Content */}
               <div className="absolute inset-0 p-6 flex flex-col justify-between z-10">
                   <div className="flex justify-between items-start">
-                      <span className="bg-rose-600 text-white text-[10px] font-black px-2 py-1 rounded shadow-lg shadow-rose-500/50 flex items-center gap-1">
-                          <Sparkles size={10} /> 熱門推薦
+                      <span className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded shadow-lg shadow-red-500/50 flex items-center gap-1">
+                          <Sparkles size={10} /> 維護中
                       </span>
                       <div className="bg-white/10 p-2 rounded-full backdrop-blur-md">
                           <Swords className="text-white" size={20} />
@@ -122,7 +122,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                   <div>
                       <h2 className="text-3xl font-black text-white mb-1 italic tracking-tight drop-shadow-md">PK 競技場</h2>
                       <p className="text-indigo-200 text-xs font-medium max-w-[80%]">
-                          新增 <span className="text-yellow-400 font-bold">超載競技場</span> 模式！賭上 HP 的心理博弈，全新技能等你體驗。
+                          系統維護升級中，請稍後再試。
                       </p>
                   </div>
               </div>
@@ -193,32 +193,30 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="休閒益智" onBack={() => setView('HOME')} />
                   
-                  {/* Maintenance Mode for Draw Guess */}
                   <GameItem 
                       title="畫畫接龍" 
-                      desc="系統緊急維護中，修復破圖與版面問題。" 
+                      desc="系統緊急維護中。" 
                       icon={<Hammer size={24} />} 
                       colorClass="bg-gray-400"
-                      onClick={undefined}
-                      tags={['維修中']}
+                      onClick={onOpenDrawGuess}
+                      tags={['維護中']}
                   />
 
                   <GameItem 
                       title="方塊爆破" 
-                      desc="經典消除遊戲，無限模式挑戰最高分。" 
+                      desc="系統緊急維護中。" 
                       icon={<Grid3X3 size={24} />} 
-                      colorClass="bg-cyan-500"
+                      colorClass="bg-gray-400"
                       onClick={onOpenBlockBlast}
-                      tags={['殺時間']}
-                      limit={`每日剩餘: ${remainingPlays}/${MAX_PLAYS}`}
+                      tags={['維護中']}
                   />
                   <GameItem 
                       title="PK 競技場" 
-                      desc="含「經典對決」與「超載競技場」雙模式。" 
+                      desc="系統緊急維護中。" 
                       icon={<Swords size={24} />} 
-                      colorClass="bg-rose-600"
+                      colorClass="bg-gray-400"
                       onClick={() => onOpenPkGame && onOpenPkGame()}
-                      tags={['對戰']}
+                      tags={['維護中']}
                   />
               </div>
           )}
@@ -227,24 +225,23 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="博弈娛樂" onBack={() => setView('HOME')} />
                   <div className="bg-red-50 border border-red-100 rounded-xl p-3 mb-4 text-xs text-red-600 flex items-center gap-2">
-                      <Zap size={14} /> 注意：博弈遊戲可能會導致積分歸零，請量力而為。
+                      <Zap size={14} /> 系統維護中，暫停所有博弈功能。
                   </div>
                   <GameItem 
                       title="幸運轉盤" 
-                      desc="每日限轉 3 次！消耗積分贏取 500 PT 大獎。" 
+                      desc="暫停使用。" 
                       icon={<Coins size={24} />} 
-                      colorClass="bg-yellow-500"
+                      colorClass="bg-gray-400"
                       onClick={onOpenLuckyWheel}
-                      tags={['運氣']}
-                      limit={`每日剩餘: ${Math.max(0, 3 - (user.lastWheelDate === new Date().toDateString() ? user.dailyWheelSpins || 0 : 0))}/3`}
+                      tags={['維護中']}
                   />
                   <GameItem 
                       title="高低博弈 (High Low)" 
-                      desc="猜測下一張牌的大小，連續猜對獎金翻倍！" 
+                      desc="暫停使用。" 
                       icon={<Dices size={24} />} 
-                      colorClass="bg-indigo-600"
+                      colorClass="bg-gray-400"
                       onClick={onOpenHighLow}
-                      tags={['NEW', '高風險']}
+                      tags={['維護中']}
                   />
               </div>
           )}
@@ -253,37 +250,34 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="學習挑戰" onBack={() => setView('HOME')} />
                   
-                  {/* Maintenance Mode for Vocab Practice */}
                   <GameItem 
                       title="單字練習 (純練習)" 
-                      desc="發現大量 Bug，正在緊急修復測驗模式。" 
+                      desc="暫停使用。" 
                       icon={<Hammer size={24} />} 
                       colorClass="bg-gray-400"
-                      onClick={undefined}
-                      tags={['維修中']}
+                      onClick={onOpenVocabPractice}
+                      tags={['維護中']}
                   />
 
                   <GameItem 
                       title="單字挑戰賽" 
-                      desc="快速回答單字，累積 Combo 衝擊排行榜！" 
+                      desc="暫停使用。" 
                       icon={<Trophy size={24} />} 
-                      colorClass="bg-blue-500"
+                      colorClass="bg-gray-400"
                       onClick={onOpenWordChallenge}
-                      tags={['競賽']}
-                      limit={`每日剩餘: ${remainingPlays}/${MAX_PLAYS}`}
+                      tags={['維護中']}
                   />
                   <GameItem 
                       title="電阻色碼" 
-                      desc="訓練直覺反應，快速辨識 4 環與 5 環電阻。" 
+                      desc="暫停使用。" 
                       icon={<Zap size={24} />} 
-                      colorClass="bg-orange-500"
+                      colorClass="bg-gray-400"
                       onClick={onOpenResistorGame}
-                      tags={['電子學']}
-                      limit={`每日剩餘: ${remainingPlays}/${MAX_PLAYS}`}
+                      tags={['維護中']}
                   />
                   <GameItem 
                       title="AI 萬能家教" 
-                      desc="遇到難題？隨時呼叫 AI 助教為您解惑。" 
+                      desc="暫停使用。" 
                       icon={<Bot size={24} />} 
                       colorClass="bg-violet-500"
                       onClick={null}
