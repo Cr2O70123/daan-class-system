@@ -54,6 +54,9 @@ const getFrameStyle = (frameId?: string) => {
     }
 };
 
+// Security Constant: Max points allowed per transaction
+const MAX_POINT_GAIN_PER_ACTION = 500;
+
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
     const xp = user.lifetimePoints ?? user.points;
     const progress = (xp % 500) / 5; 
@@ -123,7 +126,7 @@ const App = () => {
   
   // Update Announcement State (Key changed to force show)
   const [showUpdateModal, setShowUpdateModal] = useState(() => {
-      return !localStorage.getItem('hasSeenUpdate2.2');
+      return !localStorage.getItem('hasSeenUpdate2.3');
   });
   
   // Game States
@@ -413,7 +416,11 @@ const App = () => {
 
   const handleFinishChallenge = async (result: GameResult) => {
     if (!user) return;
-    const earnedPt = Math.floor(result.score / 10); 
+    
+    // SECURITY: Cap points per game to prevent cheating
+    const rawEarnedPt = Math.floor(result.score / 10);
+    const earnedPt = Math.min(rawEarnedPt, MAX_POINT_GAIN_PER_ACTION); 
+
     const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt;
     const updatedUser: User = { 
         ...user, 
@@ -432,7 +439,8 @@ const App = () => {
   const handleFinishPk = async (result: PkResult) => {
       if (!user) return;
       
-      const earnedPt = result.score; // Score is PT
+      // SECURITY: Cap points
+      const earnedPt = Math.min(result.score, MAX_POINT_GAIN_PER_ACTION);
       const ratingChange = result.ratingChange || 0;
       
       // Determine which rating to update based on the mode played
@@ -479,10 +487,10 @@ const App = () => {
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       
-      {/* 2.2 Update Announcement Modal (Updated Key) */}
+      {/* 2.3 Update Announcement Modal (Updated Key to force show) */}
       {showUpdateModal && (
           <UpdateAnnouncementModal onClose={() => {
-              localStorage.setItem('hasSeenUpdate2.2', 'true');
+              localStorage.setItem('hasSeenUpdate2.3', 'true');
               setShowUpdateModal(false);
           }} />
       )}

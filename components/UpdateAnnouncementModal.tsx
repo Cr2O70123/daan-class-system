@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Rocket, CheckCircle2, ShoppingBag, Image as ImageIcon, Zap, X } from 'lucide-react';
+import { Rocket, CheckCircle2, ShoppingBag, Image as ImageIcon, Zap, X, AlertTriangle } from 'lucide-react';
 
 interface UpdateAnnouncementModalProps {
   onClose: () => void;
@@ -38,6 +38,19 @@ export const UpdateAnnouncementModal: React.FC<UpdateAnnouncementModalProps> = (
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-slate-50 dark:bg-gray-950">
+            
+            {/* WARNING ALERT - Placed at the very top as requested */}
+            <div className="bg-red-500 text-white p-4 rounded-xl shadow-lg animate-pulse border-2 border-red-400">
+                <h3 className="font-black text-lg flex items-center gap-2 mb-1">
+                    <AlertTriangle size={24} className="fill-white text-red-600" /> 嚴正聲明：關於刷榜行為
+                </h3>
+                <p className="text-xs font-bold leading-relaxed opacity-95">
+                    近期發現有部分同學利用漏洞或腳本惡意刷分（刷榜）。系統後台已進行數據回溯與修復，並全面加強防作弊機制。
+                    <br/><br/>
+                    <span className="bg-white/20 px-1 rounded">請大家維持公平競爭，切勿以身試法，違者帳號將直接永久停權。</span>
+                </p>
+            </div>
+
             <div className="space-y-2">
                 <p className="text-slate-600 dark:text-slate-300 font-bold text-sm leading-relaxed">
                     親愛的用戶您好，我們推出了內測 2.0 版本更新，以下是更新細節：
