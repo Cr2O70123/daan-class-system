@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Rocket, CheckCircle2, ShoppingBag, Image as ImageIcon, Zap, X, AlertTriangle } from 'lucide-react';
+import { Rocket, CheckCircle2, ShoppingBag, Image as ImageIcon, Zap, X, AlertTriangle, Info } from 'lucide-react';
 
 interface UpdateAnnouncementModalProps {
   onClose: () => void;
@@ -39,15 +39,15 @@ export const UpdateAnnouncementModal: React.FC<UpdateAnnouncementModalProps> = (
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6 bg-slate-50 dark:bg-gray-950">
             
-            {/* WARNING ALERT - Placed at the very top as requested */}
-            <div className="bg-red-500 text-white p-4 rounded-xl shadow-lg animate-pulse border-2 border-red-400">
+            {/* NOTICE ALERT - Milder Tone */}
+            <div className="bg-amber-500 text-white p-4 rounded-xl shadow-lg border-2 border-amber-400">
                 <h3 className="font-black text-lg flex items-center gap-2 mb-1">
-                    <AlertTriangle size={24} className="fill-white text-red-600" /> 嚴正聲明：關於刷榜行為
+                    <Info size={24} className="fill-white text-amber-600" /> 關於積分調整說明
                 </h3>
                 <p className="text-xs font-bold leading-relaxed opacity-95">
-                    近期發現有部分同學利用漏洞或腳本惡意刷分（刷榜）。系統後台已進行數據回溯與修復，並全面加強防作弊機制。
+                    為了維護排行榜的公平性，系統已針對近期部分異常的積分數據進行了<span className="text-black/60 font-black">回退處理</span>，並同步優化了遊戲機制。
                     <br/><br/>
-                    <span className="bg-white/20 px-1 rounded">請大家維持公平競爭，切勿以身試法，違者帳號將直接永久停權。</span>
+                    <span className="bg-white/20 px-1 rounded">請大家在公平的環境下良性競爭，共同享受遊戲與學習的樂趣，謝謝配合！</span>
                 </p>
             </div>
 
