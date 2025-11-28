@@ -58,7 +58,7 @@ const getFrameStyle = (frameId?: string) => {
 const MAX_POINT_GAIN_PER_ACTION = 500;
 
 // EMERGENCY LOCKDOWN FLAG
-const IS_MAINTENANCE_MODE = true;
+const IS_MAINTENANCE_MODE = false;
 
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
     const xp = user.lifetimePoints ?? user.points;

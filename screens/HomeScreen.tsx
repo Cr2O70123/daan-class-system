@@ -235,37 +235,37 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ questions, onQuestionCli
 
                 {/* Slide 1: Overload Arena (New Mode) */}
                 <div 
-                    className="w-full h-full flex-shrink-0 bg-gradient-to-br from-red-900 via-rose-800 to-orange-800 text-white flex items-center justify-between p-4 cursor-pointer relative overflow-hidden grayscale cursor-not-allowed"
+                    className="w-full h-full flex-shrink-0 bg-gradient-to-br from-red-900 via-rose-800 to-orange-800 text-white flex items-center justify-between p-4 cursor-pointer relative overflow-hidden"
                     onClick={() => onOpenPkGame && onOpenPkGame('OVERLOAD')}
                 >
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-30"></div>
                     <div className="z-10 relative">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className="bg-gray-500 text-white px-2 py-0.5 rounded text-[10px] font-black shadow-lg">維護中</span>
+                            <span className="bg-yellow-500 text-black px-2 py-0.5 rounded text-[10px] font-black shadow-lg">NEW</span>
                         </div>
                         <h3 className="font-black text-2xl leading-none italic tracking-tighter text-white drop-shadow-md">
                             超載競技場
                         </h3>
-                        <p className="text-[10px] text-orange-200 font-bold mt-1">功能維護升級中</p>
+                        <p className="text-[10px] text-orange-200 font-bold mt-1">賭上 HP 的極限心理博弈</p>
                     </div>
                     <div className="relative z-10 mr-2">
                         <Skull size={48} className="text-red-500 drop-shadow-[0_0_10px_rgba(255,0,0,0.8)]" />
-                        <Zap size={24} className="absolute -top-2 -right-2 text-yellow-400 fill-yellow-400" />
+                        <Zap size={24} className="absolute -top-2 -right-2 text-yellow-400 fill-yellow-400 animate-pulse" />
                     </div>
                 </div>
 
                 {/* Slide 2: Daily Check-in */}
                 <div 
-                    className="w-full h-full flex-shrink-0 bg-gradient-to-r from-gray-600 to-gray-800 text-white flex items-center justify-between p-4 cursor-not-allowed"
+                    className="w-full h-full flex-shrink-0 bg-gradient-to-r from-green-600 to-teal-600 text-white flex items-center justify-between p-4 cursor-pointer"
                     onClick={onOpenCheckIn}
                 >
                     <div>
-                        <div className="bg-white/20 px-2 py-0.5 rounded text-[10px] w-fit mb-1 font-bold backdrop-blur-sm">維護中</div>
-                        <h3 className="font-bold text-xl text-gray-300">每日簽到領獎</h3>
-                        <p className="text-xs text-gray-400 opacity-90 mt-1">系統維護中，暫停簽到</p>
+                        <div className="bg-white/20 px-2 py-0.5 rounded text-[10px] w-fit mb-1 font-bold backdrop-blur-sm">每日任務</div>
+                        <h3 className="font-bold text-xl">每日簽到領獎</h3>
+                        <p className="text-xs text-green-100 opacity-90 mt-1">連續登入可獲得額外獎勵！</p>
                     </div>
                     <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
-                        <Gift size={28} className="text-gray-400" />
+                        <Gift size={28} className="text-white" />
                     </div>
                 </div>
 

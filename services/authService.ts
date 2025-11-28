@@ -4,7 +4,7 @@ import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
 
 // Emergency Ban List (1 Hour Suspension)
-const BANNED_IDS = ['1204217', 's1204228', '1204229', 's1204221'];
+const BANNED_IDS = [];
 
 // Generate Daily Passcode: DAAN-XXXX (Random 4 digits seeded by date)
 export const getDailyPasscode = () => {
