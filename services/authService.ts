@@ -3,6 +3,9 @@ import { User } from '../types';
 import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
 
+// Emergency Ban List (1 Hour Suspension)
+const BANNED_IDS = ['1204217', 's1204228', '1204229', 's1204221'];
+
 // Generate Daily Passcode: DAAN-XXXX (Random 4 digits seeded by date)
 export const getDailyPasscode = () => {
     const today = new Date().toDateString(); // e.g., "Mon Nov 06 2023"
@@ -22,6 +25,11 @@ export const getDailyPasscode = () => {
 };
 
 export const login = async (name: string, studentId: string): Promise<User> => {
+    // 0. Check Emergency Ban List
+    if (BANNED_IDS.includes(studentId)) {
+        throw new Error("此帳號因涉嫌異常刷分，系統已自動執行暫時封禁。");
+    }
+
     const isAdmin = name === 'admin1204'; 
     
     // 1. Try to fetch user from Supabase
@@ -72,9 +80,9 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         user = createdUser;
     }
 
-    // Check Ban Status
+    // Check Ban Status (Database Flag)
     if (user.is_banned) {
-        throw new Error("ACCOUNT_BANNED");
+        throw new Error("ACCOUNT_BANNED: 此帳號已被管理員停權");
     }
 
     // 3. Transform DB user to App User
@@ -137,6 +145,12 @@ export const checkSession = async (): Promise<User | null> => {
     const storedId = localStorage.getItem('student_id');
     
     if (!storedId) return null;
+
+    // Check Emergency Ban List on Session Resume
+    if (BANNED_IDS.includes(storedId)) {
+        localStorage.removeItem('student_id');
+        return null;
+    }
 
     const { data: user, error } = await supabase
         .from('users')
