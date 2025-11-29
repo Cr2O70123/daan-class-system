@@ -1,18 +1,20 @@
 
 import { supabase } from './supabaseClient';
-import { User, PkPlayerState, PkGamePayload, Word } from '../types';
+import { User, PkPlayerState, PkGamePayload } from '../types';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 // --- Matchmaking Service ---
 
 let matchmakingChannel: RealtimeChannel | null = null;
 let gameChannel: RealtimeChannel | null = null;
+let disconnectTimer: number | null = null;
 
 export const joinMatchmaking = (
     user: User, 
     onMatchFound: (opponent: PkPlayerState, roomId: string, isHost: boolean) => void,
     onStatusChange: (msg: string) => void
 ) => {
+    // Clean up any existing connection first
     leaveMatchmaking();
 
     const myState: PkPlayerState = {
@@ -25,6 +27,8 @@ export const joinMatchmaking = (
         status: 'idle',
         joinedAt: Date.now()
     };
+
+    onStatusChange("正在連接大廳伺服器...");
 
     matchmakingChannel = supabase.channel('public-pk-lobby', {
         config: {
@@ -46,19 +50,31 @@ export const joinMatchmaking = (
                 if (userState) allUsers.push(userState);
             }
 
+            // Filter only idle users
             const idleUsers = allUsers.filter(u => u.status === 'idle');
             
+            // Sort by join time to ensure deterministic pairing
             const sortedUsers = idleUsers.sort((a, b) => a.joinedAt - b.joinedAt);
             const myIndex = sortedUsers.findIndex(u => u.studentId === user.studentId);
 
+            onStatusChange(`尋找對手中... (線上人數: ${idleUsers.length})`);
+
             if (myIndex !== -1 && sortedUsers.length > 1) {
-                // Match with the next person
+                // Determine pair based on sorted list
+                // If I am at index 0, I match with index 1. 
+                // If I am at index 2, I match with index 3.
+                // Only the "even" index initiates the match to prevent double-firing.
+                
                 if (myIndex % 2 === 0 && myIndex + 1 < sortedUsers.length) {
                     const opponent = sortedUsers[myIndex + 1];
-                    // Deterministic Room ID: Always sort IDs to ensure consistency
+                    
+                    // Generate a deterministic Room ID based on sorted Student IDs
                     const ids = [user.studentId, opponent.studentId].sort();
                     const roomId = `room_${ids[0]}_${ids[1]}`;
                     
+                    console.log(`Initiating match with ${opponent.name} in ${roomId}`);
+
+                    // Send offer
                     matchmakingChannel?.send({
                         type: 'broadcast',
                         event: 'MATCH_OFFER',
@@ -69,14 +85,20 @@ export const joinMatchmaking = (
                         }
                     });
 
+                    // I am the host/initiator
                     onMatchFound(opponent, roomId, true); 
                 }
             }
         })
         .on('broadcast', { event: 'MATCH_OFFER' }, ({ payload }) => {
+            // Check if this offer is for me
             if (payload.targetId === user.studentId) {
                 const initiator = payload.initiator as PkPlayerState;
                 const roomId = payload.roomId;
+                
+                console.log(`Received match offer from ${initiator.name}`);
+                
+                // I am the joiner
                 onMatchFound(initiator, roomId, false);
             }
         })
@@ -84,6 +106,8 @@ export const joinMatchmaking = (
             if (status === 'SUBSCRIBED') {
                 onStatusChange("正在搜尋對手...");
                 await matchmakingChannel?.track(myState);
+            } else if (status === 'CHANNEL_ERROR') {
+                onStatusChange("連線錯誤，請重試");
             }
         });
 };
@@ -97,10 +121,8 @@ export const leaveMatchmaking = () => {
 
 /**
  * Join a private game room.
- * REFACTORED: Now uses a debounce timer for disconnects to prevent flickering.
+ * Improved logic to handle connection stability.
  */
-let disconnectTimer: number | null = null;
-
 export const joinGameRoom = (
     roomId: string,
     userId: string,
@@ -108,6 +130,7 @@ export const joinGameRoom = (
     onOpponentLeft: () => void,
     onRoomReady: () => void
 ) => {
+    // Cleanup previous game channels
     if (gameChannel) {
         gameChannel.unsubscribe();
         gameChannel = null;
@@ -117,66 +140,59 @@ export const joinGameRoom = (
         disconnectTimer = null;
     }
 
-    console.log(`Joining Game Room: ${roomId}`);
+    console.log(`Connecting to Game Room: ${roomId}`);
 
     gameChannel = supabase.channel(roomId, {
         config: {
             presence: {
-                key: userId // Use unique user ID for presence key
+                key: userId
             }
         }
     });
     
-    let isReadyTriggered = false;
+    let isConnected = false;
 
     gameChannel
         .on('broadcast', { event: 'GAME_EVENT' }, ({ payload }) => {
-            // console.log("Received Game Event:", payload);
             onGameEvent(payload as PkGamePayload);
         })
         .on('presence', { event: 'sync' }, () => {
             const state = gameChannel?.presenceState();
             const count = state ? Object.keys(state).length : 0;
-            console.log(`Room Sync: ${count} users present`);
+            // console.log(`Room Sync: ${count} users`);
 
-            // Trigger start only when BOTH players are connected and tracked
+            // If we have 2 players, the room is ready
             if (count >= 2) {
                 if (disconnectTimer) {
                     clearTimeout(disconnectTimer);
                     disconnectTimer = null;
                 }
-                if (!isReadyTriggered) {
-                    isReadyTriggered = true;
+                // Only trigger ready once when we hit 2 players
+                if (!isConnected) {
+                    isConnected = true;
                     onRoomReady();
                 }
-            }
-
-            // If game was ready but count drops, use debounce before declaring opponent left
-            if (isReadyTriggered && count < 2) {
-                console.warn("Potential disconnect detected, waiting...");
+            } else if (isConnected && count < 2) {
+                // If we were connected but count dropped, opponent might have left
+                // Add a small debounce to avoid flickering on page reload
                 if (!disconnectTimer) {
                     disconnectTimer = window.setTimeout(() => {
-                        console.warn("Opponent confirmed disconnected");
+                        console.log("Opponent disconnect confirmed");
                         onOpponentLeft();
-                    }, 3000); // 3 seconds grace period
+                    }, 5000); // 5 seconds grace period for reconnections
                 }
             }
         })
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                console.log("Channel Subscribed, tracking presence...");
+                // Track my presence in the room
                 await gameChannel?.track({ online: true, userId });
-            } else if (status === 'CHANNEL_ERROR') {
-                console.error("Game Channel Error");
             }
         });
 };
 
 export const sendGameEvent = async (payload: PkGamePayload) => {
-    if (!gameChannel) {
-        // console.warn("Attempted to send event without active channel");
-        return;
-    }
+    if (!gameChannel) return;
     try {
         await gameChannel.send({
             type: 'broadcast',

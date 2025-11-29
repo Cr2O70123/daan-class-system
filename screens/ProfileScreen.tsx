@@ -1,9 +1,11 @@
 
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap, Key, Image as ImageIcon } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap, Key, Image as ImageIcon, Cone, Activity } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
 import { getDailyPasscode } from '../services/authService';
+import { supabase } from '../services/supabaseClient';
+import { createNotification } from '../services/notificationService';
 
 interface ProfileScreenProps {
   user: User;
@@ -11,7 +13,7 @@ interface ProfileScreenProps {
   onNavigateToModeration: () => void;
   onNavigateToLeaderboard: () => void;
   onOpenCheckIn: () => void;
-  onOpenExams: () => void; // New prop for opening exams
+  onOpenExams: () => void; 
   onLogout: () => void;
   isDarkMode: boolean;
   toggleDarkMode: () => void;
@@ -42,7 +44,6 @@ const AVATAR_COLORS = [
   'bg-purple-500', 'bg-fuchsia-500', 'bg-pink-500', 'bg-rose-500', 'bg-slate-500'
 ];
 
-// Mock Frame Metadata for Inventory Display
 const FRAME_META: Record<string, { name: string, icon: React.ReactNode, color: string }> = {
     'frame_gold': { name: '黃金光環', icon: <Crown size={14}/>, color: 'text-yellow-500' },
     'frame_neon': { name: '霓虹科技', icon: <Zap size={14}/>, color: 'text-cyan-500' },
@@ -71,13 +72,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [avatarImage, setAvatarImage] = useState<string | undefined>(user.avatarImage);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [activeHistoryTab, setActiveHistoryTab] = useState<'questions' | 'answers' | 'resources' | 'inventory'>('questions');
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   
   const progressPercent = calculateProgress(user.points);
 
-  // Avatar Upload - Immediately updates user state
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -85,21 +86,18 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       reader.onloadend = () => {
         const newImage = reader.result as string;
         setAvatarImage(newImage);
-        // Immediate Global Update
         setUser({ ...user, avatarImage: newImage });
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Background Upload - Immediately updates user state
   const handleBgUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
         const newBg = reader.result as string;
-        // Immediate Global Update
         setUser({ ...user, profileBackgroundImage: newBg });
       };
       reader.readAsDataURL(file);
@@ -114,12 +112,56 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   const handleEquipFrame = (frameId: string) => {
       if (user.avatarFrame === frameId) {
-          // Unequip
           setUser({ ...user, avatarFrame: undefined });
       } else {
-          // Equip
           setUser({ ...user, avatarFrame: frameId });
       }
+  };
+
+  // MAINTENANCE TOGGLE FOR ADMIN
+  const toggleMaintenance = async () => {
+      if (!confirm("確定要切換系統維護狀態嗎？開啟後其他用戶將無法進入！")) return;
+      setMaintenanceLoading(true);
+      
+      try {
+          // 1. Check current status
+          const { data } = await supabase.from('notifications').select('*').eq('type', 'system').eq('title', 'MAINTENANCE_MODE').eq('content', 'ON').limit(1);
+          const isCurrentlyOn = data && data.length > 0;
+          
+          if (isCurrentlyOn) {
+              // Turn OFF: Delete the specific notification
+              await supabase.from('notifications').delete().eq('type', 'system').eq('title', 'MAINTENANCE_MODE');
+              
+              // Broadcast OFF
+              await supabase.channel('maintenance_channel').send({
+                  type: 'broadcast',
+                  event: 'MAINTENANCE_TRIGGER',
+                  payload: { status: 'OFF' }
+              });
+              alert("維護模式已關閉");
+          } else {
+              // Turn ON: Create blocking notification
+              // We use createNotification helper but targeting admin ID as placeholder, main logic is the filter in App.tsx
+              await supabase.from('notifications').insert([{
+                  user_id: user.studentId, // Associated with admin
+                  type: 'system',
+                  title: 'MAINTENANCE_MODE',
+                  content: 'ON',
+                  is_read: false
+              }]);
+
+              // Broadcast ON (Kicks online users)
+              await supabase.channel('maintenance_channel').send({
+                  type: 'broadcast',
+                  event: 'MAINTENANCE_TRIGGER',
+                  payload: { status: 'ON' }
+              });
+              alert("維護模式已開啟，用戶將被踢出");
+          }
+      } catch (e) {
+          alert("操作失敗");
+      }
+      setMaintenanceLoading(false);
   };
 
   const renderInventory = () => {
@@ -379,22 +421,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     )}
                 </div>
                 
-                {/* Exclusive Daily Passcode for specific student ID */}
+                {/* Exclusive Admin Controls for 1204233 */}
                 {user.studentId === '1204233' && (
-                     <div className="w-full mt-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-3 flex items-center justify-between border border-indigo-100 dark:border-indigo-800 relative overflow-hidden">
-                        <div className="absolute right-0 top-0 h-full w-20 bg-gradient-to-l from-indigo-500/10 to-transparent"></div>
-                        <div className="flex items-center gap-3 relative z-10">
-                            <div className="bg-indigo-100 dark:bg-indigo-900 p-2.5 rounded-xl text-indigo-600 dark:text-indigo-300 shadow-sm">
-                                <Key size={20} />
+                     <div className="w-full mt-4 space-y-2">
+                         {/* Maintenance Toggle */}
+                         <button 
+                            onClick={toggleMaintenance}
+                            disabled={maintenanceLoading}
+                            className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-2xl p-3 flex items-center justify-between shadow-lg shadow-amber-500/20"
+                         >
+                             <div className="flex items-center gap-3">
+                                 <div className="bg-white/20 p-2 rounded-xl">
+                                     <Cone size={20} />
+                                 </div>
+                                 <div className="text-left">
+                                     <div className="text-sm font-bold">系統維護模式</div>
+                                     <div className="text-[10px] opacity-80">踢出所有用戶並鎖定</div>
+                                 </div>
+                             </div>
+                             <div className="bg-white/20 px-3 py-1 rounded-full text-xs font-black">
+                                 {maintenanceLoading ? '...' : '切換'}
+                             </div>
+                         </button>
+
+                         <div className="w-full bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl p-3 flex items-center justify-between border border-indigo-100 dark:border-indigo-800 relative overflow-hidden">
+                            <div className="absolute right-0 top-0 h-full w-20 bg-gradient-to-l from-indigo-500/10 to-transparent"></div>
+                            <div className="flex items-center gap-3 relative z-10">
+                                <div className="bg-indigo-100 dark:bg-indigo-900 p-2.5 rounded-xl text-indigo-600 dark:text-indigo-300 shadow-sm">
+                                    <Key size={20} />
+                                </div>
+                                <div className="text-left">
+                                    <div className="text-[10px] text-indigo-400 dark:text-indigo-300 font-bold uppercase tracking-wider">每日驗證碼 (Admin)</div>
+                                    <div className="text-xl font-black text-indigo-600 dark:text-indigo-200 font-mono tracking-widest">{getDailyPasscode()}</div>
+                                </div>
                             </div>
-                            <div className="text-left">
-                                <div className="text-[10px] text-indigo-400 dark:text-indigo-300 font-bold uppercase tracking-wider">每日驗證碼 (Admin)</div>
-                                <div className="text-xl font-black text-indigo-600 dark:text-indigo-200 font-mono tracking-widest">{getDailyPasscode()}</div>
-                            </div>
-                        </div>
-                        <div className="text-[10px] text-indigo-300 font-bold relative z-10 bg-white dark:bg-gray-800 px-2 py-1 rounded-lg shadow-sm">
-                            Daily Access
-                        </div>
+                         </div>
                      </div>
                 )}
 
@@ -473,7 +534,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                     <LogOut size={12} /> 登出帳號
                 </button>
-                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.4.2 Build 20251133</p>
+                <p className="text-[10px] text-gray-300 dark:text-gray-600 mt-2">v2.5.0 Build 20251145</p>
             </div>
       </div>
     </div>

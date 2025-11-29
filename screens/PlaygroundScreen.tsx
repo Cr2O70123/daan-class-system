@@ -1,19 +1,12 @@
 
-import React, { useState } from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
   user: User;
-  onOpenWordChallenge: () => void;
-  onOpenResistorGame: () => void;
-  onOpenLuckyWheel?: () => void;
-  onOpenBlockBlast?: () => void;
-  onOpenPkGame?: (mode?: 'CLASSIC' | 'OVERLOAD') => void;
-  onOpenOhmsLaw?: () => void; // Mapped to BaseConverter
-  onOpenVocabPractice?: () => void; // New
-  onOpenDrawGuess?: () => void; // New
-  onOpenHighLow?: () => void; // New Gambling Game
+  onNavigate: (featureId: string, params?: any) => void;
+  setUser?: (user: User) => void;
 }
 
 type ViewState = 'HOME' | 'LEARN' | 'PUZZLE' | 'TOOLS' | 'GAMBLE';
@@ -21,7 +14,7 @@ type ViewState = 'HOME' | 'LEARN' | 'PUZZLE' | 'TOOLS' | 'GAMBLE';
 const CategoryCard = ({ title, icon, color, count, onClick }: { title: string, icon: React.ReactNode, color: string, count: string, onClick: () => void }) => (
     <button 
         onClick={onClick}
-        className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between group active:scale-95 transition-all"
+        className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex items-center justify-between group active:scale-95 transition-all w-full"
     >
         <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-xl ${color} text-white flex items-center justify-center shadow-md group-hover:scale-110 transition-transform`}>
@@ -40,7 +33,7 @@ const CategoryCard = ({ title, icon, color, count, onClick }: { title: string, i
 
 const SubPageHeader = ({ title, onBack }: { title: string, onBack: () => void }) => (
     <div className="flex items-center gap-2 mb-6">
-        <button onClick={onBack} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+        <button onClick={onBack} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors shadow-sm">
             <ArrowRight size={20} className="rotate-180 text-gray-600 dark:text-gray-300" />
         </button>
         <h2 className="text-2xl font-black text-gray-800 dark:text-white">{title}</h2>
@@ -50,9 +43,9 @@ const SubPageHeader = ({ title, onBack }: { title: string, onBack: () => void })
 const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: any) => (
     <div 
         onClick={onClick}
-        className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden transition-all flex gap-4 items-center ${onClick ? 'cursor-pointer active:scale-[0.98]' : 'opacity-60 cursor-not-allowed grayscale-[0.5]'}`}
+        className={`bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 relative overflow-hidden transition-all flex gap-4 items-center ${onClick ? 'cursor-pointer active:scale-[0.98] hover:shadow-md' : 'opacity-60 cursor-not-allowed grayscale-[0.5]'}`}
     >
-        <div className={`w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center ${colorClass} text-white shadow-md`}>
+        <div className={`w-14 h-14 rounded-2xl flex-shrink-0 flex items-center justify-center ${colorClass} text-white shadow-lg`}>
             {icon}
         </div>
         <div className="flex-1 min-w-0">
@@ -62,6 +55,7 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: an
                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                         tags[0] === 'Coming Soon' ? 'bg-gray-200 text-gray-500' : 
                         tags[0] === '維護中' ? 'bg-red-500 text-white animate-pulse shadow-red-500/50 shadow-sm' :
+                        tags[0] === '黑市限定' ? 'bg-purple-900 text-purple-200 border border-purple-700' :
                         'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                     }`}>
                         {tags[0]}
@@ -82,33 +76,26 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: an
 );
 
 export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({ 
-    onOpenWordChallenge, 
-    onOpenResistorGame, 
-    onOpenLuckyWheel, 
-    onOpenBlockBlast, 
-    onOpenPkGame,
-    onOpenOhmsLaw,
-    onOpenVocabPractice,
-    onOpenDrawGuess,
-    onOpenHighLow,
-    user
+    user,
+    onNavigate,
+    setUser
 }) => {
   const [view, setView] = useState<ViewState>('HOME');
-  const MAX_PLAYS = 15;
-  const remainingPlays = Math.max(0, MAX_PLAYS - user.dailyPlays);
+
+  useEffect(() => {
+      window.scrollTo(0, 0);
+  }, [view]);
 
   const renderHome = () => (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
           {/* Featured Hero Card - PK Battle */}
           <div 
-              onClick={() => onOpenPkGame && onOpenPkGame()}
+              onClick={() => onNavigate('pk_game')}
               className="relative w-full aspect-[16/9] bg-gray-900 rounded-[2rem] overflow-hidden shadow-xl cursor-pointer group active:scale-[0.98] transition-all border border-gray-800"
           >
-              {/* Background with Gradient & Pattern */}
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-900 via-purple-900 to-black"></div>
               <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]"></div>
               
-              {/* Content */}
               <div className="absolute inset-0 p-6 flex flex-col justify-between z-10">
                   <div className="flex justify-between items-start">
                       <span className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded shadow-lg shadow-red-500/50 flex items-center gap-1">
@@ -120,19 +107,17 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                   </div>
                   
                   <div>
-                      <h2 className="text-3xl font-black text-white mb-1 italic tracking-tight drop-shadow-md">PK 競技場</h2>
+                      <h2 className="text-3xl font-black text-white mb-1 italic tracking-tight drop-shadow-md">英語單字 PK</h2>
                       <p className="text-indigo-200 text-xs font-medium max-w-[80%]">
                           即時連線對戰，展現你的單字實力！
                       </p>
                   </div>
               </div>
 
-              {/* Decorative 3D Element */}
               <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-gradient-to-tl from-rose-500 to-orange-500 rounded-full blur-2xl opacity-60 group-hover:opacity-80 transition-opacity"></div>
               <Trophy size={120} className="absolute -right-4 -bottom-8 text-white/10 rotate-12 group-hover:rotate-6 transition-transform duration-500" />
           </div>
 
-          {/* Categories Grid */}
           <div className="grid gap-3">
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider ml-1">功能分類</h3>
               
@@ -146,7 +131,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
 
               <CategoryCard 
                   title="博弈娛樂" 
-                  count="2 款遊戲"
+                  count="4 款遊戲"
                   icon={<Dices size={24} />} 
                   color="bg-gradient-to-br from-purple-600 to-indigo-600"
                   onClick={() => setView('GAMBLE')}
@@ -154,7 +139,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               
               <CategoryCard 
                   title="學習挑戰" 
-                  count="4 款應用"
+                  count="5 款應用"
                   icon={<GraduationCap size={24} />} 
                   color="bg-gradient-to-br from-blue-400 to-indigo-600"
                   onClick={() => setView('LEARN')}
@@ -173,7 +158,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
 
   return (
     <div className="pb-24 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-      {/* Main Header */}
+      
       <div className="bg-white dark:bg-gray-800 p-6 pt-safe rounded-b-[2rem] shadow-sm mb-6 sticky top-0 z-20">
         <div className="flex items-center justify-between mt-2">
             <div>
@@ -198,7 +183,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       desc="多人繪畫猜謎，發揮創意與默契。" 
                       icon={<Palette size={24} />} 
                       colorClass="bg-pink-500"
-                      onClick={onOpenDrawGuess}
+                      onClick={() => onNavigate('draw_guess')}
                       tags={['多人同樂']}
                   />
 
@@ -207,16 +192,16 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       desc="放置方塊填滿行或列，消除得分！" 
                       icon={<Grid3X3 size={24} />} 
                       colorClass="bg-blue-500"
-                      onClick={onOpenBlockBlast}
+                      onClick={() => onNavigate('block_blast')}
                       tags={['舒壓']}
                   />
                   <GameItem 
-                      title="PK 競技場" 
-                      desc="與同學即時對戰，搶答拼手速。" 
-                      icon={<Swords size={24} />} 
-                      colorClass="bg-red-500"
-                      onClick={() => onOpenPkGame && onOpenPkGame()}
-                      tags={['競技']}
+                      title="中國象棋" 
+                      desc="楚河漢界大盤、暗棋小盤。" 
+                      icon={<Scroll size={24} />} 
+                      colorClass="bg-amber-600"
+                      onClick={() => onNavigate('xiangqi')}
+                      tags={['雙人']}
                   />
               </div>
           )}
@@ -225,21 +210,61 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="博弈娛樂" onBack={() => setView('HOME')} />
                   
+                  {/* Black Market Entry */}
+                  <div 
+                      onClick={() => onNavigate('black_market')}
+                      className="bg-gray-900 p-4 rounded-2xl shadow-lg border-2 border-purple-500/50 relative overflow-hidden group cursor-pointer"
+                  >
+                      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+                      <div className="absolute top-0 right-0 p-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                          <Skull size={48} className="text-purple-700"/>
+                      </div>
+                      <div className="relative z-10 flex gap-4 items-center">
+                          <div className="w-14 h-14 rounded-2xl bg-purple-900 flex items-center justify-center text-purple-300 border border-purple-700">
+                              <Gem size={24} />
+                          </div>
+                          <div>
+                              <h4 className="font-black text-white text-lg flex items-center gap-2">
+                                  暗巷交易所 <span className="text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded">HOT</span>
+                              </h4>
+                              <p className="text-xs text-gray-400">黑幣兌換與非法道具</p>
+                          </div>
+                      </div>
+                  </div>
+
                   <GameItem 
                       title="幸運轉盤" 
                       desc="每日 3 次機會，拚搏高額積分！" 
                       icon={<Coins size={24} />} 
                       colorClass="bg-yellow-500"
-                      onClick={onOpenLuckyWheel}
-                      tags={['每日限定']}
+                      onClick={() => onNavigate('lucky_wheel')}
+                      tags={['每日限定', 'PT']}
                   />
                   <GameItem 
                       title="高低博弈 (High Low)" 
-                      desc="預測下一張牌的大小，以小博大。" 
+                      desc="預測點數大小，黑幣翻倍的機會。" 
                       icon={<Dices size={24} />} 
                       colorClass="bg-emerald-600"
-                      onClick={onOpenHighLow}
-                      tags={['高風險']}
+                      onClick={() => onNavigate('high_low')}
+                      tags={['黑市限定']}
+                  />
+                  
+                  <GameItem 
+                      title="俄羅斯輪盤" 
+                      desc="一發入魂，贏家通吃。" 
+                      icon={<Crosshair size={24} />} 
+                      colorClass="bg-red-700"
+                      onClick={() => onNavigate('russian_roulette')}
+                      tags={['黑市限定']}
+                  />
+
+                  <GameItem 
+                      title="Cyber Slots" 
+                      desc="賽博風格拉霸機，挑戰超級大獎。" 
+                      icon={<Gem size={24} />} 
+                      colorClass="bg-purple-600"
+                      onClick={() => onNavigate('slot_machine')}
+                      tags={['黑市限定']}
                   />
               </div>
           )}
@@ -249,11 +274,20 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                   <SubPageHeader title="學習挑戰" onBack={() => setView('HOME')} />
                   
                   <GameItem 
+                      title="英語單字 PK" 
+                      desc="與同學即時對戰，搶答拼手速。" 
+                      icon={<Swords size={24} />} 
+                      colorClass="bg-red-500"
+                      onClick={() => onNavigate('pk_game')}
+                      tags={['競技']}
+                  />
+
+                  <GameItem 
                       title="單字練習 (純練習)" 
                       desc="無壓力學習模式，含發音與例句。" 
                       icon={<BookOpen size={24} />} 
                       colorClass="bg-teal-500"
-                      onClick={onOpenVocabPractice}
+                      onClick={() => onNavigate('vocab_practice')}
                       tags={['推薦']}
                   />
 
@@ -262,7 +296,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       desc="30秒極限挑戰，累積連擊加分。" 
                       icon={<Trophy size={24} />} 
                       colorClass="bg-indigo-500"
-                      onClick={onOpenWordChallenge}
+                      onClick={() => onNavigate('word_challenge')}
                       tags={['經典']}
                   />
                   <GameItem 
@@ -270,7 +304,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       desc="看到顏色就要知道數值！" 
                       icon={<Zap size={24} />} 
                       colorClass="bg-orange-500"
-                      onClick={onOpenResistorGame}
+                      onClick={() => onNavigate('resistor_game')}
                       tags={['專業']}
                   />
                   <GameItem 
@@ -292,7 +326,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       desc="二進制、十六進制、十進制快速轉換。" 
                       icon={<Binary size={24} />} 
                       colorClass="bg-gray-700"
-                      onClick={onOpenOhmsLaw} // BaseConverter
+                      onClick={() => onNavigate('base_converter')}
                       tags={['必備']}
                   />
               </div>

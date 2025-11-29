@@ -34,7 +34,8 @@ export interface User {
   avatarImage?: string; 
   avatarFrame?: string;
   profileBackgroundImage?: string; // New: Profile Cover Image
-  points: number; // Current Currency
+  points: number; // Current Currency (PT)
+  blackMarketCoins?: number; // New: Black Market Currency (BMC)
   lifetimePoints?: number; // Total XP for Leveling (Never decreases)
   level: number;
   isAdmin?: boolean;
@@ -93,6 +94,7 @@ export interface Reply {
   nameColor?: string;
   isAi?: boolean; 
   isBestAnswer?: boolean;
+  isAnonymous?: boolean; // New: Anonymous flag for replies
 }
 
 export interface Question {
@@ -156,10 +158,11 @@ export interface Product {
   id: string;
   name: string;
   price: number;
+  currency?: 'PT' | 'BMC'; // Currency Type
   icon: React.ReactNode;
   color: string;
   description: string;
-  category: 'tool' | 'cosmetic' | 'frame' | 'consumable';
+  category: 'tool' | 'cosmetic' | 'frame' | 'consumable' | 'black_market';
   isRare?: boolean; // New: For shiny effect
   tag?: string; // New: For labels like "Sale"
 }
@@ -311,7 +314,19 @@ export interface ChatMsg {
     isSystem?: boolean;
 }
 
-// --- New: Visual Vocab Types ---
+// New: Multi-stage Game Types
+export interface DrawChainItem {
+    authorId: string;
+    authorName: string;
+    type: 'PROMPT' | 'DRAWING' | 'GUESS';
+    content: string; // Text or Base64 Image
+}
+
+export interface DrawChain {
+    id: string; // Usually initial owner's ID
+    items: DrawChainItem[];
+}
+
 export type DrawDifficulty = 'EASY' | 'MEDIUM' | 'HARD';
 
 export interface DrawGuessWord {

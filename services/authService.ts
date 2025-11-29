@@ -4,7 +4,7 @@ import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
 
 // Emergency Ban List (1 Hour Suspension)
-const BANNED_IDS = [];
+const BANNED_IDS = ['1204217', 's1204228', '1204229', 's1204221'];
 
 // Generate Daily Passcode: DAAN-XXXX (Random 4 digits seeded by date)
 export const getDailyPasscode = () => {
@@ -27,7 +27,7 @@ export const getDailyPasscode = () => {
 export const login = async (name: string, studentId: string): Promise<User> => {
     // 0. Check Emergency Ban List
     if (BANNED_IDS.includes(studentId)) {
-        throw new Error("此帳號因涉嫌異常刷分，系統已自動執行暫時封禁。");
+        throw new Error("此帳號因涉嫌異常刷分，系統已自動執行暫時封禁 (1小時)。");
     }
 
     const isAdmin = name === 'admin1204'; 
@@ -53,6 +53,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             student_id: studentId,
             name: name,
             points: initialPoints,
+            black_market_coins: 0, // Initial BMC
             lifetime_points: initialPoints, // Initialize XP same as starting points
             hearts: 0, // Legacy field, might be unused now but kept for DB schema
             daily_plays: 0, // New field
@@ -106,6 +107,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         avatarFrame: user.avatar_frame || undefined,
         profileBackgroundImage: user.profile_background_image || undefined,
         points: user.points,
+        blackMarketCoins: user.black_market_coins || 0, // Load BMC
         lifetimePoints: xp, // Store XP
         level: calculateLevel(xp), // Calculate level based on XP
         isAdmin: isAdmin, 
@@ -190,6 +192,7 @@ export const checkSession = async (): Promise<User | null> => {
         avatarFrame: user.avatar_frame || undefined,
         profileBackgroundImage: user.profile_background_image || undefined,
         points: user.points,
+        blackMarketCoins: user.black_market_coins || 0, // Load BMC
         lifetimePoints: xp,
         level: calculateLevel(xp),
         isAdmin: isAdmin,
@@ -227,6 +230,7 @@ export const updateUserInDb = async (user: User) => {
     const updatePayload = {
         name: user.name,
         points: user.points,
+        black_market_coins: user.blackMarketCoins, // Save BMC
         lifetime_points: user.lifetimePoints, // Ensure XP is saved
         
         // Game Limits (Mapped to DB columns)

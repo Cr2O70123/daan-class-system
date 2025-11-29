@@ -47,6 +47,7 @@ export const fetchQuestions = async (): Promise<Question[]> => {
             avatarImage: r.author_avatar_data?.image,
             avatarFrame: r.author_avatar_data?.frame,
             nameColor: r.author_avatar_data?.nameColor,
+            isAnonymous: r.author_name === '匿名同學',
         }))
     }));
 };
@@ -94,8 +95,15 @@ export const deleteQuestion = async (id: number) => {
     if (error) throw error;
 };
 
-export const createReply = async (user: User, questionId: number, content: string, image?: string) => {
-    const avatarData = {
+export const createReply = async (user: User, questionId: number, content: string, image?: string, isAnonymous: boolean = false) => {
+    // Mask logic for anonymous replies
+    const authorName = isAnonymous ? '匿名同學' : user.name;
+    const avatarData = isAnonymous ? {
+        color: 'bg-gray-500',
+        image: null,
+        frame: null,
+        nameColor: null
+    } : {
         color: user.avatarColor,
         image: user.avatarImage,
         frame: user.avatarFrame,
@@ -106,7 +114,7 @@ export const createReply = async (user: User, questionId: number, content: strin
         question_id: questionId,
         content,
         image,
-        author_name: user.name,
+        author_name: authorName,
         author_student_id: user.studentId,
         author_avatar_data: avatarData
     }]);
@@ -122,13 +130,15 @@ export const createReply = async (user: User, questionId: number, content: strin
             .eq('id', questionId)
             .single();
         
+        // Don't notify if replying to self
         if (qData && qData.author_student_id && qData.author_student_id !== user.studentId) {
+            const replierName = isAnonymous ? '有人' : user.name;
             // 2. Create Notification
             await createNotification(
                 qData.author_student_id,
                 'reply',
                 '您的問題有新回覆',
-                `${user.name} 回覆了您的問題：${qData.title.substring(0, 15)}...`,
+                `${replierName} 回覆了您的問題：${qData.title.substring(0, 15)}...`,
                 questionId.toString()
             );
         }
@@ -271,10 +281,10 @@ export const unbanUser = async (studentId: string) => {
 
 // --- Class Leaderboard ---
 
-export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
+export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[] & { blackMarketCoins?: number }> => {
     const { data, error } = await supabase
         .from('users')
-        .select('name, student_id, points, lifetime_points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
+        .select('name, student_id, points, lifetime_points, black_market_coins, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
         .eq('is_banned', false)
         .limit(1000);
 
@@ -303,6 +313,7 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         name: u.name,
         studentId: u.student_id,
         points: u.lifetime_points ?? u.points, 
+        blackMarketCoins: u.black_market_coins || 0, // Exposed for Black Market P2P
         level: calculateLevel(u.lifetime_points ?? u.points), 
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
@@ -310,6 +321,47 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         checkInStreak: u.consecutive_check_in_days || 0,
         lastCheckInDate: u.last_check_in_date
     }));
+};
+
+// --- Black Market Transfer ---
+export const transferBlackCoins = async (senderId: string, receiverId: string, amount: number) => {
+    // Attempt to call RPC first
+    try {
+        const { error } = await supabase.rpc('transfer_bmc', {
+            sender_id: senderId,
+            receiver_id: receiverId,
+            amount: amount
+        });
+        if (error) throw error;
+        return true;
+    } catch (e: any) {
+        console.warn("RPC Failed, trying client-side fallback:", e.message);
+        
+        // Fallback: Client-side update (Not recommended for prod security, but works for prototype if RLS allows)
+        if (amount <= 0) throw new Error("Invalid amount");
+
+        // 1. Fetch Sender
+        const { data: sender, error: sErr } = await supabase.from('users').select('black_market_coins').eq('student_id', senderId).single();
+        if(sErr || !sender) throw new Error("Sender not found");
+        if((sender.black_market_coins || 0) < amount) throw new Error("Insufficient funds");
+
+        // 2. Fetch Receiver
+        const { data: receiver, error: rErr } = await supabase.from('users').select('black_market_coins').eq('student_id', receiverId).single();
+        if(rErr || !receiver) throw new Error("Receiver not found");
+
+        // 3. Perform Updates
+        const { error: updErr1 } = await supabase.from('users')
+            .update({ black_market_coins: (sender.black_market_coins || 0) - amount })
+            .eq('student_id', senderId);
+        if(updErr1) throw updErr1;
+
+        const { error: updErr2 } = await supabase.from('users')
+            .update({ black_market_coins: (receiver.black_market_coins || 0) + amount })
+            .eq('student_id', receiverId);
+        if(updErr2) throw updErr2;
+
+        return true;
+    }
 };
 
 // --- PK Leaderboard (Updated) ---
@@ -347,7 +399,7 @@ export const submitGameScore = async (user: User, score: number, gameId: string 
     const avatarData = {
         color: user.avatarColor,
         frame: user.avatarFrame,
-        gameId: gameId // Store game ID in metadata to distinguish leaderboards
+        gameId: gameId // Ensure gameId is saved in JSONB metadata
     };
 
     const { error } = await supabase.from('game_scores').insert([{

@@ -1,12 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Dices, Coins, ArrowUp, ArrowDown, RefreshCw, AlertTriangle, BookOpen, Info, CircleDollarSign, CheckCircle, X } from 'lucide-react';
+import { ArrowLeft, Dices, Coins, ArrowUp, ArrowDown, RefreshCw, AlertTriangle, BookOpen, Info, CircleDollarSign, CheckCircle, X, Gem } from 'lucide-react';
 import { User } from '../types';
 
 interface HighLowGameScreenProps {
   user: User;
   onBack: () => void;
-  onFinish: (netPoints: number) => void;
+  onFinish: (netBmc: number) => void;
 }
 
 // Card Deck Helper
@@ -24,90 +24,18 @@ const getRandomCard = () => {
     };
 };
 
-// --- Strict Disclaimer Modal ---
-const StrictDisclaimerModal = ({ onClose }: { onClose: () => void }) => {
-    const [timeLeft, setTimeLeft] = useState(5);
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 0) {
-                    clearInterval(timer);
-                    return 0;
-                }
-                return prev - 0.1; // Smoother progress bar
-            });
-        }, 100);
-        return () => clearInterval(timer);
-    }, []);
-
-    const progress = Math.min(100, ((5 - timeLeft) / 5) * 100);
-    const isLocked = timeLeft > 0;
-
-    return (
-        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
-            <div className="bg-zinc-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border-4 border-red-600 relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-2 bg-gray-800">
-                    <div className="h-full bg-red-600 transition-all duration-100 ease-linear" style={{ width: `${progress}%` }}></div>
-                </div>
-
-                <div className="w-20 h-20 bg-red-900/50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 animate-pulse border-2 border-red-600/50">
-                    <AlertTriangle size={40} />
-                </div>
-                
-                <h2 className="text-2xl font-black text-white mb-4 tracking-wider">高風險警告</h2>
-                
-                <div className="text-left bg-black/40 p-4 rounded-xl border border-red-900/50 mb-6 space-y-3">
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                        <span className="text-red-500 font-bold block mb-1">⚠ 積分可能瞬間歸零</span>
-                        本遊戲屬於高風險博弈，您辛苦累積的積分可能在幾秒鐘內化為烏有。
-                    </p>
-                    <p className="text-gray-300 text-sm leading-relaxed">
-                        <span className="text-red-500 font-bold block mb-1">⚠ 理性娛樂</span>
-                        請評估自身承受能力，切勿沉迷或意氣用事。
-                    </p>
-                </div>
-
-                <button 
-                    onClick={onClose}
-                    disabled={isLocked}
-                    className={`w-full py-4 rounded-xl font-bold transition-all relative overflow-hidden group ${
-                        isLocked 
-                            ? 'bg-gray-800 text-gray-500 cursor-not-allowed' 
-                            : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/50'
-                    }`}
-                >
-                    {isLocked ? (
-                        <span>請閱讀警語 ({Math.ceil(timeLeft)}s)</span>
-                    ) : (
-                        <span className="flex items-center justify-center gap-2">
-                            <CheckCircle size={18} /> 我已了解風險，進入遊戲
-                        </span>
-                    )}
-                    {isLocked && (
-                        <div 
-                            className="absolute bottom-0 left-0 top-0 bg-gray-700/30 transition-all duration-100 ease-linear" 
-                            style={{ width: `${progress}%` }} 
-                        />
-                    )}
-                </button>
-            </div>
-        </div>
-    );
-};
-
 // --- Rules Modal ---
 const RulesModal = ({ onClose }: { onClose: () => void }) => (
     <div className="fixed inset-0 z-[90] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
         <div className="bg-emerald-900/90 border-2 border-yellow-500/50 rounded-2xl p-6 max-w-sm w-full text-white shadow-2xl relative">
             <button onClick={onClose} className="absolute top-4 right-4 text-emerald-300 hover:text-white bg-black/20 p-1 rounded-full"><X size={20}/></button>
             <h3 className="text-xl font-black text-yellow-400 mb-4 flex items-center gap-2">
-                <BookOpen size={24}/> 遊戲規則
+                <BookOpen size={24}/> 遊戲規則 (BMC)
             </h3>
             <ul className="space-y-3 text-sm text-emerald-100 font-medium">
                 <li className="flex gap-2">
                     <span className="text-yellow-400 font-bold">1.</span>
-                    莊家發出一張牌，您需預測<span className="text-yellow-400">下一張牌</span>的點數大小。
+                    使用 <span className="text-purple-300 font-bold">黑幣 (BMC)</span> 下注，預測下一張牌的大小。
                 </li>
                 <li className="flex gap-2">
                     <span className="text-yellow-400 font-bold">2.</span>
@@ -157,8 +85,7 @@ const Chip = ({ value, onClick, selected, disabled }: { value: number | 'ALL', o
 );
 
 export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBack, onFinish }) => {
-  const [showDisclaimer, setShowDisclaimer] = useState(true);
-  const [showRules, setShowRules] = useState(false);
+  const [showRules, setShowRules] = useState(true);
   
   const [currentCard, setCurrentCard] = useState(getRandomCard());
   const [nextCard, setNextCard] = useState<ReturnType<typeof getRandomCard> | null>(null);
@@ -166,17 +93,22 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
   const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'RESULT'>('IDLE');
   const [result, setResult] = useState<'WIN' | 'LOSE' | 'PUSH' | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false); // New lock state
 
   const handleBet = (guess: 'HIGH' | 'LOW') => {
+      // SECURITY FIX: Prevent spam clicking
+      if (isProcessing) return;
+      
       if (betAmount <= 0) {
           alert("請選擇下注金額");
           return;
       }
-      if (betAmount > user.points) {
-          alert("積分不足！");
+      if (betAmount > (user.blackMarketCoins || 0)) {
+          alert("黑幣不足！請前往交易所兌換。");
           return;
       }
 
+      setIsProcessing(true); // Lock
       setGameState('PLAYING');
       
       // Draw next card
@@ -198,6 +130,7 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
           outcome = 'WIN';
       }
 
+      // Simulate server delay and reveal
       setTimeout(() => {
           setResult(outcome);
           setGameState('RESULT');
@@ -212,7 +145,8 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
           }
           
           onFinish(netChange);
-      }, 800); 
+          setIsProcessing(false); // Unlock only after finish
+      }, 1000); 
   };
 
   const resetGame = () => {
@@ -223,13 +157,13 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
   };
 
   const setBet = (val: number | 'ALL') => {
-      if (val === 'ALL') setBetAmount(user.points);
+      if (gameState !== 'IDLE') return;
+      if (val === 'ALL') setBetAmount(user.blackMarketCoins || 0);
       else setBetAmount(val);
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-[#0f2e1a] flex flex-col overflow-hidden text-white font-sans">
-        {showDisclaimer && <StrictDisclaimerModal onClose={() => setShowDisclaimer(false)} />}
         {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
         {/* Casino Background Texture */}
@@ -246,14 +180,14 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
                     <h1 className="font-black text-lg text-yellow-400 tracking-wider flex items-center gap-2">
                         <Dices size={20} /> HIGH-LOW
                     </h1>
-                    <span className="text-[10px] text-emerald-300 font-bold tracking-[0.2em] uppercase">Casino Royale</span>
+                    <span className="text-[10px] text-emerald-300 font-bold tracking-[0.2em] uppercase">Black Market Edition</span>
                 </div>
             </div>
             
             <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2 bg-black/60 px-4 py-1.5 rounded-full border border-yellow-600/50 shadow-inner">
-                    <Coins size={16} className="text-yellow-400" />
-                    <span className="font-mono font-bold text-yellow-100">{user.points.toLocaleString()}</span>
+                <div className="flex items-center gap-2 bg-black/60 px-4 py-1.5 rounded-full border border-purple-600/50 shadow-inner">
+                    <Gem size={16} className="text-purple-400" />
+                    <span className="font-mono font-bold text-purple-100">{user.blackMarketCoins || 0}</span>
                 </div>
                 <button 
                     onClick={() => setShowRules(true)}
@@ -289,8 +223,9 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
 
                     {/* Next Card Slot */}
                     <div className="relative">
-                        {gameState === 'IDLE' ? (
-                            <div className="w-24 h-36 md:w-28 md:h-40 bg-emerald-900/50 rounded-xl border-2 border-dashed border-emerald-400/30 flex items-center justify-center shadow-inner">
+                        {gameState === 'IDLE' || gameState === 'PLAYING' ? (
+                            <div className="w-24 h-36 md:w-28 md:h-40 bg-emerald-900/50 rounded-xl border-2 border-dashed border-emerald-400/30 flex items-center justify-center shadow-inner relative overflow-hidden">
+                                {gameState === 'PLAYING' && <div className="absolute inset-0 bg-white/10 animate-pulse"></div>}
                                 <span className="text-4xl text-emerald-400/20 font-black">?</span>
                             </div>
                         ) : (
@@ -315,7 +250,7 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
                             {result === 'WIN' ? 'WIN' : 'LOSE'}
                         </div>
                         <div className={`text-xl md:text-2xl font-bold mb-8 px-6 py-2 rounded-full border-2 ${result === 'WIN' ? 'bg-yellow-500/20 border-yellow-500 text-yellow-100' : 'bg-red-500/20 border-red-500 text-red-100'}`}>
-                            {result === 'WIN' ? `+${betAmount} PT` : `-${betAmount} PT`}
+                            {result === 'WIN' ? `+${betAmount} BMC` : `-${betAmount} BMC`}
                         </div>
                         <button 
                             onClick={resetGame}
@@ -332,7 +267,7 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
                         <Chip value={10} onClick={() => setBet(10)} selected={betAmount === 10} />
                         <Chip value={50} onClick={() => setBet(50)} selected={betAmount === 50} />
                         <Chip value={100} onClick={() => setBet(100)} selected={betAmount === 100} />
-                        <Chip value="ALL" onClick={() => setBet('ALL')} selected={betAmount === user.points} />
+                        <Chip value="ALL" onClick={() => setBet('ALL')} selected={betAmount === (user.blackMarketCoins || 0)} />
                     </div>
 
                     <div className="bg-black/40 rounded-xl p-2 flex items-center justify-center border border-yellow-600/30 mb-6">
@@ -344,14 +279,16 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
                     <div className="flex gap-4">
                         <button 
                             onClick={() => handleBet('HIGH')}
-                            className="flex-1 bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 py-3 md:py-4 rounded-xl font-black text-lg md:text-xl shadow-[0_4px_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex flex-col items-center border border-blue-400/30"
+                            disabled={isProcessing}
+                            className="flex-1 bg-gradient-to-b from-blue-600 to-blue-800 hover:from-blue-500 hover:to-blue-700 py-3 md:py-4 rounded-xl font-black text-lg md:text-xl shadow-[0_4px_0_#1e3a8a] active:shadow-none active:translate-y-1 transition-all flex flex-col items-center border border-blue-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <ArrowUp size={24} className="mb-1 text-blue-200" />
                             HIGH
                         </button>
                         <button 
                             onClick={() => handleBet('LOW')}
-                            className="flex-1 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 py-3 md:py-4 rounded-xl font-black text-lg md:text-xl shadow-[0_4px_0_#7f1d1d] active:shadow-none active:translate-y-1 transition-all flex flex-col items-center border border-red-400/30"
+                            disabled={isProcessing}
+                            className="flex-1 bg-gradient-to-b from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 py-3 md:py-4 rounded-xl font-black text-lg md:text-xl shadow-[0_4px_0_#7f1d1d] active:shadow-none active:translate-y-1 transition-all flex flex-col items-center border border-red-400/30 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <ArrowDown size={24} className="mb-1 text-red-200" />
                             LOW

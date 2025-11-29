@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { LoginScreen } from './screens/LoginScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -12,26 +12,16 @@ import { QuestionDetailScreen } from './screens/QuestionDetailScreen';
 import { ResourceScreen } from './screens/ResourceScreen';
 import { ResourceDetailScreen } from './screens/ResourceDetailScreen';
 import { ExamScreen } from './screens/ExamScreen';
-import { WordChallengeScreen } from './screens/WordChallengeScreen';
-import { ResistorGameScreen } from './screens/ResistorGameScreen';
 import { PlaygroundScreen } from './screens/PlaygroundScreen';
 import { NotificationScreen } from './screens/NotificationScreen';
 import { CheckInModal } from './components/CheckInModal';
-import { UpdateAnnouncementModal } from './components/UpdateAnnouncementModal'; // New Import
-import { LuckyWheelScreen } from './screens/LuckyWheelScreen';
-import { BlockBlastScreen } from './screens/BlockBlastScreen'; 
-import { PkGameScreen } from './screens/PkGameScreen';
-import { BaseConverterScreen } from './screens/BaseConverterScreen'; 
-import { AiTutorScreen } from './screens/AiTutorScreen'; 
-import { VocabPracticeScreen } from './screens/VocabPracticeScreen';
-import { DrawGuessScreen } from './screens/DrawGuessScreen';
-import { HighLowGameScreen } from './screens/HighLowGameScreen'; 
+import { UpdateAnnouncementModal } from './components/UpdateAnnouncementModal';
+import { AiTutorScreen } from './screens/AiTutorScreen';
 
-import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult } from './types';
-import { RefreshCw, X, Bell } from 'lucide-react';
+import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult, PkGameMode } from './types';
+import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2 } from 'lucide-react';
 
 // Services
-import { WORD_DATABASE } from './services/mockData'; 
 import { calculateLevel } from './services/levelService';
 import { login, updateUserInDb, checkSession, logout } from './services/authService';
 import { 
@@ -41,8 +31,25 @@ import {
 } from './services/dataService';
 import { fetchNotifications } from './services/notificationService';
 import { supabase } from './services/supabaseClient';
+import { WORD_DATABASE } from './services/mockData';
 
-// Helper to get frame styles (Used in Header)
+// --- Lazy Load Features (Code Splitting) ---
+// This prevents the main bundle from getting too huge. Features are loaded only when clicked.
+const WordChallengeScreen = React.lazy(() => import('./screens/WordChallengeScreen').then(module => ({ default: module.WordChallengeScreen })));
+const ResistorGameScreen = React.lazy(() => import('./screens/ResistorGameScreen').then(module => ({ default: module.ResistorGameScreen })));
+const BlockBlastScreen = React.lazy(() => import('./screens/BlockBlastScreen').then(module => ({ default: module.BlockBlastScreen })));
+const LuckyWheelScreen = React.lazy(() => import('./screens/LuckyWheelScreen').then(module => ({ default: module.LuckyWheelScreen })));
+const PkGameScreen = React.lazy(() => import('./screens/PkGameScreen').then(module => ({ default: module.PkGameScreen })));
+const VocabPracticeScreen = React.lazy(() => import('./screens/VocabPracticeScreen').then(module => ({ default: module.VocabPracticeScreen })));
+const DrawGuessScreen = React.lazy(() => import('./screens/DrawGuessScreen').then(module => ({ default: module.DrawGuessScreen })));
+const HighLowGameScreen = React.lazy(() => import('./screens/HighLowGameScreen').then(module => ({ default: module.HighLowGameScreen })));
+const BaseConverterScreen = React.lazy(() => import('./screens/BaseConverterScreen').then(module => ({ default: module.BaseConverterScreen })));
+const BlackMarketScreen = React.lazy(() => import('./screens/BlackMarketScreen').then(module => ({ default: module.BlackMarketScreen })));
+const SlotMachineScreen = React.lazy(() => import('./screens/SlotMachineScreen').then(module => ({ default: module.SlotMachineScreen })));
+const RussianRouletteScreen = React.lazy(() => import('./screens/RussianRouletteScreen').then(module => ({ default: module.RussianRouletteScreen })));
+const XiangqiScreen = React.lazy(() => import('./screens/XiangqiScreen').then(module => ({ default: module.XiangqiScreen })));
+
+// Helper to get frame styles
 const getFrameStyle = (frameId?: string) => {
     switch(frameId) {
       case 'frame_gold': return 'ring-2 ring-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
@@ -50,16 +57,38 @@ const getFrameStyle = (frameId?: string) => {
       case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
       case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
       case 'frame_beta': return 'ring-2 ring-amber-500 border-2 border-dashed border-yellow-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]';
+      case 'frame_cyber': return 'ring-2 ring-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.8)] border border-blue-300';
+      case 'frame_angel': return 'ring-2 ring-white shadow-[0_0_15px_rgba(255,255,255,0.8)] border-2 border-yellow-100';
       default: return 'ring-2 ring-white dark:ring-gray-700';
     }
 };
 
-// Security Constant: Max points allowed per transaction
 const MAX_POINT_GAIN_PER_ACTION = 500;
 
-// EMERGENCY LOCKDOWN FLAG
-const IS_MAINTENANCE_MODE = false;
+// Maintenance Screen
+const MaintenanceScreen = () => (
+    <div className="fixed inset-0 z-[999] bg-gray-900 flex flex-col items-center justify-center text-white p-6 text-center">
+        <div className="w-32 h-32 bg-yellow-500/20 rounded-full flex items-center justify-center mb-8 animate-pulse">
+            <Cone size={64} className="text-yellow-500" />
+        </div>
+        <h1 className="text-4xl font-black mb-4 tracking-wider">系統維護中</h1>
+        <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 max-w-sm w-full">
+            <div className="flex items-center gap-2 text-yellow-400 font-bold mb-2 justify-center">
+                <AlertTriangle size={20} />
+                <span>工程進行中</span>
+            </div>
+            <p className="text-gray-400 text-sm leading-relaxed">
+                系統正在進行安全性升級與資料庫優化。<br/>
+                請稍後再嘗試登入。
+            </p>
+        </div>
+        <div className="mt-8 text-xs text-gray-600 font-mono">
+            Error Code: 503 Service Unavailable
+        </div>
+    </div>
+);
 
+// Header Component
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
     const xp = user.lifetimePoints ?? user.points;
     const progress = (xp % 500) / 5; 
@@ -109,10 +138,18 @@ const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpen
     );
 };
 
+// --- Loading Component for Suspense ---
+const LoadingFallback = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <Loader2 className="animate-spin text-blue-500" size={32} />
+    </div>
+);
+
 const App = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentTab, setCurrentTab] = useState<Tab>(Tab.HOME);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
   // Data States
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -126,40 +163,45 @@ const App = () => {
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
   const [showLeaderboardOverlay, setShowLeaderboardOverlay] = useState(false);
   const [showModeration, setShowModeration] = useState(false);
-  
-  // Update Announcement State (Key changed to force show)
-  const [showUpdateModal, setShowUpdateModal] = useState(() => {
-      return !localStorage.getItem('hasSeenUpdate2.3');
-  });
-  
-  // Game States
-  const [showWordChallenge, setShowWordChallenge] = useState(false);
-  const [showResistorGame, setShowResistorGame] = useState(false);
-  const [showLuckyWheel, setShowLuckyWheel] = useState(false);
-  const [showBlockBlast, setShowBlockBlast] = useState(false); 
-  const [showPkGame, setShowPkGame] = useState(false);
-  const [pkGameMode, setPkGameMode] = useState<'CLASSIC' | 'OVERLOAD' | undefined>(undefined); // Track PK mode (undefined = show select)
-  const [showVocabPractice, setShowVocabPractice] = useState(false);
-  const [showDrawGuess, setShowDrawGuess] = useState(false);
-  const [showHighLowGame, setShowHighLowGame] = useState(false); 
-  
-  // Tools States
-  const [showBaseConverter, setShowBaseConverter] = useState(false);
-  
+  const [showUpdateModal, setShowUpdateModal] = useState(true);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showNotificationScreen, setShowNotificationScreen] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
+  // --- UNIFIED FEATURE STATE (The Key Optimization) ---
+  // Instead of 10 boolean flags, we use one object to track the active full-screen feature.
+  type ActiveFeature = { id: string; params?: any } | null;
+  const [activeFeature, setActiveFeature] = useState<ActiveFeature>(null);
+
+  // --- Maintenance Check ---
+  useEffect(() => {
+      const checkMaintenance = async () => {
+          const { data } = await supabase
+              .from('notifications')
+              .select('*')
+              .eq('type', 'system')
+              .eq('title', 'MAINTENANCE_MODE')
+              .eq('content', 'ON')
+              .limit(1);
+          
+          if (data && data.length > 0) setIsMaintenanceMode(true);
+          else setIsMaintenanceMode(false);
+      };
+
+      checkMaintenance();
+
+      const channel = supabase.channel('maintenance_channel')
+          .on('broadcast', { event: 'MAINTENANCE_TRIGGER' }, ({ payload }) => {
+              setIsMaintenanceMode(payload.status === 'ON');
+          })
+          .subscribe();
+
+      return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const handleTabChange = (newTab: Tab) => {
-      setShowWordChallenge(false);
-      setShowResistorGame(false);
-      setShowLuckyWheel(false);
-      setShowBlockBlast(false);
-      setShowPkGame(false);
-      setShowVocabPractice(false);
-      setShowDrawGuess(false);
-      setShowHighLowGame(false);
-      setShowBaseConverter(false);
+      // Reset all overlays when changing tabs
+      setActiveFeature(null);
       setShowLeaderboardOverlay(false);
       setSelectedQuestion(null);
       setSelectedResource(null);
@@ -170,20 +212,32 @@ const App = () => {
       setCurrentTab(newTab);
   };
 
+  const handleCloseFeature = () => {
+      setActiveFeature(null);
+  };
+
+  const alertMaintenance = () => {
+      alert("系統正在進行安全性維護，相關功能暫時關閉。");
+  };
+
+  // --- Generic Navigation Handler ---
+  // Passed to PlaygroundScreen to avoid prop drilling mania
+  const handleNavigateToFeature = (featureId: string, params?: any) => {
+      if (isMaintenanceMode && featureId !== 'base_converter' && featureId !== 'xiangqi') {
+          alertMaintenance();
+          return;
+      }
+      pushHistory();
+      setActiveFeature({ id: featureId, params });
+  };
+
+  // History Management for Back Button support
   useEffect(() => {
       const handlePopState = (event: PopStateEvent) => {
           if (lightboxImage) { setLightboxImage(null); return; }
           if (showCheckInModal) { setShowCheckInModal(false); return; }
           if (showNotificationScreen) { setShowNotificationScreen(false); return; }
-          if (showLuckyWheel) { setShowLuckyWheel(false); return; }
-          if (showBlockBlast) { setShowBlockBlast(false); return; }
-          if (showPkGame) { setShowPkGame(false); return; }
-          if (showVocabPractice) { setShowVocabPractice(false); return; }
-          if (showDrawGuess) { setShowDrawGuess(false); return; }
-          if (showHighLowGame) { setShowHighLowGame(false); return; }
-          if (showWordChallenge) { setShowWordChallenge(false); return; }
-          if (showResistorGame) { setShowResistorGame(false); return; }
-          if (showBaseConverter) { setShowBaseConverter(false); return; }
+          if (activeFeature) { setActiveFeature(null); return; }
           if (selectedQuestion) { setSelectedQuestion(null); return; }
           if (selectedResource) { setSelectedResource(null); return; }
           if (showLeaderboardOverlay) { setShowLeaderboardOverlay(false); return; }
@@ -193,7 +247,7 @@ const App = () => {
 
       window.addEventListener('popstate', handlePopState);
       return () => window.removeEventListener('popstate', handlePopState);
-  }, [lightboxImage, showCheckInModal, showNotificationScreen, showLuckyWheel, showBlockBlast, showPkGame, showVocabPractice, showDrawGuess, showHighLowGame, showWordChallenge, showResistorGame, showBaseConverter, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
+  }, [lightboxImage, showCheckInModal, showNotificationScreen, activeFeature, selectedQuestion, selectedResource, showLeaderboardOverlay, showModeration, currentTab]);
 
   const pushHistory = () => {
       window.history.pushState({ overlay: true }, '');
@@ -249,7 +303,6 @@ const App = () => {
   const checkDailyReset = async (currentUser: User) => {
     const today = new Date().toDateString();
     if (currentUser.lastDailyReset !== today) {
-        // Reset daily plays to 0 on a new day
         const updatedUser = { 
             ...currentUser, 
             dailyPlays: 0, 
@@ -262,11 +315,7 @@ const App = () => {
   };
 
   const handleCheckIn = async () => {
-    if (IS_MAINTENANCE_MODE) {
-        alert("系統安全性升級中，暫停簽到功能。");
-        return;
-    }
-    
+    if (isMaintenanceMode) { alert("維護中"); return; }
     if (!user) return;
     const today = new Date().toDateString();
     const lastDate = user.lastCheckInDate;
@@ -327,22 +376,18 @@ const App = () => {
       } catch (e) { alert("發布失敗"); }
   };
   
-  const handleAddReply = async (qid: number, content: string, image?: string) => {
+  const handleAddReply = async (qid: number, content: string, image?: string, isAnonymous: boolean = false) => {
       if (!user) return;
       try {
-          await createReply(user, qid, content, image);
+          await createReply(user, qid, content, image, isAnonymous);
           await loadData();
-          
-          if (IS_MAINTENANCE_MODE) {
-              alert("回覆成功 (積分系統維護中，本次不計分)");
-          } else {
+          if (!isMaintenanceMode) {
               const reward = 5;
               const newLifetime = (user.lifetimePoints ?? user.points) + reward;
               const updatedUser = { ...user, points: user.points + reward, lifetimePoints: newLifetime, level: calculateLevel(newLifetime) };
               await updateUserInDb(updatedUser);
               setUser(updatedUser);
           }
-          
           const uQ = await fetchQuestions();
           const tQ = uQ.find(q => q.id === qid);
           if (tQ) setSelectedQuestion(tQ);
@@ -351,10 +396,14 @@ const App = () => {
 
   const handleBuyProduct = async (product: Product) => {
       if (!user) return;
+      if (product.category !== 'consumable' && product.category !== 'tool') {
+          if (user.inventory.includes(product.id) || user.avatarFrame === product.id) {
+              alert("您已經擁有此商品，無法重複購買！"); return;
+          }
+      }
       if (user.points < product.price) { alert("積分不足！"); return; }
       
       const currentLifetimePoints = user.lifetimePoints ?? user.points;
-      
       let updatedUser: User = { 
           ...user, 
           points: user.points - product.price,
@@ -362,13 +411,9 @@ const App = () => {
       };
 
       if (product.category === 'consumable' && product.id === 'item_heart_refill') {
-          // Energy Drink restores 5 plays (reduces daily plays count)
           updatedUser = { ...updatedUser, dailyPlays: Math.max(0, user.dailyPlays - 5) };
           await updateUserInDb(updatedUser); setUser(updatedUser); alert("補充成功！遊玩次數 +5"); return;
       }
-      
-      const isStackable = product.category === 'tool';
-      if (!isStackable && user.inventory.includes(product.id) && product.category !== 'frame') { alert("已擁有"); return; }
       
       const newInv = [...user.inventory];
       newInv.push(product.id);
@@ -379,77 +424,21 @@ const App = () => {
       await updateUserInDb(updatedUser); setUser(updatedUser); alert("購買成功！");
   };
 
-  const handleWheelSpin = async (prize: number, cost: number) => {
-      if (IS_MAINTENANCE_MODE) {
-          alert("系統維護中，無法進行積分結算。");
-          return;
-      }
-      
-      if (!user) return;
-      
-      // Calculate new values
-      const currentLifetimePoints = user.lifetimePoints ?? user.points;
-      const newLifetime = currentLifetimePoints + (prize > 0 ? prize : 0);
-      const safeLifetime = Math.max(currentLifetimePoints, newLifetime);
-      const netPoints = user.points - cost + prize;
-      
-      // Update Spin Counts
-      const today = new Date().toDateString();
-      const newSpins = (user.lastWheelDate === today ? (user.dailyWheelSpins || 0) : 0) + 1;
-
-      const updatedUser = { 
-          ...user, 
-          points: netPoints,
-          lifetimePoints: safeLifetime,
-          level: calculateLevel(safeLifetime),
-          dailyWheelSpins: newSpins,
-          lastWheelDate: today
-      };
-      
-      try {
-          await updateUserInDb(updatedUser);
-          setUser(updatedUser);
-      } catch(e) {
-          console.error("Failed to update points from wheel", e);
-      }
-  };
-
-  const handleFinishHighLow = async (netPoints: number) => {
-      if (IS_MAINTENANCE_MODE) {
-          alert("系統維護中，無法進行積分結算。");
-          return;
-      }
-
-      if (!user) return;
-      const currentLifetimePoints = user.lifetimePoints ?? user.points;
-      // Only wins contribute to lifetime points
-      const newLifetime = netPoints > 0 ? currentLifetimePoints + netPoints : currentLifetimePoints;
-      
-      const updatedUser: User = {
-          ...user,
-          points: user.points + netPoints,
-          lifetimePoints: newLifetime,
-          level: calculateLevel(newLifetime)
-      };
-      
-      try {
-          await updateUserInDb(updatedUser);
-          setUser(updatedUser);
-      } catch(e) {}
+  // --- GAME HANDLERS ---
+  
+  const handleUpdateUser = async (u: User) => {
+      setUser(u);
+      await updateUserInDb(u);
   };
 
   const handleFinishChallenge = async (result: GameResult) => {
-    if (IS_MAINTENANCE_MODE) {
+    if (isMaintenanceMode) {
         alert("系統維護中，暫停積分結算功能。");
-        setShowWordChallenge(false);
-        setShowResistorGame(false);
-        setShowBlockBlast(false);
+        setActiveFeature(null);
         return;
     }
-
     if (!user) return;
     
-    // SECURITY: Cap points per game to prevent cheating
     const rawEarnedPt = Math.floor(result.score / 10);
     const earnedPt = Math.min(rawEarnedPt, MAX_POINT_GAIN_PER_ACTION); 
 
@@ -461,36 +450,26 @@ const App = () => {
         level: calculateLevel(newLifetime)
     };
     try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
-    
-    setShowWordChallenge(false);
-    setShowResistorGame(false);
-    setShowBlockBlast(false);
+    setActiveFeature(null);
   };
-  
-  // PK Result Handler - Update Rating
+
   const handleFinishPk = async (result: PkResult) => {
-      if (IS_MAINTENANCE_MODE) {
+      if (isMaintenanceMode) {
           alert("系統維護中，暫停積分與排名結算。");
-          setShowPkGame(false);
+          setActiveFeature(null);
           return;
       }
-
       if (!user) return;
       
-      // SECURITY: Cap points
       const earnedPt = Math.min(result.score, MAX_POINT_GAIN_PER_ACTION);
       const ratingChange = result.ratingChange || 0;
-      
-      // Determine which rating to update based on the mode played
-      const modePlayed = result.mode || pkGameMode; // Use result mode if available, fallback to state
-      
+      const modePlayed = result.mode || 'CLASSIC'; 
       let updatedUser: User = { ...user };
       
       if (modePlayed === 'OVERLOAD') {
           const newRating = Math.max(0, (user.pkRatingOverload || 0) + ratingChange);
           updatedUser = { ...updatedUser, pkRatingOverload: newRating };
       } else {
-          // Default to Classic if undefined or 'CLASSIC'
           const newRating = Math.max(0, (user.pkRating || 0) + ratingChange);
           updatedUser = { ...updatedUser, pkRating: newRating };
       }
@@ -503,40 +482,72 @@ const App = () => {
           level: calculateLevel(newLifetime)
       };
       
-      try { 
-          await updateUserInDb(updatedUser); 
-          setUser(updatedUser); 
-      } catch(e) {}
-      
-      setShowPkGame(false);
+      try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
+      setActiveFeature(null);
   };
-  
+
+  const handleWheelSpin = async (prize: number, cost: number) => {
+      if (isMaintenanceMode) return;
+      if (!user) return;
+      const newLifetime = (user.lifetimePoints ?? user.points) + prize;
+      const updatedUser = { 
+          ...user, 
+          points: user.points - cost + prize,
+          lifetimePoints: newLifetime,
+          level: calculateLevel(newLifetime),
+          dailyWheelSpins: (user.dailyWheelSpins || 0) + 1,
+          lastWheelDate: new Date().toDateString()
+      };
+      try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
+  };
+
+  const handleBmcGameFinish = async (netBmc: number) => {
+      if (isMaintenanceMode) return;
+      if (!user) return;
+      const updatedUser = { ...user, blackMarketCoins: (user.blackMarketCoins || 0) + netBmc };
+      try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
+      setActiveFeature(null);
+  };
+
   const handleAddResource = async (t: string, d: string, tags: string[], i: string[]) => { 
       if(!user) return;
       await createResource(user, t, d, tags, i); 
       await loadData(); setCurrentTab(Tab.RESOURCE);
   };
   const handleAddExam = async (s: string, t: string, d: string, tm: string) => { if(user) await createExam(user, s, t, d, tm); loadData(); };
-  const handleDeleteContent = async (type: any, id: number) => { /* ... */ };
 
-  // --- Maintenance Mode Alert Helper ---
-  const alertMaintenance = () => {
-      alert("系統正在進行安全性維護，相關功能暫時關閉。");
-  };
-
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="animate-spin"/></div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin"/></div>;
+  if (isMaintenanceMode && user && user.studentId !== '1204233') return <MaintenanceScreen />;
   if (!user) return <LoginScreen onLogin={handleLogin} />;
+
+  // --- FEATURE RENDERER ---
+  const renderActiveFeature = () => {
+      if (!activeFeature) return null;
+      const { id, params } = activeFeature;
+
+      return (
+          <Suspense fallback={<LoadingFallback />}>
+              {id === 'word_challenge' && <WordChallengeScreen user={user} words={WORD_DATABASE} onBack={handleCloseFeature} onFinish={handleFinishChallenge} onUpdateHearts={async (n) => handleUpdateUser({...user, dailyPlays: n})} />}
+              {id === 'resistor_game' && <ResistorGameScreen user={user} onBack={handleCloseFeature} onFinish={handleFinishChallenge} onUpdateHearts={async (n) => handleUpdateUser({...user, dailyPlays: n})} />}
+              {id === 'block_blast' && <BlockBlastScreen user={user} onBack={handleCloseFeature} onFinish={handleFinishChallenge} onUpdateHearts={async (n) => handleUpdateUser({...user, dailyPlays: n})} />}
+              {id === 'lucky_wheel' && <LuckyWheelScreen user={user} onBack={handleCloseFeature} onSpinEnd={handleWheelSpin} />}
+              {id === 'pk_game' && <PkGameScreen user={user} onBack={handleCloseFeature} onFinish={handleFinishPk} initialMode={params?.mode} />}
+              {id === 'vocab_practice' && <VocabPracticeScreen onBack={handleCloseFeature} />}
+              {id === 'draw_guess' && <DrawGuessScreen user={user} onBack={handleCloseFeature} />}
+              {id === 'high_low' && <HighLowGameScreen user={user} onBack={handleCloseFeature} onFinish={handleBmcGameFinish} />}
+              {id === 'base_converter' && <BaseConverterScreen onBack={handleCloseFeature} />}
+              {id === 'black_market' && <BlackMarketScreen user={user} onBack={handleCloseFeature} onBuy={handleBuyProduct} setUser={handleUpdateUser} />}
+              {id === 'slot_machine' && <SlotMachineScreen user={user} onBack={handleCloseFeature} onFinish={handleBmcGameFinish} />}
+              {id === 'russian_roulette' && <RussianRouletteScreen user={user} onBack={handleCloseFeature} onFinish={handleBmcGameFinish} />}
+              {id === 'xiangqi' && <XiangqiScreen onBack={handleCloseFeature} />}
+          </Suspense>
+      );
+  };
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       
-      {/* 2.3 Update Announcement Modal (Updated Key to force show) */}
-      {showUpdateModal && (
-          <UpdateAnnouncementModal onClose={() => {
-              localStorage.setItem('hasSeenUpdate2.3', 'true');
-              setShowUpdateModal(false);
-          }} />
-      )}
+      {showUpdateModal && <UpdateAnnouncementModal onClose={() => setShowUpdateModal(false)} />}
 
       {lightboxImage && (
           <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center" onClick={() => setLightboxImage(null)}>
@@ -567,79 +578,8 @@ const App = () => {
           />
       )}
 
-      {/* --- GAMES SCREENS --- */}
-
-      {showWordChallenge && (
-        <WordChallengeScreen 
-            user={user}
-            words={WORD_DATABASE}
-            onBack={() => setShowWordChallenge(false)}
-            onFinish={handleFinishChallenge}
-            onUpdateHearts={async (newPlays) => { const u = { ...user, dailyPlays: newPlays }; setUser(u); await updateUserInDb(u); }}
-        />
-      )}
-      
-      {showResistorGame && (
-          <ResistorGameScreen 
-              user={user}
-              onBack={() => setShowResistorGame(false)}
-              onFinish={handleFinishChallenge}
-              onUpdateHearts={async (newPlays) => { const u = { ...user, dailyPlays: newPlays }; setUser(u); await updateUserInDb(u); }}
-          />
-      )}
-
-      {showBlockBlast && (
-          <BlockBlastScreen
-              user={user}
-              onBack={() => setShowBlockBlast(false)}
-              onFinish={handleFinishChallenge}
-              onUpdateHearts={async (newPlays) => { const u = { ...user, dailyPlays: newPlays }; setUser(u); await updateUserInDb(u); }}
-          />
-      )}
-      
-      {showPkGame && (
-          <PkGameScreen
-              user={user}
-              onBack={() => setShowPkGame(false)}
-              onFinish={handleFinishPk}
-              initialMode={pkGameMode} 
-          />
-      )}
-
-      {showVocabPractice && (
-          <VocabPracticeScreen 
-              onBack={() => setShowVocabPractice(false)}
-          />
-      )}
-
-      {showDrawGuess && (
-          <DrawGuessScreen 
-              user={user}
-              onBack={() => setShowDrawGuess(false)}
-          />
-      )}
-
-      {/* --- GAMBLING SCREENS --- */}
-      {showLuckyWheel && (
-          <LuckyWheelScreen 
-            user={user}
-            onBack={() => setShowLuckyWheel(false)}
-            onSpinEnd={handleWheelSpin}
-          />
-      )}
-
-      {showHighLowGame && (
-          <HighLowGameScreen 
-              user={user}
-              onBack={() => setShowHighLowGame(false)}
-              onFinish={handleFinishHighLow}
-          />
-      )}
-
-      {/* --- TOOLS SCREENS --- */}
-      {showBaseConverter && (
-          <BaseConverterScreen onBack={() => setShowBaseConverter(false)} />
-      )}
+      {/* --- RENDER FULL SCREEN FEATURES --- */}
+      {renderActiveFeature()}
 
       {/* Overlays */}
       {selectedQuestion && (
@@ -710,18 +650,13 @@ const App = () => {
                         onNavigateToPlayground={() => handleTabChange(Tab.PLAYGROUND)}
                         onOpenLeaderboard={() => { pushHistory(); setShowLeaderboardOverlay(true); }}
                         onOpenCheckIn={() => { 
-                            if(IS_MAINTENANCE_MODE) { alert("簽到系統維護中"); return; }
+                            if(isMaintenanceMode) { alertMaintenance(); return; }
                             pushHistory(); setShowCheckInModal(true); 
                         }}
                         onNavigateToAiTutor={() => handleTabChange(Tab.AI_TUTOR)} 
                         onRefresh={loadData}
                         onImageClick={(url) => { pushHistory(); setLightboxImage(url); }}
-                        onOpenPkGame={(mode) => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            setPkGameMode(mode);
-                            pushHistory(); 
-                            setShowPkGame(true); 
-                        }}
+                        onOpenPkGame={(mode) => handleNavigateToFeature('pk_game', { mode })}
                     />
                 )}
                 {currentTab === Tab.RESOURCE && (
@@ -747,41 +682,8 @@ const App = () => {
                 {currentTab === Tab.PLAYGROUND && (
                     <PlaygroundScreen 
                         user={user}
-                        onOpenWordChallenge={() => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            pushHistory(); setShowWordChallenge(true); 
-                        }}
-                        onOpenResistorGame={() => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            pushHistory(); setShowResistorGame(true); 
-                        }}
-                        onOpenLuckyWheel={() => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            pushHistory(); setShowLuckyWheel(true); 
-                        }}
-                        onOpenBlockBlast={() => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            pushHistory(); setShowBlockBlast(true); 
-                        }}
-                        onOpenPkGame={(mode) => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            setPkGameMode(mode);
-                            pushHistory(); 
-                            setShowPkGame(true); 
-                        }}
-                        onOpenOhmsLaw={() => { pushHistory(); setShowBaseConverter(true); }}
-                        onOpenVocabPractice={() => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            pushHistory(); setShowVocabPractice(true); 
-                        }}
-                        onOpenDrawGuess={() => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            pushHistory(); setShowDrawGuess(true); 
-                        }}
-                        onOpenHighLow={() => { 
-                            if(IS_MAINTENANCE_MODE) { alertMaintenance(); return; }
-                            pushHistory(); setShowHighLowGame(true); 
-                        }}
+                        onNavigate={handleNavigateToFeature}
+                        setUser={handleUpdateUser} 
                     />
                 )}
                 
@@ -791,17 +693,17 @@ const App = () => {
                 {currentTab === Tab.STORE && <ShopScreen user={user} onBuy={handleBuyProduct} />}
                 {currentTab === Tab.PROFILE && (
                     <ProfileScreen 
-                        user={user} setUser={async (u) => { setUser(u); await updateUserInDb(u); }}
+                        user={user} setUser={handleUpdateUser}
                         onNavigateToModeration={() => { pushHistory(); setShowModeration(true); }}
                         onNavigateToLeaderboard={() => { pushHistory(); setShowLeaderboardOverlay(true); }}
                         onOpenCheckIn={() => { 
-                            if(IS_MAINTENANCE_MODE) { alert("簽到系統維護中"); return; }
+                            if(isMaintenanceMode) { alert("簽到系統維護中"); return; }
                             pushHistory(); setShowCheckInModal(true); 
                         }}
                         onOpenExams={() => { pushHistory(); setCurrentTab(Tab.EXAM); }} 
                         onLogout={() => { logout(); setUser(null); }}
                         isDarkMode={user.settings?.darkMode || false}
-                        toggleDarkMode={async () => { const s = { ...user.settings!, darkMode: !user.settings?.darkMode }; const u = { ...user, settings: s }; setUser(u); await updateUserInDb(u); }}
+                        toggleDarkMode={async () => { const s = { ...user.settings!, darkMode: !user.settings?.darkMode }; const u = { ...user, settings: s }; await handleUpdateUser(u); }}
                         userQuestions={questions.filter(q => q.author === user.name)}
                         userReplies={questions.filter(q => q.replies.some(r => r.author === user.name))}
                         userResources={resources.filter(r => r.author === user.name)}

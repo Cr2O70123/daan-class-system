@@ -1,176 +1,144 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Eraser, Trash2, Palette, Send, MessageCircle, PenTool, Play, Clock, Crown, PlusCircle, Sparkles, User as UserIcon, Users, Copy, Info, CheckCircle2, HelpCircle, X, Shuffle, Trophy } from 'lucide-react';
+import { ArrowLeft, Eraser, Trash2, Palette, Send, MessageCircle, PenTool, Play, Clock, Crown, PlusCircle, Sparkles, User as UserIcon, Users, Copy, Info, CheckCircle2, HelpCircle, X, Shuffle, Trophy, Eye, RotateCcw, Image as ImageIcon, ChevronRight, BookOpen } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
-import { User, DrawPoint, ChatMsg, DrawGuessWord, DrawDifficulty } from '../types';
-import { getDrawChoices, submitUserWord } from '../services/visualVocabService';
+import { User, DrawPoint, ChatMsg } from '../types';
 
 interface DrawGuessScreenProps {
   user: User;
   onBack: () => void;
 }
 
+// Extended Color Palette
 const COLORS = [
-    '#000000', // Black
-    '#FFFFFF', // White
-    '#9CA3AF', // Gray
-    '#EF4444', // Red
-    '#F97316', // Orange
-    '#F59E0B', // Yellow
-    '#10B981', // Green
-    '#3B82F6', // Blue
-    '#8B5CF6', // Purple
-    '#EC4899', // Pink
-    '#78350F', // Brown
+    '#000000', '#FFFFFF', '#9CA3AF', // Mono
+    '#EF4444', '#F97316', '#F59E0B', // Warm
+    '#10B981', '#06B6D4', '#3B82F6', // Cool
+    '#8B5CF6', '#EC4899', '#78350F'  // Misc
 ];
+const WIDTHS = [2, 6, 12, 24];
 
-const WIDTHS = [2, 5, 10, 20];
+type GamePhase = 'MENU' | 'LOBBY' | 'WRITE' | 'DRAW' | 'GUESS' | 'REVIEW';
 
-// Game Stages
-type GamePhase = 'MENU' | 'LOBBY' | 'SELECTING' | 'DRAWING' | 'ROUND_END' | 'GAME_END';
-
-// Helper for UI colors
-const DIFF_CONFIG = {
-    'EASY': { color: 'text-green-600', bg: 'bg-green-100', border: 'border-green-300', label: '簡單' },
-    'MEDIUM': { color: 'text-yellow-600', bg: 'bg-yellow-100', border: 'border-yellow-300', label: '普通' },
-    'HARD': { color: 'text-red-600', bg: 'bg-red-100', border: 'border-red-300', label: '困難' }
+type ChainStep = {
+    type: 'TEXT' | 'IMAGE';
+    content: string;
+    authorName: string;
 };
 
-// --- Game Rules Modal ---
-const RulesModal = ({ onClose }: { onClose: () => void }) => (
-    <div className="fixed inset-0 z-[80] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
-        <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative">
-            <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={24}/></button>
-            <h3 className="text-xl font-black text-gray-800 mb-4 flex items-center gap-2">
-                <HelpCircle className="text-blue-600" /> 遊戲規則
-            </h3>
-            <ul className="space-y-4 text-sm text-gray-600">
-                <li className="flex gap-3">
-                    <div className="bg-blue-100 text-blue-600 font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">1</div>
-                    <div>
-                        <span className="font-bold text-gray-800 block">選詞繪畫</span>
-                        輪到你畫畫時，從三個題目中選一個。不能寫字，只能用畫的！
-                    </div>
-                </li>
-                <li className="flex gap-3">
-                    <div className="bg-green-100 text-green-600 font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">2</div>
-                    <div>
-                        <span className="font-bold text-gray-800 block">競速猜題</span>
-                        其他玩家在聊天室輸入答案。越快猜對分數越高！
-                    </div>
-                </li>
-                <li className="flex gap-3">
-                    <div className="bg-yellow-100 text-yellow-600 font-bold w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">3</div>
-                    <div>
-                        <span className="font-bold text-gray-800 block">積分獲勝</span>
-                        遊戲結束時，積分最高的玩家獲得冠軍。
-                    </div>
-                </li>
-            </ul>
-            <button onClick={onClose} className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700">開始遊戲</button>
-        </div>
-    </div>
-);
+interface GameChain {
+    ownerId: string;
+    steps: ChainStep[];
+}
 
 export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }) => {
-  // Navigation & Room State
+  // Navigation
   const [phase, setPhase] = useState<GamePhase>('MENU');
   const [roomId, setRoomId] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [showRules, setShowRules] = useState(false);
   
-  // Game Logic State
-  const [drawerId, setDrawerId] = useState<string | null>(null);
-  const [currentWord, setCurrentWord] = useState<DrawGuessWord | null>(null);
+  // Players
+  const [players, setPlayers] = useState<{id: string, name: string, isHost: boolean, isDone: boolean}[]>([]);
+  const isHost = players.find(p => p.id === user.studentId)?.isHost || false;
+
+  // Game Logic
   const [timer, setTimer] = useState(0);
-  const [wordChoices, setWordChoices] = useState<DrawGuessWord[]>([]);
-  const [players, setPlayers] = useState<{id: string, name: string, score: number, isHost: boolean, hasGuessed: boolean}[]>([]);
+  const [round, setRound] = useState(0); 
   
-  // Drawing State
+  // Local Input State
+  const [inputText, setInputText] = useState('');
+  const [currentPrompt, setCurrentPrompt] = useState<string | null>(null);
+  const [currentImageToGuess, setCurrentImageToGuess] = useState<string | null>(null);
+  const [reviewChains, setReviewChains] = useState<GameChain[]>([]);
+  const [reviewIndex, setReviewIndex] = useState(0);
+
+  // Canvas
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState('#000000');
-  const [lineWidth, setLineWidth] = useState(5);
-  
-  // Chat State
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const [showChatMobile, setShowChatMobile] = useState(false); // Mobile chat toggle
-  
-  const channelRef = useRef<any>(null);
+  const [lineWidth, setLineWidth] = useState(6);
+  const [history, setHistory] = useState<ImageData[]>([]); // Undo History
   const lastPos = useRef<DrawPoint | null>(null);
-  const timerInterval = useRef<number | null>(null);
 
-  const isDrawer = user.studentId === drawerId;
-  const isHost = players.find(p => p.id === user.studentId)?.isHost || false;
-  const iHaveGuessed = players.find(p => p.id === user.studentId)?.hasGuessed || false;
+  const channelRef = useRef<any>(null);
 
-  // --- Initialization ---
-  useEffect(() => {
-    // Initialize Canvas Context
-    if (canvasRef.current) {
-        const context = canvasRef.current.getContext('2d');
-        if (context) {
-            context.lineCap = 'round';
-            context.lineJoin = 'round';
-            setCtx(context);
-            context.fillStyle = '#ffffff';
-            context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-        }
-    }
-  }, [phase]); // Re-init when phase changes (entering game)
+  // --- 1. Connection & Room Logic ---
 
-  // --- Room Connection Logic ---
-  const joinRoom = (room: string, create: boolean = false) => {
+  const joinRoom = (room: string) => {
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       
-      const newChannel = supabase.channel(`draw_${room}`, {
+      const channel = supabase.channel(`gartic_${room}`, {
           config: { presence: { key: user.studentId } }
       });
 
-      newChannel
-        .on('broadcast', { event: 'DRAW_STROKE' }, ({ payload }: { payload: any }) => handleRemoteDraw(payload))
-        .on('broadcast', { event: 'CLEAR' }, () => clearCanvas(false))
-        .on('broadcast', { event: 'GAME_STATE' }, ({ payload }: { payload: any }) => {
+      channel
+        .on('broadcast', { event: 'GAME_STATE_UPDATE' }, ({ payload }) => {
             if (payload.phase) setPhase(payload.phase);
-            if (payload.drawerId) setDrawerId(payload.drawerId);
-            if (payload.currentWord) setCurrentWord(payload.currentWord); 
             if (payload.timer !== undefined) setTimer(payload.timer);
+            if (payload.round !== undefined) setRound(payload.round);
             if (payload.players) setPlayers(payload.players);
             
-            if (payload.phase === 'SELECTING') {
-                clearCanvas(false); 
+            if (payload.phase === 'WRITE') {
+                setInputText('');
+                setIsDrawing(false);
+                setHistory([]);
             }
         })
-        .on('broadcast', { event: 'CHAT' }, ({ payload }: { payload: ChatMsg }) => {
-            setMessages(prev => [...prev, payload]);
+        .on('broadcast', { event: 'ASSIGN_TASK' }, ({ payload }) => {
+            if (payload.targetId === user.studentId) {
+                if (payload.type === 'DRAW') {
+                    setCurrentPrompt(payload.content);
+                    setCurrentImageToGuess(null);
+                    setTimeout(clearCanvas, 100); // Ensure canvas is ready
+                } else if (payload.type === 'GUESS') {
+                    setCurrentImageToGuess(payload.content);
+                    setCurrentPrompt(null);
+                    setInputText('');
+                }
+            }
+        })
+        .on('broadcast', { event: 'REVIEW_DATA' }, ({ payload }) => {
+            setReviewChains(payload.chains);
         })
         .on('presence', { event: 'sync' }, () => {
-            const state = newChannel.presenceState();
-            const currentUsers: any[] = [];
+            const state = channel.presenceState();
+            const users: any[] = [];
             for (const key in state) {
                 // @ts-ignore
-                if(state[key][0]) currentUsers.push(state[key][0]);
+                if(state[key][0]) users.push(state[key][0]);
             }
-            
-            if (currentUsers.length === 1) {
-                 setPlayers([{ id: user.studentId, name: user.name, score: 0, isHost: true, hasGuessed: false }]);
+            if (players.length === 0 && users.length > 0) {
+                 const sorted = users.sort((a,b) => a.joinedAt - b.joinedAt);
+                 const mappedPlayers = sorted.map(u => ({
+                     id: u.userId,
+                     name: u.name,
+                     isHost: u.userId === sorted[0].userId,
+                     isDone: false
+                 }));
+                 setPlayers(mappedPlayers);
+            } else {
+                setPlayers(prev => {
+                    const hostId = prev.find(p => p.isHost)?.id;
+                    return users.map(u => ({
+                        id: u.userId,
+                        name: u.name,
+                        isHost: u.userId === hostId,
+                        isDone: false
+                    }));
+                });
             }
         })
-        .subscribe(async (status: string) => {
+        .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
-                await newChannel.track({ 
-                    userId: user.studentId, 
-                    name: user.name,
-                    joinedAt: Date.now() 
-                });
+                await channel.track({ userId: user.studentId, name: user.name, joinedAt: Date.now() });
                 setRoomId(room);
                 setPhase('LOBBY');
             }
         });
 
-      channelRef.current = newChannel;
+      channelRef.current = channel;
   };
 
   const leaveRoom = () => {
@@ -178,465 +146,559 @@ export const DrawGuessScreen: React.FC<DrawGuessScreenProps> = ({ user, onBack }
       setRoomId(null);
       setPhase('MENU');
       setPlayers([]);
-      setMessages([]);
-      setTimer(0);
   };
 
-  // --- Game Logic (Host Side) ---
+  // --- 2. Host Logic ---
+  
+  const [hostChains, setHostChains] = useState<Record<string, GameChain>>({});
+
   useEffect(() => {
-      if (isHost && (phase === 'DRAWING' || phase === 'SELECTING' || phase === 'ROUND_END')) {
-          if (timerInterval.current) clearInterval(timerInterval.current);
-          timerInterval.current = window.setInterval(() => {
-              setTimer(prev => {
-                  if (prev <= 1) {
-                      if (phase === 'DRAWING') {
-                          handleRoundEnd();
-                      } else if (phase === 'SELECTING') {
-                          const word = wordChoices[0] || { en: 'Timeout', zh: '超時', difficulty: 'EASY', category: 'System', points: 0 } as DrawGuessWord;
-                          handleSelectWord(word); 
-                      } else if (phase === 'ROUND_END') {
-                          handleStartGame(); 
-                      }
-                      return 0;
-                  }
-                  return prev - 1;
-              });
-          }, 1000);
-      } else {
-          if (timerInterval.current) clearInterval(timerInterval.current);
-      }
-      return () => { if (timerInterval.current) clearInterval(timerInterval.current); };
-  }, [phase, isHost, wordChoices]);
+      if (!isHost) return;
 
-  const broadcastState = (newState: any) => {
-      if (newState.phase) setPhase(newState.phase);
-      if (newState.drawerId) setDrawerId(newState.drawerId);
-      if (newState.currentWord) setCurrentWord(newState.currentWord);
-      if (newState.timer !== undefined) setTimer(newState.timer);
-      if (newState.players) setPlayers(newState.players);
-
-      channelRef.current?.send({
-          type: 'broadcast',
-          event: 'GAME_STATE',
-          payload: newState
+      const subscription = channelRef.current?.on('broadcast', { event: 'SUBMIT_STEP' }, ({ payload }: any) => {
+          const { userId, type, content } = payload;
+          
+          setPlayers(prev => {
+              const next = prev.map(p => p.id === userId ? { ...p, isDone: true } : p);
+              return next;
+          });
+          
+          setHostChains(prev => {
+              const chainId = payload.chainId;
+              const chain = prev[chainId] || { ownerId: chainId, steps: [] };
+              const newSteps = [...chain.steps, { type, content, authorName: payload.authorName }];
+              return { ...prev, [chainId]: { ...chain, steps: newSteps } };
+          });
       });
-  };
+
+      return () => {};
+  }, [isHost, phase]);
 
   const handleStartGame = () => {
-      const resetPlayers = players.map(p => ({ ...p, hasGuessed: false }));
-      const potentialDrawers = resetPlayers; 
-      const nextDrawer = potentialDrawers[Math.floor(Math.random() * potentialDrawers.length)];
-      setDrawerId(nextDrawer.id);
-      
-      broadcastState({ 
-          phase: 'SELECTING', 
-          drawerId: nextDrawer.id, 
-          timer: 15, 
-          currentWord: null,
-          players: resetPlayers 
-      });
-  };
-
-  useEffect(() => {
-      if (phase === 'SELECTING' && isDrawer) {
-          setWordChoices(getDrawChoices());
-      }
-  }, [phase, isDrawer]);
-
-  const handleSelectWord = (word: DrawGuessWord) => {
-      setWordChoices([]);
-      clearCanvas(true);
-      const payload = { phase: 'DRAWING', currentWord: word, timer: 80 };
-      channelRef.current?.send({ type: 'broadcast', event: 'GAME_STATE', payload });
-      setPhase('DRAWING');
-      setCurrentWord(word);
-      setTimer(80);
-  };
-
-  const handleRoundEnd = () => {
       if (!isHost) return;
-      broadcastState({ phase: 'ROUND_END', timer: 5 });
+      const chains: Record<string, GameChain> = {};
+      players.forEach(p => {
+          chains[p.id] = { ownerId: p.id, steps: [] };
+      });
+      setHostChains(chains);
+      
+      broadcastUpdate({ phase: 'WRITE', timer: 60, round: 0, players: players.map(p => ({...p, isDone: false})) });
+  };
+
+  const broadcastUpdate = (update: any) => {
+      channelRef.current?.send({ type: 'broadcast', event: 'GAME_STATE_UPDATE', payload: update });
+  };
+
+  // Check Phase Completion
+  useEffect(() => {
+      if (!isHost || players.length === 0) return;
+      
+      if (players.every(p => p.isDone)) {
+          setTimeout(() => {
+              if (phase === 'WRITE') {
+                  // WRITE -> DRAW
+                  const shuffledPlayers = [...players];
+                  shuffledPlayers.forEach((p, i) => {
+                      const targetChainOwner = shuffledPlayers[(i + 1) % shuffledPlayers.length].id;
+                      const chain = hostChains[targetChainOwner];
+                      const prompt = chain.steps[0].content;
+                      
+                      channelRef.current?.send({ 
+                          type: 'broadcast', 
+                          event: 'ASSIGN_TASK', 
+                          payload: { targetId: p.id, type: 'DRAW', content: prompt, chainId: targetChainOwner } 
+                      });
+                  });
+                  broadcastUpdate({ phase: 'DRAW', timer: 90, round: 1, players: players.map(p => ({...p, isDone: false})) });
+
+              } else if (phase === 'DRAW') {
+                  // DRAW -> GUESS
+                  const shuffledPlayers = [...players];
+                  shuffledPlayers.forEach((p, i) => {
+                      const targetChainOwner = shuffledPlayers[(i + 2) % shuffledPlayers.length].id;
+                      const chain = hostChains[targetChainOwner];
+                      const drawing = chain.steps[1].content;
+                      
+                      channelRef.current?.send({ 
+                          type: 'broadcast', 
+                          event: 'ASSIGN_TASK', 
+                          payload: { targetId: p.id, type: 'GUESS', content: drawing, chainId: targetChainOwner } 
+                      });
+                  });
+                  broadcastUpdate({ phase: 'GUESS', timer: 60, round: 2, players: players.map(p => ({...p, isDone: false})) });
+
+              } else if (phase === 'GUESS') {
+                  // GUESS -> REVIEW
+                  const allChains = Object.values(hostChains);
+                  channelRef.current?.send({ type: 'broadcast', event: 'REVIEW_DATA', payload: { chains: allChains } });
+                  broadcastUpdate({ phase: 'REVIEW', round: 3 });
+              }
+          }, 1000);
+      }
+  }, [players, isHost, phase, hostChains]);
+
+
+  // --- 3. Client Submission Logic ---
+
+  const currentTaskChainId = useRef<string>('');
+  
+  useEffect(() => {
+      const listener = channelRef.current?.on('broadcast', { event: 'ASSIGN_TASK' }, ({ payload }: any) => {
+          if (payload.targetId === user.studentId) {
+              currentTaskChainId.current = payload.chainId;
+          }
+      });
+      return () => { listener?.unsubscribe() };
+  }, [channelRef.current]);
+
+  const handleSubmitWrite = () => {
+      if (!inputText.trim()) return;
+      channelRef.current?.send({ 
+          type: 'broadcast', event: 'SUBMIT_STEP', 
+          payload: { userId: user.studentId, chainId: user.studentId, type: 'TEXT', content: inputText, authorName: user.name } 
+      });
+      setPlayers(prev => prev.map(p => p.id === user.studentId ? { ...p, isDone: true } : p));
+  };
+
+  const submitDraw = () => {
+      if (!canvasRef.current) return;
+      const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.5);
+      channelRef.current?.send({ 
+          type: 'broadcast', event: 'SUBMIT_STEP', 
+          payload: { userId: user.studentId, chainId: currentTaskChainId.current, type: 'IMAGE', content: dataUrl, authorName: user.name } 
+      });
+      setPlayers(prev => prev.map(p => p.id === user.studentId ? { ...p, isDone: true } : p));
+  };
+
+  const submitGuess = () => {
+      if (!inputText.trim()) return;
+      channelRef.current?.send({ 
+          type: 'broadcast', event: 'SUBMIT_STEP', 
+          payload: { userId: user.studentId, chainId: currentTaskChainId.current, type: 'TEXT', content: inputText, authorName: user.name } 
+      });
+      setPlayers(prev => prev.map(p => p.id === user.studentId ? { ...p, isDone: true } : p));
   };
 
   // --- Canvas Logic ---
-  const handleRemoteDraw = (data: { start: DrawPoint, end: DrawPoint, color: string, width: number }) => {
-      if (!ctx) return;
-      ctx.beginPath();
-      ctx.moveTo(data.start.x, data.start.y);
-      ctx.lineTo(data.end.x, data.end.y);
-      ctx.strokeStyle = data.color;
-      ctx.lineWidth = data.width;
-      ctx.stroke();
-  };
+  useEffect(() => {
+    if (phase === 'DRAW' && canvasRef.current) {
+        const context = canvasRef.current.getContext('2d', { willReadFrequently: true });
+        if (context) {
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            setCtx(context);
+            // Initial state for undo
+            setHistory([context.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height)]);
+        }
+    }
+  }, [phase]);
 
-  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-      if (!isDrawer || phase !== 'DRAWING') return;
+  const startDrawing = (e: any) => {
+      if (phase !== 'DRAW') return;
       setIsDrawing(true);
-      const pos = getPos(e);
-      lastPos.current = pos;
-      if (ctx) {
-          ctx.beginPath();
-          ctx.moveTo(pos.x, pos.y);
-      }
+      lastPos.current = getPos(e);
   };
-
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-      if (!isDrawing || !ctx || !lastPos.current || !isDrawer || phase !== 'DRAWING') return;
-      // Prevent scrolling on touch
-      // if (e.type === 'touchmove') e.preventDefault(); 
-      
-      const currentPos = getPos(e);
-      
+  const draw = (e: any) => {
+      if (!isDrawing || !ctx || !lastPos.current) return;
+      const newPos = getPos(e);
       ctx.beginPath();
       ctx.moveTo(lastPos.current.x, lastPos.current.y);
-      ctx.lineTo(currentPos.x, currentPos.y);
+      ctx.lineTo(newPos.x, newPos.y);
       ctx.strokeStyle = color;
       ctx.lineWidth = lineWidth;
       ctx.stroke();
-
-      channelRef.current?.send({
-          type: 'broadcast',
-          event: 'DRAW_STROKE',
-          payload: { start: lastPos.current, end: currentPos, color: color, width: lineWidth }
-      });
-
-      lastPos.current = currentPos;
+      lastPos.current = newPos;
   };
-
+  
   const stopDrawing = () => {
-      if (isDrawing) {
+      if (isDrawing && ctx && canvasRef.current) {
           setIsDrawing(false);
-          lastPos.current = null;
+          // Save state for undo
+          const imageData = ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height);
+          setHistory(prev => [...prev.slice(-9), imageData]); // Keep last 10
       }
   };
 
-  const getPos = (e: React.MouseEvent | React.TouchEvent): DrawPoint => {
-      const canvas = canvasRef.current;
-      if (!canvas) return { x: 0, y: 0 };
-      const rect = canvas.getBoundingClientRect();
-      const scaleX = canvas.width / rect.width;
-      const scaleY = canvas.height / rect.height;
-      
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+  const handleUndo = () => {
+      if (history.length > 1 && ctx) {
+          const newHistory = [...history];
+          newHistory.pop(); // Remove current
+          const previousState = newHistory[newHistory.length - 1];
+          ctx.putImageData(previousState, 0, 0);
+          setHistory(newHistory);
+      }
+  };
+
+  const getPos = (e: any) => {
+      const rect = canvasRef.current!.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const scaleX = canvasRef.current!.width / rect.width;
+      const scaleY = canvasRef.current!.height / rect.height;
       return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
   };
-
-  const clearCanvas = (emit = true) => {
-      if (ctx && canvasRef.current) {
+  
+  const clearCanvas = () => {
+      if(ctx && canvasRef.current) {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-          if (emit) channelRef.current?.send({ type: 'broadcast', event: 'CLEAR', payload: {} });
+          setHistory([ctx.getImageData(0, 0, canvasRef.current.width, canvasRef.current.height)]);
       }
-  };
-
-  // --- Chat & Guessing Logic ---
-  useEffect(() => {
-      if (!channelRef.current) return;
-      const handleGuessSuccess = (payload: { userId: string }) => {
-          setPlayers(prev => prev.map(p => {
-              if (p.id === payload.userId && !p.hasGuessed) {
-                  return { ...p, score: p.score + 10, hasGuessed: true };
-              }
-              if (p.id === drawerId && !p.hasGuessed) { 
-                   return { ...p, score: p.score + 2 };
-              }
-              return p;
-          }));
-      };
-      channelRef.current.on('broadcast', { event: 'GUESS_SUCCESS' }, ({ payload }: any) => handleGuessSuccess(payload));
-      return () => { channelRef.current?.off('broadcast', { event: 'GUESS_SUCCESS' }); };
-  }, [drawerId]);
-
-  const handleClientChat = () => {
-      if (!chatInput.trim()) return;
-      const input = chatInput.trim();
-      
-      if (!isDrawer && phase === 'DRAWING' && currentWord && input === currentWord.zh) {
-          if (!iHaveGuessed) {
-              channelRef.current?.send({ type: 'broadcast', event: 'GUESS_SUCCESS', payload: { userId: user.studentId } });
-              const winMsg = { id: Date.now().toString(), sender: '', text: `${user.name} 猜對了答案！`, isSystem: true };
-              channelRef.current?.send({ type: 'broadcast', event: 'CHAT', payload: winMsg });
-              setMessages(prev => [...prev, winMsg]);
-              setPlayers(prev => prev.map(p => p.id === user.studentId ? { ...p, hasGuessed: true } : p));
-          }
-      } else {
-          const msg = { id: Date.now().toString(), sender: user.name, text: input };
-          channelRef.current?.send({ type: 'broadcast', event: 'CHAT', payload: msg });
-          setMessages(prev => [...prev, msg]);
-      }
-      setChatInput('');
-  };
-
+  }
 
   // --- RENDER ---
 
   if (phase === 'MENU') {
       return (
-          <div className="fixed inset-0 z-50 bg-indigo-50 flex flex-col items-center justify-center p-6">
-              {showRules && <RulesModal onClose={() => setShowRules(false)} />}
-              <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl p-8 text-center animate-in zoom-in border-4 border-indigo-100">
-                  <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                      <Palette size={48} className="text-indigo-600" />
-                  </div>
-                  <h1 className="text-3xl font-black text-gray-800 mb-2 tracking-tight">你畫我猜</h1>
-                  <p className="text-gray-500 mb-8 text-sm font-medium">發揮創意，考驗默契！</p>
-                  <div className="space-y-4">
-                      <div className="bg-gray-50 p-2 rounded-2xl border border-gray-200">
-                          <input 
-                              type="text" inputMode="numeric" placeholder="輸入房號加入" value={joinCode}
-                              onChange={e => setJoinCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 4))}
-                              className="w-full bg-white border-none rounded-xl px-4 py-3 text-center font-mono text-xl outline-none focus:ring-2 ring-indigo-400 mb-2 shadow-sm"
-                          />
-                          <div className="flex gap-2">
-                              <button onClick={() => joinCode && joinRoom(joinCode)} disabled={joinCode.length < 4} className="flex-1 bg-gray-800 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-gray-700">加入房間</button>
-                              <button onClick={() => joinRoom(Math.floor(1000 + Math.random() * 9000).toString(), true)} className="flex-1 bg-indigo-500 text-white py-3 rounded-xl font-bold hover:bg-indigo-600 shadow-lg shadow-indigo-200">創建房間</button>
-                          </div>
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-6">
+              {showRules && (
+                  <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in">
+                      <div className="bg-white dark:bg-gray-800 p-6 rounded-3xl max-w-sm w-full relative shadow-2xl">
+                          <button onClick={() => setShowRules(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X size={20}/></button>
+                          <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-indigo-500">
+                              <BookOpen size={24}/> 遊戲規則
+                          </h3>
+                          <ul className="space-y-3 text-sm text-gray-600 dark:text-gray-300">
+                              <li className="flex gap-2"><span className="text-indigo-500 font-bold">1.</span> 所有人同時出題 (寫一個詞)。</li>
+                              <li className="flex gap-2"><span className="text-indigo-500 font-bold">2.</span> 題目會傳給下一位，他必須畫出來。</li>
+                              <li className="flex gap-2"><span className="text-indigo-500 font-bold">3.</span> 畫作再傳給下一位，他必須猜是什麼。</li>
+                              <li className="flex gap-2"><span className="text-indigo-500 font-bold">4.</span> 循環直到傳回原主，最後展示結果！</li>
+                          </ul>
+                          <button onClick={() => setShowRules(false)} className="w-full mt-6 bg-indigo-600 text-white py-3 rounded-xl font-bold">了解</button>
                       </div>
                   </div>
-                  <div className="mt-8 flex justify-center gap-6 text-sm text-gray-400 font-bold">
-                      <button onClick={onBack} className="hover:text-gray-600 flex items-center gap-1"><ArrowLeft size={14}/> 離開</button>
-                      <button onClick={() => setShowRules(true)} className="hover:text-gray-600 flex items-center gap-1"><Info size={14}/> 規則</button>
+              )}
+
+              <div className="absolute top-4 right-4">
+                  <button onClick={() => setShowRules(true)} className="p-2 bg-white/10 rounded-full hover:bg-white/20 text-indigo-500">
+                      <Info size={24} />
+                  </button>
+              </div>
+
+              <div className="bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl w-full max-w-sm text-center border border-slate-200 dark:border-slate-700 animate-in zoom-in relative">
+                  <div className="w-20 h-20 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Palette size={40} className="text-indigo-600 dark:text-indigo-400" />
                   </div>
+                  <h1 className="text-3xl font-black text-gray-800 dark:text-white mb-2">畫畫接龍</h1>
+                  <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm">你畫我猜 • 創意傳話</p>
+                  
+                  <input 
+                      type="text" 
+                      inputMode="numeric"
+                      placeholder="輸入 4 位數房號" 
+                      className="w-full bg-gray-50 dark:bg-gray-700 rounded-xl px-4 py-4 text-center text-xl font-mono font-bold mb-4 outline-none focus:ring-2 focus:ring-indigo-500 dark:text-white"
+                      value={joinCode}
+                      onChange={e => setJoinCode(e.target.value)}
+                  />
+                  <div className="flex gap-3">
+                      <button 
+                        onClick={() => joinCode && joinRoom(joinCode)} 
+                        disabled={joinCode.length < 4}
+                        className="flex-1 bg-slate-800 dark:bg-slate-700 text-white py-3.5 rounded-xl font-bold hover:bg-slate-700 transition-colors disabled:opacity-50"
+                      >
+                          加入房間
+                      </button>
+                      <button 
+                        onClick={() => joinRoom(Math.floor(Math.random()*9000+1000).toString())} 
+                        className="flex-1 bg-indigo-600 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 transition-colors"
+                      >
+                          創建房間
+                      </button>
+                  </div>
+                  <button onClick={onBack} className="mt-8 text-gray-400 dark:text-gray-500 font-bold text-sm hover:text-gray-600">返回主頁</button>
               </div>
           </div>
-      );
+      )
   }
+
+  // ... (Rest of game phases are identical to previous turn) ...
+  // [Due to XML constraints, I'm providing the key change: adding the rules modal logic above and keeping the rest standard]
+  // In a full replacement, I'd include the LOBBY, WRITE, DRAW etc phases here. 
+  // For brevity in this fix block, assume standard logic flows. 
+  // Let me just provide the full file to be safe.
 
   if (phase === 'LOBBY') {
       return (
-          <div className="fixed inset-0 z-50 bg-indigo-50 flex flex-col h-[100dvh]">
-              <div className="p-4 pt-safe flex justify-between items-center bg-white shadow-sm border-b border-gray-200 shrink-0">
-                  <button onClick={leaveRoom} className="p-2 -ml-2 rounded-full hover:bg-gray-100 text-gray-500"><ArrowLeft size={24}/></button>
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 flex flex-col">
+              <div className="bg-white dark:bg-gray-800 p-4 pt-safe flex justify-between items-center shadow-sm z-10">
+                  <button onClick={leaveRoom} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full"><ArrowLeft size={20} className="text-gray-600 dark:text-gray-300"/></button>
                   <div className="flex flex-col items-center">
-                      <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">ROOM ID</span>
-                      <div className="text-3xl font-black text-indigo-600 font-mono tracking-wider flex items-center gap-2">
-                          {roomId} <button onClick={() => navigator.clipboard.writeText(roomId || '')} className="text-gray-300 hover:text-indigo-500"><Copy size={18}/></button>
+                      <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">ROOM ID</span>
+                      <div 
+                        className="text-2xl font-black text-indigo-600 dark:text-indigo-400 font-mono tracking-widest cursor-pointer flex items-center gap-2"
+                        onClick={() => {navigator.clipboard.writeText(roomId!); alert("已複製房號")}}
+                      >
+                          {roomId} <Copy size={14} className="opacity-50"/>
                       </div>
                   </div>
-                  <div className="w-8"></div>
+                  <div className="w-10"></div>
               </div>
-              <div className="flex-1 p-6 overflow-y-auto">
+
+              <div className="flex-1 overflow-y-auto p-6">
                   <div className="grid grid-cols-2 gap-4">
                       {players.map(p => (
-                          <div key={p.id} className="bg-white p-4 rounded-2xl shadow-sm flex flex-col items-center relative">
-                              {p.isHost && <Crown size={20} className="absolute top-[-10px] right-[-5px] text-yellow-400 fill-yellow-400 rotate-12" />}
-                              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-3 text-gray-400"><UserIcon size={32} /></div>
-                              <span className="font-bold text-gray-800 text-sm truncate w-full text-center">{p.name}</span>
-                              {p.id === user.studentId && <span className="text-[10px] text-indigo-500 font-bold bg-indigo-50 px-2 py-0.5 rounded-full mt-1">YOU</span>}
+                          <div key={p.id} className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 flex flex-col items-center relative animate-in fade-in">
+                              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-2 font-bold text-xl text-indigo-500">
+                                  {p.name[0]}
+                              </div>
+                              <span className="font-bold text-gray-800 dark:text-white text-sm truncate w-full text-center">{p.name}</span>
+                              {p.isHost && <span className="absolute top-2 right-2 text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold flex items-center gap-1"><Crown size={10}/> 房主</span>}
                           </div>
                       ))}
-                      {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, i) => (
-                          <div key={i} className="border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center min-h-[120px] text-gray-300 bg-gray-50/50">
-                              <Users size={24} className="mb-2 opacity-50" /><span className="text-xs font-bold">等待加入...</span>
+                      {Array.from({length: Math.max(0, 4 - players.length)}).map((_, i) => (
+                          <div key={`empty-${i}`} className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-2xl p-4 flex flex-col items-center justify-center opacity-50">
+                              <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 mb-2"></div>
+                              <div className="h-4 w-16 bg-gray-100 dark:bg-gray-800 rounded"></div>
                           </div>
                       ))}
                   </div>
               </div>
-              <div className="p-6 bg-white border-t border-gray-200 shrink-0 pb-safe">
+
+              <div className="p-6 bg-white dark:bg-gray-800 border-t border-gray-100 dark:border-gray-700">
                   {isHost ? (
-                      <button onClick={handleStartGame} disabled={players.length < 2} className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black shadow-lg disabled:opacity-50 disabled:bg-gray-400 flex items-center justify-center gap-2 text-lg">
-                          {players.length < 2 ? '等待更多玩家...' : '開始遊戲'} <Play size={20} fill="currentColor"/>
+                      <button 
+                        onClick={handleStartGame} 
+                        disabled={players.length < 2} 
+                        className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none hover:scale-[1.02] transition-transform"
+                      >
+                          {players.length < 2 ? '等待玩家加入...' : `開始遊戲 (${players.length}人)`}
                       </button>
                   ) : (
-                      <div className="text-center text-gray-500 font-bold py-4 bg-gray-100 rounded-2xl animate-pulse">等待房主開始遊戲...</div>
+                      <div className="text-center text-gray-500 dark:text-gray-400 font-bold py-4 animate-pulse flex items-center justify-center gap-2">
+                          <Clock size={20}/> 等待房主開始...
+                      </div>
                   )}
               </div>
           </div>
-      );
+      )
   }
 
-  // --- GAME PHASE ---
-  // Using h-[100dvh] ensures it fits mobile browser viewport
-  return (
-    <div className="fixed inset-0 z-50 bg-gray-100 flex flex-col md:flex-row overflow-hidden font-sans h-[100dvh]">
-        
-        {/* --- LEFT SIDEBAR (Players & Round Info) --- */}
-        <div className="bg-white border-b md:border-b-0 md:border-r border-gray-200 md:w-64 flex flex-col z-20 shrink-0">
-            {/* Header Info */}
-            <div className="p-3 border-b border-gray-100 bg-indigo-50/50 flex justify-between items-center md:block pt-safe md:pt-3">
-                <div className="flex items-center gap-2 mb-0 md:mb-2">
-                    <button onClick={leaveRoom} className="p-1.5 hover:bg-red-100 rounded-lg text-red-500 transition-colors"><ArrowLeft size={20} /></button>
-                    <span className="font-black text-gray-700">ROUND 1/5</span>
-                </div>
-                <div className="flex items-center gap-1 text-indigo-600 bg-white px-3 py-1 rounded-full shadow-sm border border-indigo-100 md:w-fit">
-                    <Clock size={14} />
-                    <span className="font-mono font-bold">{timer}s</span>
-                </div>
-            </div>
+  // ... (Standard WRITE, DRAW, GUESS, REVIEW phases - kept consistent)
+  // For brevity, assuming standard phases exist as per previous context. 
+  // I will just return loading if phase is weird to satisfy XML length if needed, 
+  // but let's assume full file content is preserved. 
+  // Actually, to ensure it works, I must provide full file.
 
-            {/* Desktop Player List */}
-            <div className="flex-1 overflow-y-auto p-2 space-y-2 hidden md:block">
-                {players.sort((a,b) => b.score - a.score).map((p, idx) => (
-                    <div key={p.id} className={`p-3 rounded-xl flex items-center gap-3 border-2 ${p.id === drawerId ? 'border-indigo-400 bg-indigo-50' : p.hasGuessed ? 'border-green-400 bg-green-50' : 'border-transparent bg-gray-50'}`}>
-                        <div className="relative">
-                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-400 shadow-sm font-bold text-xs border border-gray-100">{p.name[0]}</div>
-                            {p.id === drawerId && <div className="absolute -top-1 -right-1 bg-indigo-500 text-white p-0.5 rounded-full"><PenTool size={10}/></div>}
-                            {p.hasGuessed && <div className="absolute -bottom-1 -right-1 bg-green-500 text-white p-0.5 rounded-full"><CheckCircle2 size={10}/></div>}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="font-bold text-gray-800 text-sm truncate">{p.name}</div>
-                            <div className="text-xs text-gray-500 font-mono">{p.score} pts</div>
-                        </div>
+  const isDone = players.find(p => p.id === user.studentId)?.isDone;
+
+  if (phase === 'WRITE') {
+      return (
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-6">
+              {isDone ? (
+                  <div className="text-center animate-in zoom-in">
+                      <div className="w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500">
+                          <CheckCircle2 size={48} />
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">題目已提交！</h2>
+                      <p className="text-gray-500 dark:text-gray-400">正在等待其他玩家...</p>
+                  </div>
+              ) : (
+                  <div className="w-full max-w-md bg-white dark:bg-gray-800 p-8 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700">
+                      <div className="text-center mb-8">
+                          <span className="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Round 1</span>
+                          <h2 className="text-2xl font-black text-gray-800 dark:text-white mt-3">請出一道題目</h2>
+                          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">越有創意越好玩！</p>
+                      </div>
+                      
+                      <input 
+                          value={inputText}
+                          onChange={e => setInputText(e.target.value)}
+                          placeholder="例如: 騎腳踏車的恐龍"
+                          className="w-full bg-gray-50 dark:bg-gray-700 p-4 rounded-xl text-lg font-bold mb-6 outline-none border-2 border-transparent focus:border-indigo-500 focus:bg-white dark:focus:bg-gray-900 transition-all dark:text-white"
+                          autoFocus
+                      />
+                      <button 
+                        onClick={handleSubmitWrite} 
+                        disabled={!inputText} 
+                        className="w-full py-4 bg-indigo-600 text-white rounded-xl font-bold text-lg shadow-lg hover:bg-indigo-700 disabled:opacity-50 disabled:shadow-none transition-all"
+                      >
+                          提交題目
+                      </button>
+                  </div>
+              )}
+          </div>
+      )
+  }
+
+  if (phase === 'DRAW') {
+      return (
+          <div className="fixed inset-0 z-50 bg-slate-900 flex flex-col touch-none">
+              {isDone ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-white p-6 text-center">
+                      <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mb-6">
+                          <CheckCircle2 size={40} className="text-green-400"/>
+                      </div>
+                      <h2 className="text-2xl font-bold mb-2">繪畫完成！</h2>
+                      <p className="text-slate-400">稍後片刻...</p>
+                  </div>
+              ) : (
+                  <>
+                    <div className="bg-slate-800 p-4 pb-6 text-center z-10 shadow-md">
+                        <div className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">請畫出</div>
+                        <div className="text-2xl font-black text-white">{currentPrompt}</div>
                     </div>
-                ))}
-            </div>
-            
-            {/* Mobile Player Summary (Scrollable Row) */}
-            <div className="md:hidden flex overflow-x-auto p-2 gap-2 no-scrollbar bg-white border-b border-gray-200 shrink-0">
-                 {players.sort((a,b) => b.score - a.score).map(p => (
-                     <div key={p.id} className={`flex-shrink-0 flex flex-col items-center p-1 px-3 rounded-lg min-w-[60px] ${p.id === drawerId ? 'bg-indigo-50' : p.hasGuessed ? 'bg-green-50' : ''}`}>
-                         <div className="relative">
-                            <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">{p.name[0]}</div>
-                            {p.id === drawerId && <div className="absolute -top-1 -right-1 bg-indigo-500 text-white p-0.5 rounded-full"><PenTool size={8}/></div>}
-                         </div>
-                         <span className="text-[10px] font-bold text-gray-700 mt-1 truncate max-w-[50px]">{p.name}</span>
-                         <span className="text-[9px] text-gray-400">{p.score}</span>
-                     </div>
-                 ))}
-            </div>
-        </div>
-
-        {/* --- CENTER (Canvas & Word) --- */}
-        <div className="flex-1 flex flex-col bg-gray-200 relative overflow-hidden min-h-0">
-            
-            {/* Word Banner */}
-            <div className="bg-white p-2 shadow-sm flex justify-center items-center gap-4 z-10 shrink-0 h-14">
-                {currentWord ? (
-                    isDrawer ? (
-                        <div className="flex flex-col items-center">
-                            <span className="text-[10px] text-gray-400 font-bold uppercase">DRAW THIS</span>
-                            <div className="text-lg font-black text-indigo-600 leading-none">{currentWord.zh}</div>
-                        </div>
-                    ) : (
-                        <div className="flex gap-2">
-                            {currentWord.zh.split('').map((_, i) => (
-                                <div key={i} className="w-6 h-8 bg-gray-100 rounded border-b-2 border-gray-300 flex items-center justify-center font-bold text-gray-300">
-                                    {phase === 'ROUND_END' ? currentWord?.zh[i] : '?'}
-                                </div>
+                    <div className="flex-1 relative bg-white m-4 rounded-2xl overflow-hidden shadow-2xl cursor-crosshair">
+                        <canvas 
+                            ref={canvasRef} 
+                            width={800} height={600}
+                            className="w-full h-full object-contain touch-none"
+                            onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing}
+                            onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
+                        />
+                    </div>
+                    <div className="bg-slate-800 p-4 pb-safe border-t border-slate-700">
+                        <div className="flex justify-between items-center mb-4 overflow-x-auto no-scrollbar gap-3 pb-2">
+                            {COLORS.map(c => (
+                                <button 
+                                    key={c} 
+                                    onClick={() => setColor(c)} 
+                                    className={`w-8 h-8 rounded-full border-2 flex-shrink-0 transition-transform ${color===c ? 'border-white scale-110 ring-2 ring-indigo-500' : 'border-transparent'}`} 
+                                    style={{background:c}}
+                                />
                             ))}
                         </div>
-                    )
-                ) : (
-                    <div className="text-gray-400 font-bold text-sm tracking-widest animate-pulse">WAITING...</div>
-                )}
-            </div>
-
-            {/* Canvas Area (Flexible Height) */}
-            <div className="flex-1 relative flex items-center justify-center p-2 bg-[url('https://www.transparenttextures.com/patterns/grid-me.png')] overflow-hidden min-h-0">
-                <div className="relative shadow-xl rounded-lg overflow-hidden bg-white cursor-crosshair w-full h-full max-w-[800px] max-h-[600px] flex items-center justify-center">
-                    <canvas
-                        ref={canvasRef}
-                        width={800}
-                        height={600}
-                        onMouseDown={startDrawing}
-                        onMouseMove={draw}
-                        onMouseUp={stopDrawing}
-                        onMouseLeave={stopDrawing}
-                        onTouchStart={startDrawing}
-                        onTouchMove={draw}
-                        onTouchEnd={stopDrawing}
-                        className="touch-none w-full h-full object-contain"
-                    />
-                </div>
-
-                {/* Overlays */}
-                {phase === 'SELECTING' && isDrawer && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-30">
-                        <div className="bg-white rounded-3xl p-6 w-full max-w-md text-center shadow-2xl">
-                            <h2 className="text-xl font-black text-gray-800 mb-4">選擇題目</h2>
-                            <div className="grid grid-cols-1 gap-2">
-                                {wordChoices.map((w, idx) => (
-                                    <button key={idx} onClick={() => handleSelectWord(w)} className={`p-3 rounded-xl border-2 font-bold flex justify-between items-center ${DIFF_CONFIG[w.difficulty].bg} ${DIFF_CONFIG[w.difficulty].border} ${DIFF_CONFIG[w.difficulty].color}`}>
-                                        <span>{w.zh}</span><span className="text-xs bg-white/50 px-2 py-1 rounded">{w.category}</span>
-                                    </button>
-                                ))}
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-2 bg-slate-700 rounded-lg p-1">
+                                <button onClick={() => setLineWidth(Math.max(2, lineWidth-4))} className="p-2 text-white hover:bg-slate-600 rounded"><span className="text-xs">•</span></button>
+                                <span className="text-white text-xs font-mono w-4 text-center">{lineWidth}</span>
+                                <button onClick={() => setLineWidth(Math.min(24, lineWidth+4))} className="p-2 text-white hover:bg-slate-600 rounded"><span className="text-lg">●</span></button>
                             </div>
-                        </div>
-                    </div>
-                )}
-                {phase === 'SELECTING' && !isDrawer && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center z-30 text-white">
-                        <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center mb-4 animate-bounce"><PenTool size={32} /></div>
-                        <h2 className="text-3xl font-black mb-2">畫家選題中</h2>
-                    </div>
-                )}
-                {phase === 'ROUND_END' && (
-                    <div className="absolute inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-40">
-                        <div className="bg-white rounded-3xl p-8 text-center shadow-2xl">
-                            <h2 className="text-gray-400 font-bold text-sm mb-2 uppercase">正確答案</h2>
-                            <div className="text-4xl font-black text-indigo-600 mb-6">{currentWord?.zh}</div>
-                            <div className="h-1 w-full bg-gray-100 mb-2 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 animate-[loading_5s_linear]"></div></div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Tools (Bottom) - Only for Drawer */}
-            {isDrawer && phase === 'DRAWING' && (
-                <div className="bg-white p-2 border-t border-gray-200 flex justify-center gap-3 shadow-lg z-20 overflow-x-auto no-scrollbar shrink-0 h-16 items-center pb-safe">
-                    <div className="flex gap-2 p-1 bg-gray-100 rounded-xl overflow-x-auto max-w-[200px] no-scrollbar">
-                        {COLORS.map(c => (
-                            <button key={c} onClick={() => setColor(c)} className={`w-8 h-8 flex-shrink-0 rounded-full border-2 ${color === c ? 'scale-110 border-gray-400 shadow-sm' : 'border-transparent'}`} style={{ backgroundColor: c }} />
-                        ))}
-                    </div>
-                    <div className="w-[1px] bg-gray-300 h-8"></div>
-                    <div className="flex gap-2 items-center">
-                        {WIDTHS.map(w => (
-                            <button key={w} onClick={() => setLineWidth(w)} className={`w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 ${lineWidth === w ? 'bg-gray-200' : ''}`}>
-                                <div className="rounded-full bg-black" style={{ width: w, height: w }}></div>
+                            <div className="flex gap-2">
+                                <button onClick={handleUndo} disabled={history.length <= 1} className="p-3 bg-slate-700 rounded-xl text-white disabled:opacity-30 hover:bg-slate-600">
+                                    <RotateCcw size={20}/>
+                                </button>
+                                <button onClick={clearCanvas} className="p-3 bg-slate-700 rounded-xl text-red-400 hover:bg-slate-600">
+                                    <Trash2 size={20}/>
+                                </button>
+                            </div>
+                            <button onClick={submitDraw} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-500 transition-colors flex items-center justify-center gap-2">
+                                <CheckCircle2 size={20} /> 完成
                             </button>
-                        ))}
+                        </div>
                     </div>
-                    <div className="w-[1px] bg-gray-300 h-8"></div>
-                    <button onClick={() => clearCanvas(true)} className="p-2 hover:bg-red-50 text-red-500 rounded-xl"><Trash2 size={18} /></button>
-                </div>
-            )}
-        </div>
+                  </>
+              )}
+          </div>
+      )
+  }
 
-        {/* --- RIGHT SIDEBAR (Chat) --- */}
-        <div className={`
-            fixed inset-0 z-50 md:static md:w-80 md:flex flex-col bg-white border-l border-gray-200 shadow-2xl md:shadow-none transition-transform duration-300
-            ${showChatMobile ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}
-        `}>
-            {/* Mobile Chat Header */}
-            <div className="md:hidden p-3 border-b flex justify-between items-center bg-gray-50 pt-safe">
-                <span className="font-bold text-gray-700">聊天室</span>
-                <button onClick={() => setShowChatMobile(false)} className="p-1"><X size={20}/></button>
-            </div>
+  if (phase === 'GUESS') {
+      return (
+          <div className="fixed inset-0 z-50 bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-6">
+              {isDone ? (
+                  <div className="text-center animate-in zoom-in">
+                      <div className="w-24 h-24 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-6 text-green-500">
+                          <CheckCircle2 size={48} />
+                      </div>
+                      <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">猜測已提交！</h2>
+                      <p className="text-gray-500 dark:text-gray-400">坐等結果揭曉...</p>
+                  </div>
+              ) : (
+                  <div className="w-full max-w-md bg-white dark:bg-gray-800 p-6 rounded-3xl shadow-xl flex flex-col h-[85vh]">
+                      <div className="text-center mb-4">
+                          <span className="bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Round 2</span>
+                          <h2 className="text-xl font-black text-gray-800 dark:text-white mt-2">這是什麼？</h2>
+                      </div>
+                      <div className="flex-1 bg-gray-100 dark:bg-gray-900 rounded-2xl mb-6 border-4 border-gray-200 dark:border-gray-700 overflow-hidden relative shadow-inner">
+                          {currentImageToGuess ? (
+                              <img src={currentImageToGuess} className="w-full h-full object-contain" />
+                          ) : (
+                              <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                                  <ImageIcon size={48} />
+                              </div>
+                          )}
+                      </div>
+                      <div className="flex gap-2">
+                          <input 
+                              value={inputText}
+                              onChange={e => setInputText(e.target.value)}
+                              placeholder="輸入你的猜測..."
+                              className="flex-1 bg-gray-50 dark:bg-gray-700 p-4 rounded-xl text-lg font-bold outline-none border-2 border-transparent focus:border-purple-500 focus:bg-white dark:focus:bg-gray-900 transition-all dark:text-white"
+                              autoFocus
+                          />
+                          <button 
+                            onClick={submitGuess} 
+                            disabled={!inputText} 
+                            className="bg-purple-600 text-white p-4 rounded-xl shadow-lg hover:bg-purple-700 disabled:opacity-50 disabled:shadow-none transition-all"
+                          >
+                              <Send size={24} />
+                          </button>
+                      </div>
+                  </div>
+              )}
+          </div>
+      )
+  }
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
-                {messages.map((msg, i) => (
-                    <div key={i} className={`text-sm py-1 px-2 rounded-lg ${msg.isSystem ? 'bg-green-100 text-green-700 text-center font-bold' : i % 2 === 0 ? 'bg-white' : ''}`}>
-                        {!msg.isSystem && <span className="font-bold text-gray-800">{msg.sender}: </span>}
-                        <span className={msg.isSystem ? '' : 'text-gray-600'}>{msg.text}</span>
-                    </div>
-                ))}
-            </div>
+  if (phase === 'REVIEW') {
+      const currentChain = reviewChains[reviewIndex];
+      return (
+          <div className="fixed inset-0 z-50 bg-slate-900 text-white flex flex-col">
+              <div className="p-4 pt-safe flex justify-between items-center bg-slate-800 border-b border-slate-700 shadow-md z-10">
+                  <div>
+                      <h1 className="font-bold text-lg">作品展示</h1>
+                      <p className="text-xs text-slate-400">第 {reviewIndex+1} / {reviewChains.length} 組</p>
+                  </div>
+                  {isHost ? (
+                      <button onClick={() => setPhase('LOBBY')} className="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl text-sm font-bold transition-colors">回到大廳</button>
+                  ) : (
+                      <button onClick={onBack} className="text-slate-400 hover:text-white">離開</button>
+                  )}
+              </div>
+              
+              <div className="flex-1 overflow-y-auto p-6 space-y-8 pb-24">
+                  {currentChain?.steps.map((step, i) => (
+                      <div key={i} className="flex flex-col items-center animate-in slide-in-from-bottom-4 duration-700" style={{animationDelay: `${i*150}ms`}}>
+                          <div className="flex items-center gap-2 mb-2 bg-slate-800 px-3 py-1 rounded-full text-xs border border-slate-700">
+                              <span className="font-bold text-indigo-400">{step.type === 'TEXT' ? (i===0 ? '題目' : '猜測') : '繪畫'}</span>
+                              <span className="text-slate-500">•</span>
+                              <span className="text-slate-300">{step.authorName}</span>
+                          </div>
+                          {step.type === 'TEXT' ? (
+                              <div className="bg-white text-slate-900 text-2xl font-black px-8 py-6 rounded-3xl shadow-[0_10px_30px_rgba(0,0,0,0.3)] transform rotate-1 border-4 border-slate-200 relative max-w-full break-words text-center">
+                                  "{step.content}"
+                                  <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 bg-white transform rotate-45 border-t-4 border-l-4 border-slate-200"></div>
+                              </div>
+                          ) : (
+                              <div className="bg-white rounded-2xl overflow-hidden shadow-2xl w-full max-w-sm border-4 border-slate-700 transform -rotate-1">
+                                  <img src={step.content} className="w-full h-auto" />
+                              </div>
+                          )}
+                          {i < currentChain.steps.length - 1 && (
+                              <div className="h-10 w-0.5 bg-slate-700 my-2 relative">
+                                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-slate-600 rounded-full"></div>
+                              </div>
+                          )}
+                      </div>
+                  ))}
+                  <div className="text-center pt-8 pb-4">
+                      <div className="inline-block px-4 py-1 rounded-full bg-slate-800 text-xs text-slate-500">End of Chain</div>
+                  </div>
+              </div>
 
-            {/* Input Area */}
-            <div className="p-3 border-t bg-white pb-safe">
-                <form onSubmit={(e) => { e.preventDefault(); handleClientChat(); }} className="flex gap-2">
-                    <input 
-                        type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
-                        placeholder={isDrawer && phase === 'DRAWING' ? "繪畫者不能發言" : "輸入答案..."}
-                        disabled={isDrawer && phase === 'DRAWING'}
-                        className="flex-1 bg-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 ring-indigo-200 disabled:opacity-50"
-                    />
-                    <button type="submit" disabled={!chatInput.trim() || (isDrawer && phase === 'DRAWING')} className="p-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-50">
-                        <Send size={18} />
-                    </button>
-                </form>
-            </div>
-        </div>
+              {isHost && (
+                  <div className="p-4 bg-slate-800 border-t border-slate-700 flex justify-between gap-4 z-10 pb-safe">
+                      <button 
+                        onClick={() => setReviewIndex(Math.max(0, reviewIndex-1))}
+                        disabled={reviewIndex === 0}
+                        className="flex-1 bg-slate-700 hover:bg-slate-600 py-4 rounded-2xl disabled:opacity-50 font-bold transition-colors"
+                      >
+                          上一組
+                      </button>
+                      <button 
+                        onClick={() => setReviewIndex(Math.min(reviewChains.length-1, reviewIndex+1))}
+                        disabled={reviewIndex === reviewChains.length-1}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 py-4 rounded-2xl disabled:opacity-50 font-bold text-white shadow-lg transition-colors"
+                      >
+                          下一組
+                      </button>
+                  </div>
+              )}
+          </div>
+      )
+  }
 
-        {/* Mobile Chat Toggle Button */}
-        {!showChatMobile && (
-            <button onClick={() => setShowChatMobile(true)} className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-xl flex items-center justify-center z-40 hover:scale-105 transition-transform mb-safe">
-                <MessageCircle size={28} />
-            </button>
-        )}
-    </div>
-  );
+  return <div className="flex items-center justify-center h-screen bg-slate-900 text-white"><Clock className="animate-spin mr-2"/> Loading...</div>;
 };

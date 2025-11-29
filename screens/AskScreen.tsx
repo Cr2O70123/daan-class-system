@@ -1,5 +1,4 @@
 
-
 import React, { useState, useRef } from 'react';
 import { AlertTriangle, Image as ImageIcon, Send, X, Ghost, Lock } from 'lucide-react';
 import { Question, User } from '../types';
@@ -136,7 +135,7 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="例如：基本電學 戴維寧定理問題..."
-          className="w-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none"
+          className="w-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl p-4 text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none font-medium"
         />
       </div>
 
@@ -144,11 +143,11 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
       <div>
         <label className="block text-sm font-bold text-gray-700 mb-2">詳細說明</label>
         <textarea 
-          rows={6}
+          rows={8}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="請詳細描述你的問題，或貼上程式碼..."
-          className="w-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none resize-none"
+          className="w-full bg-white text-gray-800 placeholder-gray-400 border border-gray-200 rounded-xl p-4 text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all outline-none resize-none"
         />
       </div>
 
@@ -227,9 +226,9 @@ export const AskScreen: React.FC<AskScreenProps> = ({ user, onPostQuestion, onIm
       <button 
         onClick={handlePost}
         disabled={!title.trim() || !content.trim()}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-xl shadow-lg shadow-blue-600/20 flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-xl shadow-lg shadow-blue-600/20 flex items-center justify-center space-x-2 transition-all active:scale-[0.98] text-lg"
       >
-        <Send size={18} />
+        <Send size={20} />
         <span>發布問題 {useAnonymous && '(匿名)'}</span>
       </button>
 

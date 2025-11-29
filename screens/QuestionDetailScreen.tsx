@@ -1,12 +1,13 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, Send, Clock, Flag, Image as ImageIcon, X, Crown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Send, Clock, Flag, Image as ImageIcon, X, Crown, AlertTriangle, Ghost } from 'lucide-react';
 import { Question, User } from '../types';
 
 interface QuestionDetailScreenProps {
   question: Question;
   currentUser: User;
   onBack: () => void;
-  onAddReply: (questionId: number, content: string, image?: string) => void;
+  onAddReply: (questionId: number, content: string, image?: string, isAnonymous?: boolean) => void;
   onReport: (type: 'question' | 'reply', id: number, content: string, reason: string) => void;
   onMarkBest: (questionId: number, replyId: number) => void;
   onImageClick?: (url: string) => void;
@@ -32,6 +33,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
 }) => {
   const [replyText, setReplyText] = useState('');
   const [replyImage, setReplyImage] = useState<string | null>(null);
+  const [isAnonymousReply, setIsAnonymousReply] = useState(false);
   
   // Modal States
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -56,9 +58,10 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
 
   const handleSendReply = () => {
     if (!replyText.trim() && !replyImage) return;
-    onAddReply(question.id, replyText, replyImage || undefined);
+    onAddReply(question.id, replyText, replyImage || undefined, isAnonymousReply);
     setReplyText('');
     setReplyImage(null);
+    setIsAnonymousReply(false); // Reset after send
   };
 
   // --- Rich Text Renderer ---
@@ -131,11 +134,11 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
   // -----------------------
 
   return (
-    <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col pb-safe relative transition-colors">
+    <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col pb-safe relative transition-colors z-[60]">
       
       {/* --- REPORT MODAL --- */}
       {reportModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-5 shadow-2xl animate-in zoom-in-95">
                 <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
                     <AlertTriangle className="text-red-500" /> 檢舉內容
@@ -162,7 +165,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
 
       {/* --- BEST ANSWER MODAL --- */}
       {bestAnswerModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 text-center">
                 <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-500">
                     <Crown size={32} className="fill-current" />
@@ -238,7 +241,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
                 )}
               </div>
               <div>
-                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{question.author}</p>
+                <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{question.isAnonymous ? '匿名同學' : question.author}</p>
                 <p className="text-[10px] text-gray-400">{question.date}</p>
               </div>
             </div>
@@ -271,7 +274,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
 
                 <div className="flex justify-between items-start mb-2 mt-1">
                   <div className="flex items-center space-x-2">
-                    <div className={`w-8 h-8 rounded-full ${reply.avatarColor} flex items-center justify-center text-white font-bold text-xs overflow-hidden`}>
+                    <div className={`w-8 h-8 rounded-full ${reply.avatarColor || 'bg-gray-400'} flex items-center justify-center text-white font-bold text-xs overflow-hidden`}>
                       {reply.avatarImage ? (
                           <img src={reply.avatarImage} alt="avatar" className="w-full h-full object-cover" />
                       ) : (
@@ -279,7 +282,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
                       )}
                     </div>
                     <div>
-                        <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">{reply.author}</span>
+                        <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">{reply.isAnonymous ? '匿名同學' : reply.author}</span>
                         <span className="text-[10px] text-gray-400 flex items-center">
                             <Clock size={10} className="mr-1" />
                             {reply.date}
@@ -325,7 +328,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
       </div>
 
       {/* Reply Input Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 z-40 max-w-md mx-auto transition-colors">
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 z-40 max-w-md mx-auto transition-colors pb-safe">
         
         {/* Image Preview */}
         {replyImage && (
@@ -355,22 +358,32 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
                 onChange={handleImageUpload}
             />
 
-            <div className="bg-gray-100 dark:bg-gray-700 flex-1 rounded-2xl px-4 py-2 flex items-center transition-colors">
-            <textarea
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                placeholder="輸入你的回答..."
-                className="bg-transparent w-full text-sm outline-none resize-none max-h-20 py-1 dark:text-white dark:placeholder-gray-400"
-                rows={1}
-                style={{ minHeight: '24px' }}
-            />
+            <div className="bg-gray-100 dark:bg-gray-700 flex-1 rounded-2xl px-4 py-2 flex items-center transition-colors focus-within:ring-2 focus-within:ring-blue-500/50">
+                <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="輸入你的回答..."
+                    className="bg-transparent w-full text-sm outline-none resize-none max-h-32 py-2 dark:text-white dark:placeholder-gray-400"
+                    rows={1}
+                    style={{ minHeight: '36px' }}
+                />
             </div>
-            <button 
-            onClick={handleSendReply}
-            disabled={!replyText.trim() && !replyImage}
-            className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:bg-gray-300 dark:disabled:bg-gray-600 transition-colors shadow-sm"
+
+            {/* Anonymous Toggle */}
+            <button
+                onClick={() => setIsAnonymousReply(!isAnonymousReply)}
+                className={`p-3 rounded-full transition-colors ${isAnonymousReply ? 'bg-gray-800 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                title="匿名回覆 (免費)"
             >
-            <Send size={18} />
+                <Ghost size={20} />
+            </button>
+
+            <button 
+                onClick={handleSendReply}
+                disabled={!replyText.trim() && !replyImage}
+                className="bg-blue-600 text-white p-3 rounded-full hover:bg-blue-700 disabled:opacity-50 disabled:bg-gray-300 dark:disabled:bg-gray-600 transition-colors shadow-lg shadow-blue-500/30"
+            >
+                <Send size={18} />
             </button>
         </div>
       </div>

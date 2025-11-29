@@ -368,7 +368,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
   // --- 2. Game Connection Logic (Realtime) ---
   useEffect(() => {
       if (roomId && user.studentId && opponent && !opponent.isAi) {
-          leaveMatchmaking();
+          // If we were matching, clear cleanup
           if (timeoutFallbackRef.current) clearTimeout(timeoutFallbackRef.current);
           
           joinGameRoom(
@@ -377,12 +377,16 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
               handleGameEvent,
               () => handleOpponentLeft(),
               () => {
-                  // This callback runs when presences sync up.
-                  // For joiners, we send a JOIN signal to the host.
-                  if (opponent.status === 'playing') {
-                      // I am joining an existing host
-                      sendGameEvent({ type: 'PLAYER_JOINED', attackerId: JSON.stringify(user) });
-                  }
+                  // This callback runs when PRESENCE SYNC confirms both players are in the room.
+                  // This is the true signal to start the game.
+                  console.log("Room Ready, Sending JOIN signal...");
+                  
+                  // Send a JOINED signal to share final profile/mode details
+                  sendGameEvent({ 
+                      type: 'PLAYER_JOINED', 
+                      attackerId: JSON.stringify(user),
+                      gameMode: gameMode // Share my mode preference
+                  });
               }
           );
       }
@@ -470,8 +474,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       const fullRoomId = `room_${newRoomId}`;
       setRoomId(fullRoomId);
       // I am host, creating a placeholder opponent until someone joins
-      // status 'playing' indicates to joiner that I am the host
-      setOpponent({ name: "Waiting...", studentId: "host", avatarColor: "bg-gray-500", level: 1, status: 'playing', joinedAt: 0 }); 
+      setOpponent({ name: "Waiting...", studentId: "host_placeholder", avatarColor: "bg-gray-500", level: 1, status: 'playing', joinedAt: 0 }); 
       setMatchStatus(`等待玩家加入... 房號: ${newRoomId}`);
       setPhase('connecting'); 
       
@@ -481,7 +484,8 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           handleGameEvent,
           () => handleOpponentLeft(),
           () => {
-              // I am host, I wait for PLAYER_JOINED event
+              // Room is ready, wait for PLAYER_JOINED from joiner
+              console.log("Host room ready");
           }
       );
   };
@@ -497,8 +501,7 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       setPhase('connecting');
       
       // I am joiner
-      // I set a placeholder opponent (host)
-      setOpponent({ name: "Host", studentId: "host", avatarColor: "bg-gray-500", level: 1, status: 'playing', joinedAt: 0 });
+      setOpponent({ name: "Host", studentId: "joiner_placeholder", avatarColor: "bg-gray-500", level: 1, status: 'playing', joinedAt: 0 });
 
       joinGameRoom(
           fullRoomId, 
@@ -508,8 +511,11 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
           },
           () => handleOpponentLeft(),
           () => {
-              // On connected, I send my info to host
-              sendGameEvent({ type: 'PLAYER_JOINED', attackerId: JSON.stringify(user) });
+              // Joiner Room Ready -> Trigger handshake
+              sendGameEvent({ 
+                  type: 'PLAYER_JOINED', 
+                  attackerId: JSON.stringify(user)
+              });
           }
       );
   };
@@ -802,15 +808,22 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       if (payload.type === 'PLAYER_JOINED' && payload.attackerId) {
           try {
               const profile = JSON.parse(payload.attackerId);
-              // I am Host, receiving a join request
-              // Set my opponent to the joiner
+              // I receive a PLAYER_JOINED from someone else
               if (profile.studentId !== user.studentId) {
                   setOpponent({ ...profile, status: 'playing', joinedAt: 0 });
+                  if (payload.gameMode) setGameMode(payload.gameMode);
                   
-                  // Reply to the specific joiner with my info so they can set me as opponent
-                  sendGameEvent({ type: 'HOST_ACK', attackerId: JSON.stringify(user), gameMode });
+                  // If I'm the host (or existing player), I send back an ACK to ensure they have my info too
+                  if (roomId && !payload.type.includes('ACK')) {
+                      sendGameEvent({ 
+                          type: 'HOST_ACK', 
+                          attackerId: JSON.stringify(user), 
+                          gameMode 
+                      });
+                  }
                   
-                  // Now start the game
+                  // BOTH players now have info, start the game
+                  console.log("Handshake complete, starting game...");
                   setPhase('ready');
                   setTimeout(startRound, 2000);
               }
@@ -822,32 +835,11 @@ export const PkGameScreen: React.FC<PkGameScreenProps> = ({ user, onBack, onFini
       if (payload.type === 'HOST_ACK' && payload.attackerId) {
           try {
               const profile = JSON.parse(payload.attackerId);
-              // I am Joiner, receiving confirmation from Host
               if (profile.studentId !== user.studentId) {
                   setOpponent({ ...profile, status: 'playing', joinedAt: 0 });
                   if (payload.gameMode) setGameMode(payload.gameMode);
                   
-                  // Game starts
-                  setPhase('ready');
-                  setTimeout(startRound, 2000);
-              }
-          } catch(e) {}
-          return;
-      }
-
-      // 3. Start Game (Legacy / Matchmaking)
-      if (payload.type === 'START_GAME' && payload.attackerId) {
-          try {
-              const profile = JSON.parse(payload.attackerId);
-              if (profile.studentId !== user.studentId) {
-                  setOpponent({ ...profile, status: 'playing', joinedAt: 0 });
-                  if (payload.gameMode) setGameMode(payload.gameMode);
-                  
-                  // For matchmaking scenarios, ensure we reply if needed (already handled by JOIN flow mostly)
-                  if (phase === 'connecting' || phase === 'matching') {
-                      sendGameEvent({ type: 'HOST_ACK', attackerId: JSON.stringify(user), gameMode });
-                  }
-
+                  console.log("Received ACK, starting game...");
                   setPhase('ready');
                   setTimeout(startRound, 2000);
               }
