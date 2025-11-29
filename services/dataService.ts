@@ -119,7 +119,10 @@ export const createReply = async (user: User, questionId: number, content: strin
         author_avatar_data: avatarData
     }]);
 
-    if (error) throw error;
+    if (error) {
+        console.error("Reply creation failed:", error);
+        throw error;
+    }
 
     // --- Auto Notification Logic ---
     try {
@@ -130,7 +133,7 @@ export const createReply = async (user: User, questionId: number, content: strin
             .eq('id', questionId)
             .single();
         
-        // Don't notify if replying to self
+        // Don't notify if replying to self or if target ID is missing (anonymous legacy)
         if (qData && qData.author_student_id && qData.author_student_id !== user.studentId) {
             const replierName = isAnonymous ? '有人' : user.name;
             // 2. Create Notification
@@ -144,6 +147,7 @@ export const createReply = async (user: User, questionId: number, content: strin
         }
     } catch (notifError) {
         console.error("Notification creation failed (non-critical)", notifError);
+        // Do not throw, allow the reply to succeed even if notif fails
     }
 };
 
@@ -302,19 +306,18 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[] & { bl
 
     const uniqueData = Array.from(uniqueMap.values());
 
+    // UPDATED SORTING: Sort by 'points' (Current Wealth) instead of 'lifetime_points'
     uniqueData.sort((a: any, b: any) => {
-        const xpA = a.lifetime_points ?? a.points;
-        const xpB = b.lifetime_points ?? b.points;
-        return xpB - xpA;
+        return b.points - a.points;
     });
 
     return uniqueData.map((u: any, index: number) => ({
         rank: index + 1,
         name: u.name,
         studentId: u.student_id,
-        points: u.lifetime_points ?? u.points, 
-        blackMarketCoins: u.black_market_coins || 0, // Exposed for Black Market P2P
-        level: calculateLevel(u.lifetime_points ?? u.points), 
+        points: u.points, // Display Current Points on Leaderboard
+        blackMarketCoins: u.black_market_coins || 0, 
+        level: calculateLevel(u.lifetime_points ?? u.points), // Level still based on XP
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
         avatarFrame: u.avatar_frame,

@@ -34,7 +34,6 @@ import { supabase } from './services/supabaseClient';
 import { WORD_DATABASE } from './services/mockData';
 
 // --- Lazy Load Features (Code Splitting) ---
-// 新增功能時，只需在此處引入，不需修改大量 State
 const WordChallengeScreen = React.lazy(() => import('./screens/WordChallengeScreen').then(module => ({ default: module.WordChallengeScreen })));
 const ResistorGameScreen = React.lazy(() => import('./screens/ResistorGameScreen').then(module => ({ default: module.ResistorGameScreen })));
 const BlockBlastScreen = React.lazy(() => import('./screens/BlockBlastScreen').then(module => ({ default: module.BlockBlastScreen })));
@@ -169,7 +168,6 @@ const App = () => {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // --- UNIFIED FEATURE STATE (The Key Optimization) ---
-  // Instead of 10+ boolean flags, we use one object to track the active full-screen feature.
   type ActiveFeature = { id: string; params?: any } | null;
   const [activeFeature, setActiveFeature] = useState<ActiveFeature>(null);
 
@@ -221,7 +219,6 @@ const App = () => {
   };
 
   // --- Generic Navigation Handler ---
-  // Passed to PlaygroundScreen to avoid prop drilling mania
   const handleNavigateToFeature = (featureId: string, params?: any) => {
       if (isMaintenanceMode && featureId !== 'base_converter' && featureId !== 'xiangqi') {
           alertMaintenance();
@@ -391,7 +388,7 @@ const App = () => {
           const uQ = await fetchQuestions();
           const tQ = uQ.find(q => q.id === qid);
           if (tQ) setSelectedQuestion(tQ);
-      } catch(e) { alert("回覆失敗"); }
+      } catch(e) { alert("回覆失敗: " + e.message); }
   };
 
   const handleBuyProduct = async (product: Product) => {
@@ -583,7 +580,7 @@ const App = () => {
 
       {/* Overlays */}
       {selectedQuestion && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 h-full flex flex-col">
              <QuestionDetailScreen 
                 question={selectedQuestion} 
                 currentUser={user} 
@@ -597,7 +594,7 @@ const App = () => {
       )}
 
       {selectedResource && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 h-full flex flex-col">
              <ResourceDetailScreen 
                 resource={selectedResource} 
                 currentUser={user} 
@@ -619,7 +616,7 @@ const App = () => {
       {showLeaderboardOverlay ? (
           <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe flex flex-col">
                <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-2">
-                   <h2 className="font-bold text-lg text-gray-800 dark:text-white">全班等級排名</h2>
+                   <h2 className="font-bold text-lg text-gray-800 dark:text-white">全班等級排名 (按現有積分)</h2>
                    <button onClick={() => setShowLeaderboardOverlay(false)} className="text-blue-600 font-bold px-4 py-1">返回</button>
                </div>
                <div className="flex-1 overflow-hidden no-scrollbar"><LeaderboardScreen currentUser={user} /></div>
