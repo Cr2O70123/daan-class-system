@@ -54,7 +54,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
             name: name,
             points: initialPoints,
             black_market_coins: 0, // Initial BMC
-            lifetime_points: initialPoints, // Initialize XP same as starting points
+            // Removed lifetime_points
             hearts: 0, // Legacy field, might be unused now but kept for DB schema
             daily_plays: 0, // New field
             last_heart_reset: new Date().toDateString(), // Using this for daily reset
@@ -96,8 +96,8 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         }
     }
 
-    // Use lifetime_points for level calculation if available, otherwise fallback to points
-    const xp = user.lifetime_points ?? user.points;
+    // Level calculation now strictly based on current points
+    const xp = user.points;
 
     const appUser: User = {
         name: user.name,
@@ -108,8 +108,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         profileBackgroundImage: user.profile_background_image || undefined,
         points: user.points,
         blackMarketCoins: user.black_market_coins || 0, // Load BMC
-        lifetimePoints: xp, // Store XP
-        level: calculateLevel(xp), // Calculate level based on XP
+        level: calculateLevel(xp), // Calculate level based on current points
         isAdmin: isAdmin, 
         inventory: inventory,
         settings: user.settings || { darkMode: false, notifications: true, fontSize: 'medium' },
@@ -181,8 +180,8 @@ export const checkSession = async (): Promise<User | null> => {
     
     const isAdmin = user.name === 'admin1204';
     
-    // Use lifetime_points for level calculation if available, otherwise fallback to points
-    const xp = user.lifetime_points ?? user.points;
+    // Level calculation now strictly based on current points
+    const xp = user.points;
 
     return {
         name: user.name,
@@ -193,7 +192,6 @@ export const checkSession = async (): Promise<User | null> => {
         profileBackgroundImage: user.profile_background_image || undefined,
         points: user.points,
         blackMarketCoins: user.black_market_coins || 0, // Load BMC
-        lifetimePoints: xp,
         level: calculateLevel(xp),
         isAdmin: isAdmin,
         inventory: inventory,
@@ -231,7 +229,7 @@ export const updateUserInDb = async (user: User) => {
         name: user.name,
         points: user.points,
         black_market_coins: user.blackMarketCoins, // Save BMC
-        lifetime_points: user.lifetimePoints, // Ensure XP is saved
+        // Removed lifetime_points
         
         // Game Limits (Mapped to DB columns)
         daily_plays: user.dailyPlays,

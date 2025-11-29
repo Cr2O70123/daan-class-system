@@ -89,7 +89,7 @@ const MaintenanceScreen = () => (
 
 // Header Component
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
-    const xp = user.lifetimePoints ?? user.points;
+    const xp = user.points;
     const progress = (xp % 500) / 5; 
 
     return (
@@ -329,10 +329,9 @@ const App = () => {
     
     let reward = newStreak % 7 === 0 ? 100 : 20;
     const newPoints = user.points + reward;
-    const newLifetime = (user.lifetimePoints ?? user.points) + reward;
 
     const updatedUser: User = {
-        ...user, points: newPoints, lifetimePoints: newLifetime, level: calculateLevel(newLifetime),
+        ...user, points: newPoints, level: calculateLevel(newPoints),
         lastCheckInDate: today, checkInStreak: newStreak
     };
     try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch (e) { alert("簽到失敗"); }
@@ -380,8 +379,8 @@ const App = () => {
           await loadData();
           if (!isMaintenanceMode) {
               const reward = 5;
-              const newLifetime = (user.lifetimePoints ?? user.points) + reward;
-              const updatedUser = { ...user, points: user.points + reward, lifetimePoints: newLifetime, level: calculateLevel(newLifetime) };
+              const newPoints = user.points + reward;
+              const updatedUser = { ...user, points: newPoints, level: calculateLevel(newPoints) };
               await updateUserInDb(updatedUser);
               setUser(updatedUser);
           }
@@ -400,11 +399,9 @@ const App = () => {
       }
       if (user.points < product.price) { alert("積分不足！"); return; }
       
-      const currentLifetimePoints = user.lifetimePoints ?? user.points;
       let updatedUser: User = { 
           ...user, 
-          points: user.points - product.price,
-          lifetimePoints: currentLifetimePoints 
+          points: user.points - product.price
       };
 
       if (product.category === 'consumable' && product.id === 'item_heart_refill') {
@@ -439,12 +436,11 @@ const App = () => {
     const rawEarnedPt = Math.floor(result.score / 10);
     const earnedPt = Math.min(rawEarnedPt, MAX_POINT_GAIN_PER_ACTION); 
 
-    const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt;
+    const newPoints = user.points + earnedPt;
     const updatedUser: User = { 
         ...user, 
-        points: user.points + earnedPt,
-        lifetimePoints: newLifetime,
-        level: calculateLevel(newLifetime)
+        points: newPoints,
+        level: calculateLevel(newPoints)
     };
     try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
     setActiveFeature(null);
@@ -471,12 +467,11 @@ const App = () => {
           updatedUser = { ...updatedUser, pkRating: newRating };
       }
 
-      const newLifetime = (user.lifetimePoints ?? user.points) + earnedPt;
+      const newPoints = user.points + earnedPt;
       updatedUser = { 
           ...updatedUser, 
-          points: user.points + earnedPt,
-          lifetimePoints: newLifetime,
-          level: calculateLevel(newLifetime)
+          points: newPoints,
+          level: calculateLevel(newPoints)
       };
       
       try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
@@ -486,12 +481,12 @@ const App = () => {
   const handleWheelSpin = async (prize: number, cost: number) => {
       if (isMaintenanceMode) return;
       if (!user) return;
-      const newLifetime = (user.lifetimePoints ?? user.points) + prize;
+      
+      const newPoints = user.points - cost + prize;
       const updatedUser = { 
           ...user, 
-          points: user.points - cost + prize,
-          lifetimePoints: newLifetime,
-          level: calculateLevel(newLifetime),
+          points: newPoints,
+          level: calculateLevel(newPoints),
           dailyWheelSpins: (user.dailyWheelSpins || 0) + 1,
           lastWheelDate: new Date().toDateString()
       };

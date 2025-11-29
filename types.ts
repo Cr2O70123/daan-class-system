@@ -36,7 +36,6 @@ export interface User {
   profileBackgroundImage?: string; // New: Profile Cover Image
   points: number; // Current Currency (PT)
   blackMarketCoins?: number; // New: Black Market Currency (BMC)
-  lifetimePoints?: number; // Total XP for Leveling (Never decreases)
   level: number;
   isAdmin?: boolean;
   inventory: string[];
