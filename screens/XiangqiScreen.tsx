@@ -168,20 +168,122 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack }) => {
       const piece = boardState[r][c];
       if (!piece) return [];
       const moves: Position[] = [];
-      const check = (nr: number, nc: number) => {
-          if (nr < 0 || nr > 9 || nc < 0 || nc > 8) return;
-          const target = boardState[nr][nc];
-          if (!target || target.color !== piece.color) {
-              moves.push({r: nr, c: nc});
-          }
-      }
+      const { type, color } = piece;
+
+      const isInsideBoard = (nr: number, nc: number) => nr >= 0 && nr <= 9 && nc >= 0 && nc <= 8;
       
-      // Simple logic for UI interaction testing - In a real app, full rules would be here
-      for (let i = 0; i < 10; i++) {
-          for (let j = 0; j < 9; j++) {
-              if (Math.abs(i-r) + Math.abs(j-c) === 1) check(i, j); 
+      const addMoveIfValid = (nr: number, nc: number) => {
+          if (!isInsideBoard(nr, nc)) return;
+          const target = boardState[nr][nc];
+          if (!target || target.color !== color) {
+              moves.push({ r: nr, c: nc });
+          }
+      };
+
+      const checkLineMoves = (dr: number, dc: number, isCannon: boolean) => {
+          let nr = r + dr;
+          let nc = c + dc;
+          let jumped = false;
+          while (isInsideBoard(nr, nc)) {
+              const target = boardState[nr][nc];
+              if (!target) {
+                  if (!isCannon || !jumped) moves.push({ r: nr, c: nc });
+              } else {
+                  if (isCannon) {
+                      if (!jumped) {
+                          jumped = true; // First piece (screen)
+                      } else {
+                          if (target.color !== color) moves.push({ r: nr, c: nc }); // Kill
+                          break;
+                      }
+                  } else {
+                      // Rook
+                      if (target.color !== color) moves.push({ r: nr, c: nc });
+                      break;
+                  }
+              }
+              nr += dr;
+              nc += dc;
+          }
+      };
+
+      if (type === 'R' || type === 'C') { // Rook or Cannon
+          [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dr, dc]) => checkLineMoves(dr, dc, type === 'C'));
+      } 
+      else if (type === 'H') { // Horse (Sun Move)
+          [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [1, -2], [-1, 2], [-1, -2]].forEach(([dr, dc]) => {
+              const nr = r + dr;
+              const nc = c + dc;
+              if (isInsideBoard(nr, nc)) {
+                  // Check blocking leg
+                  const legR = r + (Math.abs(dr) === 2 ? Math.sign(dr) : 0);
+                  const legC = c + (Math.abs(dc) === 2 ? Math.sign(dc) : 0);
+                  if (!boardState[legR][legC]) addMoveIfValid(nr, nc);
+              }
+          });
+      }
+      else if (type === 'E') { // Elephant
+          // Cannot cross river: Red (r>=5), Black (r<=4)
+          const canCrossRiver = false; 
+          const mySide = (r: number) => color === 'red' ? r >= 5 : r <= 4;
+
+          [[2, 2], [2, -2], [-2, 2], [-2, -2]].forEach(([dr, dc]) => {
+              const nr = r + dr;
+              const nc = c + dc;
+              if (isInsideBoard(nr, nc) && mySide(nr)) {
+                  // Check Eye
+                  const eyeR = r + dr / 2;
+                  const eyeC = c + dc / 2;
+                  if (!boardState[eyeR][eyeC]) addMoveIfValid(nr, nc);
+              }
+          });
+      }
+      else if (type === 'A' || type === 'K') { // Advisor or King
+          // Palace Bounds
+          const isPalace = (tr: number, tc: number) => {
+              if (tc < 3 || tc > 5) return false;
+              if (color === 'red') return tr >= 7 && tr <= 9;
+              return tr >= 0 && tr <= 2;
+          };
+
+          const directions = type === 'A' 
+              ? [[1, 1], [1, -1], [-1, 1], [-1, -1]] 
+              : [[0, 1], [0, -1], [1, 0], [-1, 0]];
+
+          directions.forEach(([dr, dc]) => {
+              const nr = r + dr;
+              const nc = c + dc;
+              if (isInsideBoard(nr, nc) && isPalace(nr, nc)) addMoveIfValid(nr, nc);
+          });
+          
+          // King Facing King Rule (Flying General)
+          if (type === 'K') {
+              const dir = color === 'red' ? -1 : 1;
+              let nr = r + dir;
+              while (isInsideBoard(nr, c)) {
+                  const target = boardState[nr][c];
+                  if (target) {
+                      if (target.type === 'K') moves.push({ r: nr, c }); // Can kill opposing king directly
+                      break;
+                  }
+                  nr += dir;
+              }
           }
       }
+      else if (type === 'S') { // Soldier
+          const forward = color === 'red' ? -1 : 1;
+          const crossedRiver = color === 'red' ? r <= 4 : r >= 5;
+          
+          // Forward
+          addMoveIfValid(r + forward, c);
+          
+          // Sideways if crossed river
+          if (crossedRiver) {
+              addMoveIfValid(r, c + 1);
+              addMoveIfValid(r, c - 1);
+          }
+      }
+
       return moves;
   };
 
@@ -200,11 +302,12 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack }) => {
               const target = boardState[nr][nc];
               
               if (piece.type === 'C') {
-                  // Cannon Move
+                  // Cannon Move (1 space to empty)
                   if (!target) {
                       moves.push({r: nr, c: nc});
                   } else {
-                      // Cannon Capture
+                      // Cannon Capture (Must Jump 1 piece)
+                      // In Dark Chess, Cannon needs a screen to eat ANY piece
                       let jumpR = nr + dr;
                       let jumpC = nc + dc;
                       while (jumpR >= 0 && jumpR < 4 && jumpC >= 0 && jumpC < 8) {
@@ -213,22 +316,32 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack }) => {
                               if (!jumpTarget.isHidden && jumpTarget.color !== piece.color) {
                                   moves.push({r: jumpR, c: jumpC});
                               }
-                              break;
+                              break; // Stop after finding target or blocked
                           }
                           jumpR += dr;
                           jumpC += dc;
                       }
                   }
               } else {
-                  // Regular
+                  // Regular Move (1 adjacent)
                   if (!target) {
                       moves.push({r: nr, c: nc});
                   } else if (!target.isHidden && target.color !== piece.color) {
+                      // Hierarchy: K > A > E > R > H > C > S
+                      // Exception: S > K
                       const ranks = ['K', 'A', 'E', 'R', 'H', 'C', 'S']; 
                       const pIdx = ranks.indexOf(piece.type);
                       const tIdx = ranks.indexOf(target.type);
                       
-                      if (piece.type === 'S' && target.type === 'K') moves.push({r: nr, c: nc});
+                      // Special case: S eats K
+                      if (piece.type === 'S' && target.type === 'K') {
+                          moves.push({r: nr, c: nc});
+                      } 
+                      // Special case: K cannot eat S
+                      else if (piece.type === 'K' && target.type === 'S') {
+                          // Invalid
+                      }
+                      // Normal rank comparison (Smaller index = Higher rank)
                       else if (pIdx <= tIdx) { 
                           moves.push({r: nr, c: nc});
                       }

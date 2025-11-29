@@ -34,7 +34,7 @@ import { supabase } from './services/supabaseClient';
 import { WORD_DATABASE } from './services/mockData';
 
 // --- Lazy Load Features (Code Splitting) ---
-// This prevents the main bundle from getting too huge. Features are loaded only when clicked.
+// 新增功能時，只需在此處引入，不需修改大量 State
 const WordChallengeScreen = React.lazy(() => import('./screens/WordChallengeScreen').then(module => ({ default: module.WordChallengeScreen })));
 const ResistorGameScreen = React.lazy(() => import('./screens/ResistorGameScreen').then(module => ({ default: module.ResistorGameScreen })));
 const BlockBlastScreen = React.lazy(() => import('./screens/BlockBlastScreen').then(module => ({ default: module.BlockBlastScreen })));
@@ -140,7 +140,7 @@ const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpen
 
 // --- Loading Component for Suspense ---
 const LoadingFallback = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <Loader2 className="animate-spin text-blue-500" size={32} />
     </div>
 );
@@ -169,7 +169,7 @@ const App = () => {
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   // --- UNIFIED FEATURE STATE (The Key Optimization) ---
-  // Instead of 10 boolean flags, we use one object to track the active full-screen feature.
+  // Instead of 10+ boolean flags, we use one object to track the active full-screen feature.
   type ActiveFeature = { id: string; params?: any } | null;
   const [activeFeature, setActiveFeature] = useState<ActiveFeature>(null);
 
