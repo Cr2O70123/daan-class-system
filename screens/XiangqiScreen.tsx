@@ -455,8 +455,19 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack }) => {
   // --- Render Helpers ---
   const boardWidth = 340; 
   const boardHeight = mode === 'DARK' ? 170 : 380; 
-  const cellW = boardWidth / (mode === 'DARK' ? 8 : 8);
-  const cellH = boardHeight / (mode === 'DARK' ? 4 : 9);
+  
+  // Calculate cell sizes based on grid dimensions
+  const cols = mode === 'DARK' ? 8 : 9;
+  const rows = mode === 'DARK' ? 4 : 10;
+  
+  const cellW = boardWidth / cols;
+  const cellH = boardHeight / rows;
+  
+  // Offsets to center lines in the grid cells
+  const startX = cellW / 2;
+  const startY = cellH / 2;
+  const endX = boardWidth - startX;
+  const endY = boardHeight - startY;
 
   const renderBoardLines = () => {
       return (
@@ -472,39 +483,61 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack }) => {
               <g stroke="#5c4033" strokeWidth="1.5">
                   {mode === 'STANDARD' ? (
                       <>
-                        {/* Rows */}
-                        {Array.from({length: 10}).map((_, i) => (
-                            <line key={`r${i}`} x1={0} y1={i * cellH} x2={boardWidth} y2={i * cellH} />
-                        ))}
-                        {/* Cols */}
-                        {Array.from({length: 7}).map((_, i) => (
-                            <line key={`ct${i}`} x1={(i + 1) * cellW} y1={0} x2={(i + 1) * cellW} y2={4 * cellH} />
-                        ))}
-                        {Array.from({length: 7}).map((_, i) => (
-                            <line key={`cb${i}`} x1={(i + 1) * cellW} y1={5 * cellH} x2={(i + 1) * cellW} y2={9 * cellH} />
-                        ))}
-                        {/* Palaces */}
-                        <line x1={3*cellW} y1={0} x2={5*cellW} y2={2*cellH} />
-                        <line x1={5*cellW} y1={0} x2={3*cellW} y2={2*cellH} />
-                        <line x1={3*cellW} y1={7*cellH} x2={5*cellW} y2={9*cellH} />
-                        <line x1={5*cellW} y1={7*cellH} x2={3*cellW} y2={9*cellH} />
+                        {/* 10 Horizontal Rows */}
+                        {Array.from({length: 10}).map((_, i) => {
+                            const y = startY + i * cellH;
+                            return <line key={`r${i}`} x1={startX} y1={y} x2={endX} y2={y} />;
+                        })}
+                        
+                        {/* 9 Vertical Columns */}
+                        {Array.from({length: 9}).map((_, i) => {
+                            const x = startX + i * cellW;
+                            if (i === 0 || i === 8) {
+                                // Outer borders connect all the way
+                                return <line key={`c${i}`} x1={x} y1={startY} x2={x} y2={endY} />;
+                            } else {
+                                // Inner lines break at river
+                                return (
+                                    <React.Fragment key={`c${i}`}>
+                                        <line x1={x} y1={startY} x2={x} y2={startY + 4 * cellH} /> {/* Top half */}
+                                        <line x1={x} y1={startY + 5 * cellH} x2={x} y2={endY} />   {/* Bottom half */}
+                                    </React.Fragment>
+                                );
+                            }
+                        })}
+
+                        {/* Palaces (X shapes) */}
+                        {/* Top Palace (0-2) */}
+                        <line x1={startX + 3*cellW} y1={startY} x2={startX + 5*cellW} y2={startY + 2*cellH} />
+                        <line x1={startX + 5*cellW} y1={startY} x2={startX + 3*cellW} y2={startY + 2*cellH} />
+                        
+                        {/* Bottom Palace (7-9) */}
+                        <line x1={startX + 3*cellW} y1={startY + 7*cellH} x2={startX + 5*cellW} y2={endY} />
+                        <line x1={startX + 5*cellW} y1={startY + 7*cellH} x2={startX + 3*cellW} y2={endY} />
+
                         {/* River Text */}
-                        <text x={boardWidth * 0.2} y={4.65 * cellH} fontSize="20" fill="#5c4033" fontWeight="bold" textAnchor="middle" style={{fontFamily: 'serif'}}>楚 河</text>
-                        <text x={boardWidth * 0.8} y={4.65 * cellH} fontSize="20" fill="#5c4033" fontWeight="bold" textAnchor="middle" style={{fontFamily: 'serif'}}>漢 界</text>
+                        <text x={boardWidth * 0.25} y={boardHeight / 2 + 6} fontSize="20" fill="#5c4033" fontWeight="bold" textAnchor="middle" style={{fontFamily: 'serif', opacity: 0.6}}>楚 河</text>
+                        <text x={boardWidth * 0.75} y={boardHeight / 2 + 6} fontSize="20" fill="#5c4033" fontWeight="bold" textAnchor="middle" style={{fontFamily: 'serif', opacity: 0.6}}>漢 界</text>
+                        
+                        {/* Outer Border Box (Optional, for aesthetics) */}
+                        <rect x={startX - 4} y={startY - 4} width={endX - startX + 8} height={endY - startY + 8} fill="none" strokeWidth="2" />
                       </>
                   ) : (
                       <>
                         {/* Dark Chess Grid (4x8) */}
-                        {Array.from({length: 5}).map((_, i) => (
-                            <line key={`r${i}`} x1={0} y1={i * cellH} x2={boardWidth} y2={i * cellH} />
-                        ))}
-                        {Array.from({length: 9}).map((_, i) => (
-                            <line key={`c${i}`} x1={i * cellW} y1={0} x2={i * cellW} y2={4 * cellH} />
-                        ))}
+                        {/* 5 Horizontal Lines? No, 4x8 grid means 4 rows, 8 cols. Lines go through centers. */}
+                        {Array.from({length: 4}).map((_, i) => {
+                            const y = startY + i * cellH;
+                            return <line key={`r${i}`} x1={startX} y1={y} x2={endX} y2={y} />;
+                        })}
+                        {Array.from({length: 8}).map((_, i) => {
+                            const x = startX + i * cellW;
+                            return <line key={`c${i}`} x1={x} y1={startY} x2={x} y2={endY} />;
+                        })}
+                        {/* Simple border */}
+                        <rect x={startX - 2} y={startY - 2} width={endX - startX + 4} height={endY - startY + 4} fill="none" strokeWidth="2" />
                       </>
                   )}
-                  {/* Border */}
-                  <rect x="2" y="2" width={boardWidth-4} height={boardHeight-4} fill="none" strokeWidth="3" />
               </g>
           </svg>
       );
@@ -579,8 +612,8 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack }) => {
                     <div 
                         className="absolute inset-0 z-10 grid"
                         style={{
-                            gridTemplateColumns: `repeat(${mode === 'DARK' ? 8 : 9}, 1fr)`,
-                            gridTemplateRows: `repeat(${mode === 'DARK' ? 4 : 10}, 1fr)`,
+                            gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                            gridTemplateRows: `repeat(${rows}, 1fr)`,
                             width: '100%',
                             height: '100%'
                         }}

@@ -286,9 +286,10 @@ export const unbanUser = async (studentId: string) => {
 // --- Class Leaderboard ---
 
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[] & { blackMarketCoins?: number }> => {
+    // Removed lifetime_points from select to avoid error if column was dropped from DB
     const { data, error } = await supabase
         .from('users')
-        .select('name, student_id, points, lifetime_points, black_market_coins, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
+        .select('name, student_id, points, black_market_coins, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
         .eq('is_banned', false)
         .limit(1000);
 
@@ -306,7 +307,7 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[] & { bl
 
     const uniqueData = Array.from(uniqueMap.values());
 
-    // UPDATED SORTING: Sort by 'points' (Current Wealth) instead of 'lifetime_points'
+    // UPDATED SORTING: Sort by 'points' (Current Wealth)
     uniqueData.sort((a: any, b: any) => {
         return b.points - a.points;
     });
@@ -315,9 +316,9 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[] & { bl
         rank: index + 1,
         name: u.name,
         studentId: u.student_id,
-        points: u.points, // Display Current Points on Leaderboard
+        points: u.points, 
         blackMarketCoins: u.black_market_coins || 0, 
-        level: calculateLevel(u.lifetime_points ?? u.points), // Level still based on XP
+        level: calculateLevel(u.points), // Fallback level calc using current points if lifetime unavailable
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
         avatarFrame: u.avatar_frame,

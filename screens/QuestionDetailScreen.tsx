@@ -131,10 +131,21 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
         setSelectedBestAnswerId(null);
     }
   };
-  // -----------------------
+  
+  // Helper to get frame styles
+  const getFrameStyle = (frameId?: string) => {
+    switch(frameId) {
+      case 'frame_gold': return 'ring-2 ring-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+      case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
+      case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
+      case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
+      case 'frame_beta': return 'ring-2 ring-amber-500 border-2 border-dashed border-yellow-200 shadow-[0_0_10px_rgba(245,158,11,0.6)]';
+      default: return 'ring-2 ring-white dark:ring-gray-700';
+    }
+  };
 
   return (
-    <div className="bg-gray-100 dark:bg-gray-900 min-h-screen flex flex-col pb-safe relative transition-colors z-[60]">
+    <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-900 transition-colors z-[60] relative">
       
       {/* --- REPORT MODAL --- */}
       {reportModalOpen && (
@@ -189,8 +200,8 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
         </div>
       )}
 
-      {/* Header - Added pt-safe */}
-      <div className="bg-white dark:bg-gray-800 sticky top-0 pt-safe z-30 px-4 py-3 flex items-center justify-between shadow-sm transition-colors">
+      {/* Header - Fixed Height, Flex Item */}
+      <div className="bg-white dark:bg-gray-800 px-4 py-3 flex items-center justify-between shadow-sm transition-colors shrink-0 pt-safe border-b border-gray-100 dark:border-gray-700">
         <div className="flex items-center">
             <button onClick={onBack} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors">
             <ArrowLeft size={20} className="text-gray-600 dark:text-gray-300" />
@@ -205,7 +216,8 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-24 p-4 space-y-4">
+      {/* Content - Flexible Height, Scrollable */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-100 dark:bg-gray-900">
         {/* Main Question Card */}
         <div className="bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 relative transition-colors">
           <div className="flex gap-2 mb-3">
@@ -252,7 +264,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
         </div>
 
         {/* Replies Section */}
-        <div className="space-y-4">
+        <div className="space-y-4 pb-4">
           <h3 className="font-bold text-gray-500 dark:text-gray-400 text-xs ml-1 uppercase tracking-wider">
             所有回答 ({question.replies.length})
           </h3>
@@ -274,7 +286,7 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
 
                 <div className="flex justify-between items-start mb-2 mt-1">
                   <div className="flex items-center space-x-2">
-                    <div className={`w-8 h-8 rounded-full ${reply.avatarColor || 'bg-gray-400'} flex items-center justify-center text-white font-bold text-xs overflow-hidden`}>
+                    <div className={`w-8 h-8 rounded-full ${reply.avatarColor || 'bg-gray-400'} flex items-center justify-center text-white font-bold text-xs overflow-hidden ${getFrameStyle(reply.avatarFrame)}`}>
                       {reply.avatarImage ? (
                           <img src={reply.avatarImage} alt="avatar" className="w-full h-full object-cover" />
                       ) : (
@@ -327,8 +339,8 @@ export const QuestionDetailScreen: React.FC<QuestionDetailScreenProps> = ({
         </div>
       </div>
 
-      {/* Reply Input Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 z-40 max-w-md mx-auto transition-colors pb-safe">
+      {/* Reply Input Bar - Fixed at bottom of flex container */}
+      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 shrink-0 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-40">
         
         {/* Image Preview */}
         {replyImage && (
