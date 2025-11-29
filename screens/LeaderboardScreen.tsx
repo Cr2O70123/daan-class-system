@@ -152,10 +152,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
                                 </div>
                             </div>
                             
-                            {/* Score (Now displays Lifetime Points / EXP) */}
+                            {/* Score (Now displays Current Points / PT) */}
                             <div className="text-right pl-2">
                                 <div className="font-black font-mono text-lg text-blue-600 dark:text-blue-400 leading-none">{entry.points}</div>
-                                <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">EXP</div>
+                                <div className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">PT</div>
                             </div>
                         </div>
                     );
@@ -204,10 +204,10 @@ export const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ currentUse
                 </div>
                 <div className="text-xs text-gray-400">我的目前排名</div>
             </div>
-            {/* Show XP (Lifetime Points) here to match the leaderboard sorting metric */}
+            {/* Show PT (Current Points) here to match the leaderboard sorting metric */}
             <div className="text-right">
-                <div className="font-black font-mono text-blue-600 dark:text-blue-400 text-lg">{currentUser.lifetimePoints ?? currentUser.points}</div>
-                <div className="text-[10px] text-gray-400 uppercase">EXP</div>
+                <div className="font-black font-mono text-blue-600 dark:text-blue-400 text-lg">{currentUser.points}</div>
+                <div className="text-[10px] text-gray-400 uppercase">PT</div>
             </div>
           </div>
       )}

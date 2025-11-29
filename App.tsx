@@ -547,7 +547,7 @@ const App = () => {
       {showUpdateModal && <UpdateAnnouncementModal onClose={() => setShowUpdateModal(false)} />}
 
       {lightboxImage && (
-          <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center" onClick={() => setLightboxImage(null)}>
+          <div className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-sm flex items-center justify-center" onClick={() => setLightboxImage(null)}>
               <button className="absolute top-6 right-6 text-white bg-white/10 p-2 rounded-full"><X size={24}/></button>
               <img src={lightboxImage} alt="Zoom" className="max-w-full max-h-full object-contain p-4" />
           </div>
@@ -578,9 +578,9 @@ const App = () => {
       {/* --- RENDER FULL SCREEN FEATURES --- */}
       {renderActiveFeature()}
 
-      {/* Overlays */}
+      {/* Overlays - Increased Z-Index to [100] to be above BottomNav [50] */}
       {selectedQuestion && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 h-full flex flex-col">
+        <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-900 h-full flex flex-col">
              <QuestionDetailScreen 
                 question={selectedQuestion} 
                 currentUser={user} 
@@ -594,7 +594,7 @@ const App = () => {
       )}
 
       {selectedResource && (
-        <div className="fixed inset-0 z-50 bg-white dark:bg-gray-900 h-full flex flex-col">
+        <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-900 h-full flex flex-col">
              <ResourceDetailScreen 
                 resource={selectedResource} 
                 currentUser={user} 
@@ -614,7 +614,7 @@ const App = () => {
       )}
 
       {showLeaderboardOverlay ? (
-          <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 pt-safe flex flex-col">
+          <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-900 pt-safe flex flex-col">
                <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800 mt-2">
                    <h2 className="font-bold text-lg text-gray-800 dark:text-white">全班等級排名 (按現有積分)</h2>
                    <button onClick={() => setShowLeaderboardOverlay(false)} className="text-blue-600 font-bold px-4 py-1">返回</button>
@@ -622,7 +622,7 @@ const App = () => {
                <div className="flex-1 overflow-hidden no-scrollbar"><LeaderboardScreen currentUser={user} /></div>
           </div>
       ) : showModeration ? (
-          <div className="fixed inset-0 z-40 bg-white dark:bg-gray-900 overflow-y-auto">
+          <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-900 overflow-y-auto">
               <ModerationScreen 
                 user={user} reports={reports} allQuestions={questions} allResources={resources} allExams={exams}
                 onBack={() => setShowModeration(false)}
