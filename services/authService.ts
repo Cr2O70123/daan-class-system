@@ -3,9 +3,6 @@ import { User } from '../types';
 import { calculateLevel } from './levelService';
 import { supabase } from './supabaseClient';
 
-// Emergency Ban List (1 Hour Suspension)
-const BANNED_IDS = ['1204217', 's1204228', '1204229', 's1204221'];
-
 // Generate Daily Passcode: DAAN-XXXX (Random 4 digits seeded by date)
 export const getDailyPasscode = () => {
     const today = new Date().toDateString(); // e.g., "Mon Nov 06 2023"
@@ -25,10 +22,7 @@ export const getDailyPasscode = () => {
 };
 
 export const login = async (name: string, studentId: string): Promise<User> => {
-    // 0. Check Emergency Ban List
-    if (BANNED_IDS.includes(studentId)) {
-        throw new Error("此帳號因涉嫌異常刷分，系統已自動執行暫時封禁 (1小時)。");
-    }
+    // 0. Emergency Ban List Removed
 
     const isAdmin = name === 'admin1204'; 
     
@@ -81,10 +75,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         user = createdUser;
     }
 
-    // Check Ban Status (Database Flag)
-    if (user.is_banned) {
-        throw new Error("ACCOUNT_BANNED: 此帳號已被管理員停權");
-    }
+    // Ban Check Removed - Allowing login even if flagged in DB
 
     // 3. Transform DB user to App User
     let inventory: string[] = [];
@@ -125,7 +116,7 @@ export const login = async (name: string, studentId: string): Promise<User> => {
         // Personalization
         lastNicknameChange: user.last_nickname_change,
 
-        isBanned: user.is_banned,
+        isBanned: false, // Force unbanned state in app
         banExpiresAt: user.ban_expires_at,
 
         // Push
@@ -147,11 +138,7 @@ export const checkSession = async (): Promise<User | null> => {
     
     if (!storedId) return null;
 
-    // Check Emergency Ban List on Session Resume
-    if (BANNED_IDS.includes(storedId)) {
-        localStorage.removeItem('student_id');
-        return null;
-    }
+    // Emergency Ban List Check Removed
 
     const { data: user, error } = await supabase
         .from('users')
@@ -164,7 +151,8 @@ export const checkSession = async (): Promise<User | null> => {
         return null;
     }
 
-    if (!user || user.is_banned) {
+    // Removed user.is_banned check to allow banned users back in
+    if (!user) {
         localStorage.removeItem('student_id');
         return null;
     }
@@ -206,7 +194,7 @@ export const checkSession = async (): Promise<User | null> => {
 
         lastNicknameChange: user.last_nickname_change,
 
-        isBanned: user.is_banned,
+        isBanned: false, // Force unbanned
         banExpiresAt: user.ban_expires_at,
 
         pushClientId: user.push_client_id,

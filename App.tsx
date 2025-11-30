@@ -47,6 +47,8 @@ const BlackMarketScreen = React.lazy(() => import('./screens/BlackMarketScreen')
 const SlotMachineScreen = React.lazy(() => import('./screens/SlotMachineScreen').then(module => ({ default: module.SlotMachineScreen })));
 const RussianRouletteScreen = React.lazy(() => import('./screens/RussianRouletteScreen').then(module => ({ default: module.RussianRouletteScreen })));
 const XiangqiScreen = React.lazy(() => import('./screens/XiangqiScreen').then(module => ({ default: module.XiangqiScreen })));
+const GomokuScreen = React.lazy(() => import('./screens/GomokuScreen').then(module => ({ default: module.GomokuScreen })));
+const OthelloScreen = React.lazy(() => import('./screens/OthelloScreen').then(module => ({ default: module.OthelloScreen })));
 
 // Helper to get frame styles
 const getFrameStyle = (frameId?: string) => {
@@ -532,6 +534,8 @@ const App = () => {
               {id === 'slot_machine' && <SlotMachineScreen user={user} onBack={handleCloseFeature} onFinish={handleBmcGameFinish} />}
               {id === 'russian_roulette' && <RussianRouletteScreen user={user} onBack={handleCloseFeature} onFinish={handleBmcGameFinish} />}
               {id === 'xiangqi' && <XiangqiScreen onBack={handleCloseFeature} />}
+              {id === 'gomoku' && <GomokuScreen onBack={handleCloseFeature} />}
+              {id === 'othello' && <OthelloScreen onBack={handleCloseFeature} />}
           </Suspense>
       );
   };

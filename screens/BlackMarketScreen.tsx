@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, RefreshCw, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, Send } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, Send, Search, Loader2, X } from 'lucide-react';
 import { User, Product, LeaderboardEntry } from '../types';
 import { updateUserInDb } from '../services/authService';
 import { fetchClassLeaderboard, transferBlackCoins } from '../services/dataService';
@@ -20,6 +20,16 @@ const BLACK_MARKET_ITEMS: Product[] = [
     { id: 'title_dark_lord', name: '稱號：暗夜領主', price: 1000, currency: 'BMC', color: 'bg-black text-yellow-500', icon: <Crown size={20}/>, description: '個人頁面專屬黑色稱號', category: 'cosmetic', isRare: true },
 ];
 
+const getFrameStyle = (frameId?: string) => {
+    switch(frameId) {
+      case 'frame_gold': return 'ring-2 ring-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
+      case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
+      case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
+      case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
+      default: return 'ring-2 ring-white/20';
+    }
+};
+
 export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBack, onBuy, setUser }) => {
     const [exchangeAmount, setExchangeAmount] = useState<number>(100); 
     const [tab, setTab] = useState<'EXCHANGE' | 'SHOP' | 'P2P'>('EXCHANGE');
@@ -34,6 +44,8 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     const [userList, setUserList] = useState<(LeaderboardEntry & { blackMarketCoins?: number })[]>([]);
     const [transferAmount, setTransferAmount] = useState('');
     const [selectedReceiver, setSelectedReceiver] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isTransferring, setIsTransferring] = useState(false);
 
     useEffect(() => {
         const updateRate = () => {
@@ -106,7 +118,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     };
 
     const handleTransfer = async () => {
-        if (!selectedReceiver || !transferAmount) return;
+        if (!selectedReceiver || !transferAmount || isTransferring) return;
         const amount = parseInt(transferAmount);
         if (isNaN(amount) || amount <= 0) {
             alert("請輸入有效金額");
@@ -121,6 +133,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         if (!receiver) return;
 
         if (confirm(`確定要轉帳 ${amount} BMC 給 ${receiver.name}? 此操作無法復原。`)) {
+            setIsTransferring(true);
             try {
                 await transferBlackCoins(user.studentId, selectedReceiver, amount);
                 const updatedUser = { ...user, blackMarketCoins: (user.blackMarketCoins || 0) - amount };
@@ -132,6 +145,8 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 fetchClassLeaderboard().then(data => setUserList(data.filter(u => u.studentId !== user.studentId)));
             } catch (e) {
                 alert("轉帳失敗，請確認對方帳號是否存在");
+            } finally {
+                setIsTransferring(false);
             }
         }
     };
@@ -168,8 +183,13 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         }
     };
 
-    // Realistic Chart
-    const renderChart = () => {
+    // Filter Users
+    const filteredUsers = userList.filter(u => 
+        u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        u.studentId.includes(searchQuery)
+    );
+
+    const renderChart = () => { /* ... existing chart logic ... */
         const width = 300;
         const height = 100;
         const min = Math.min(...priceHistory, 50.0);
@@ -182,27 +202,13 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             return `${x},${y}`;
         }).join(' ');
 
-        const areaPoints = `${points} ${width},${height} 0,${height}`;
         const isUp = priceHistory[priceHistory.length - 1] >= priceHistory[0];
-        // Red = Bad for buyer (Rate UP), Green = Good (Rate Down)
         const strokeColor = isUp ? '#ef4444' : '#10b981'; 
-        const gradientId = isUp ? 'gradUp' : 'gradDown';
 
         return (
             <div className="relative h-32 w-full mt-4 bg-gray-900/50 rounded-xl border border-gray-800 p-2 overflow-hidden">
                 <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-                    <defs>
-                        <linearGradient id="gradUp" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#ef4444" stopOpacity="0.5" />
-                            <stop offset="100%" stopColor="#ef4444" stopOpacity="0" />
-                        </linearGradient>
-                        <linearGradient id="gradDown" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#10b981" stopOpacity="0.5" />
-                            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
-                        </linearGradient>
-                    </defs>
                     <line x1="0" y1={height/2} x2={width} y2={height/2} stroke="#374151" strokeDasharray="4" strokeWidth="1" />
-                    <polygon points={areaPoints} fill={`url(#${gradientId})`} />
                     <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-md" />
                     <circle cx={width} cy={height - ((priceHistory[priceHistory.length-1] - min) / range) * height} r="4" fill="#fff" className="animate-pulse" />
                 </svg>
@@ -242,24 +248,9 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             </div>
 
             <div className="flex p-4 gap-4 z-10">
-                <button 
-                    onClick={() => setTab('EXCHANGE')}
-                    className={`flex-1 py-3 border-2 rounded-xl font-bold transition-all text-xs md:text-sm ${tab === 'EXCHANGE' ? 'border-blue-500 bg-blue-900/20 text-blue-400' : 'border-gray-800 text-gray-600 hover:border-gray-600'}`}
-                >
-                    貨幣兌換
-                </button>
-                <button 
-                    onClick={() => setTab('SHOP')}
-                    className={`flex-1 py-3 border-2 rounded-xl font-bold transition-all text-xs md:text-sm ${tab === 'SHOP' ? 'border-purple-500 bg-purple-900/20 text-purple-400' : 'border-gray-800 text-gray-600 hover:border-gray-600'}`}
-                >
-                    黑市商品
-                </button>
-                <button 
-                    onClick={() => setTab('P2P')}
-                    className={`flex-1 py-3 border-2 rounded-xl font-bold transition-all text-xs md:text-sm ${tab === 'P2P' ? 'border-green-500 bg-green-900/20 text-green-400' : 'border-gray-800 text-gray-600 hover:border-gray-600'}`}
-                >
-                    私下交易
-                </button>
+                <button onClick={() => setTab('EXCHANGE')} className={`flex-1 py-3 border-2 rounded-xl font-bold transition-all text-xs md:text-sm ${tab === 'EXCHANGE' ? 'border-blue-500 bg-blue-900/20 text-blue-400' : 'border-gray-800 text-gray-600 hover:border-gray-600'}`}>貨幣兌換</button>
+                <button onClick={() => setTab('SHOP')} className={`flex-1 py-3 border-2 rounded-xl font-bold transition-all text-xs md:text-sm ${tab === 'SHOP' ? 'border-purple-500 bg-purple-900/20 text-purple-400' : 'border-gray-800 text-gray-600 hover:border-gray-600'}`}>黑市商品</button>
+                <button onClick={() => setTab('P2P')} className={`flex-1 py-3 border-2 rounded-xl font-bold transition-all text-xs md:text-sm ${tab === 'P2P' ? 'border-green-500 bg-green-900/20 text-green-400' : 'border-gray-800 text-gray-600 hover:border-gray-600'}`}>私下交易</button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 z-10 pb-32">
@@ -278,7 +269,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     {rateTrend === 'UP' ? <TrendingUp size={20}/> : rateTrend === 'DOWN' ? <TrendingDown size={20}/> : null}
                                     {currentRate.toFixed(1)}
                                 </div>
-                                <span className="text-[10px] text-gray-500">PT / 1 BMC</span>
+                                <span className="text-xs text-gray-500">PT / 1 BMC</span>
                             </div>
                         </div>
 
@@ -311,10 +302,6 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             >
                                 確認兌換
                             </button>
-                            
-                            <p className="text-[10px] text-gray-500 text-center mt-2">
-                                * 匯率波動劇烈，請即時把握。
-                            </p>
                         </div>
                     </div>
                 ) : tab === 'SHOP' ? (
@@ -364,50 +351,85 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                     <div className="space-y-4">
                         <div className="bg-gray-900 p-4 rounded-xl border border-gray-800 mb-4">
                             <h3 className="font-bold text-green-400 mb-4 flex items-center gap-2">
-                                <Users size={18}/> 黑市名單
+                                <Users size={18}/> 交易名單
                             </h3>
+                            
+                            {/* Search */}
+                            <div className="flex items-center gap-2 bg-black border border-gray-700 rounded-lg px-3 py-2 mb-4">
+                                <Search size={16} className="text-gray-500"/>
+                                <input 
+                                    type="text" 
+                                    placeholder="搜尋名字或學號..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="bg-transparent border-none outline-none text-sm text-white w-full"
+                                />
+                            </div>
+
                             <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                                {userList.map(u => (
+                                {filteredUsers.map(u => (
                                     <div 
                                         key={u.studentId}
                                         onClick={() => setSelectedReceiver(u.studentId)}
-                                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border ${selectedReceiver === u.studentId ? 'bg-green-900/30 border-green-500' : 'bg-black border-gray-800 hover:border-gray-600'}`}
+                                        className={`flex items-center justify-between p-3 rounded-lg cursor-pointer border transition-all ${selectedReceiver === u.studentId ? 'bg-green-900/30 border-green-500' : 'bg-black border-gray-800 hover:border-gray-600'}`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>
-                                                {u.name[0]}
+                                            <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold overflow-hidden ${getFrameStyle(u.avatarFrame)}`}>
+                                                {u.avatarImage ? <img src={u.avatarImage} className="w-full h-full object-cover"/> : u.name[0]}
                                             </div>
                                             <div>
                                                 <div className="text-sm font-bold text-white">{u.name}</div>
-                                                <div className="text-[10px] text-purple-400 font-mono flex items-center gap-1">
-                                                    <Gem size={8}/> {u.blackMarketCoins || 0}
-                                                </div>
+                                                <div className="text-[10px] text-gray-500">{u.studentId}</div>
                                             </div>
                                         </div>
-                                        {selectedReceiver === u.studentId && <div className="w-3 h-3 bg-green-500 rounded-full"></div>}
+                                        <div className="text-[10px] text-purple-400 font-mono flex items-center gap-1">
+                                            <Gem size={8}/> {u.blackMarketCoins || 0}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
                         {selectedReceiver && (
-                            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 animate-in slide-in-from-bottom">
-                                <div className="text-xs text-gray-400 mb-2">轉帳給: <span className="text-white font-bold">{userList.find(u=>u.studentId===selectedReceiver)?.name}</span></div>
-                                <div className="flex gap-2">
+                            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 animate-in slide-in-from-bottom shadow-2xl">
+                                <div className="flex justify-between items-center mb-3 border-b border-gray-700 pb-2">
+                                    <span className="text-xs text-gray-400">轉帳對象</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-white font-bold">{userList.find(u=>u.studentId===selectedReceiver)?.name}</span>
+                                        <button onClick={() => setSelectedReceiver(null)} className="text-gray-500 hover:text-white"><X size={14}/></button>
+                                    </div>
+                                </div>
+                                
+                                <div className="flex gap-2 mb-3">
                                     <input 
                                         type="number" 
                                         value={transferAmount}
                                         onChange={e => setTransferAmount(e.target.value)}
                                         placeholder="輸入 BMC 數量"
-                                        className="flex-1 bg-black border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-green-500"
+                                        className="flex-1 bg-black border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-green-500 font-mono text-lg"
                                     />
-                                    <button 
-                                        onClick={handleTransfer}
-                                        className="bg-green-600 hover:bg-green-500 text-white px-6 rounded-lg font-bold flex items-center gap-2"
-                                    >
-                                        <Send size={16}/> 轉帳
+                                </div>
+                                
+                                {/* Quick Amounts */}
+                                <div className="flex gap-2 mb-4">
+                                    {[10, 50, 100].map(amt => (
+                                        <button key={amt} onClick={() => setTransferAmount(amt.toString())} className="flex-1 bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded text-gray-300">
+                                            {amt}
+                                        </button>
+                                    ))}
+                                    <button onClick={() => setTransferAmount((user.blackMarketCoins || 0).toString())} className="flex-1 bg-gray-700 hover:bg-gray-600 text-xs py-1 rounded text-purple-300 font-bold">
+                                        ALL
                                     </button>
                                 </div>
+
+                                <button 
+                                    onClick={handleTransfer}
+                                    disabled={isTransferring}
+                                    className="w-full bg-green-600 hover:bg-green-500 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg disabled:opacity-50"
+                                >
+                                    {isTransferring ? <Loader2 size={16} className="animate-spin"/> : <Send size={16}/>}
+                                    確認轉帳
+                                </button>
                             </div>
                         )}
                     </div>

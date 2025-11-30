@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { ShieldCheck, CheckCircle, AlertOctagon, Users, Award, Trash2, Ban, Unlock, BookOpen, MessageCircle, HelpCircle } from 'lucide-react';
+import { ShieldCheck, CheckCircle, AlertOctagon, Trash2, HelpCircle, BookOpen } from 'lucide-react';
 import { Report, User, Question, Resource, Exam } from '../types';
 
 interface ModerationScreenProps {
@@ -11,24 +12,17 @@ interface ModerationScreenProps {
   allExams?: Exam[];
   
   onBack: () => void;
-  onBanUser: (studentId: string) => void;
-  onUnbanUser: (studentId: string) => void;
+  // Deprecated/Unused props kept for compatibility with App.tsx
+  onBanUser?: (studentId: string) => void;
+  onUnbanUser?: (studentId: string) => void;
   onDeleteContent: (type: 'question' | 'reply' | 'resource' | 'exam', id: number) => void;
 }
 
-const MOCK_USERS_LIST = [
-    { name: '陳大華', id: '110002', points: 320, role: 'User' },
-    { name: '王小明', id: '110001', points: 150, role: 'User' },
-    { name: '張美麗', id: '110003', points: 80, role: 'User' },
-    { name: '李大同', id: '110004', points: 1050, role: 'User' },
-];
-
 export const ModerationScreen: React.FC<ModerationScreenProps> = ({ 
     user, reports, allQuestions=[], allResources=[], allExams=[], 
-    onBack, onBanUser, onUnbanUser, onDeleteContent 
+    onBack, onDeleteContent 
 }) => {
-  const [activeTab, setActiveTab] = useState<'reports' | 'users' | 'content'>('content');
-  const [targetBanId, setTargetBanId] = useState('');
+  const [activeTab, setActiveTab] = useState<'reports' | 'content'>('content');
   
   if (!user.isAdmin) return null;
 
@@ -58,12 +52,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
             className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'reports' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500 hover:text-gray-700'}`}
         >
           <AlertOctagon size={16} /> 檢舉 ({reports.length})
-        </button>
-        <button 
-            onClick={() => setActiveTab('users')}
-            className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 ${activeTab === 'users' ? 'text-red-600 border-b-2 border-red-600' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          <Users size={16} /> 用戶
         </button>
       </div>
 
@@ -137,54 +125,6 @@ export const ModerationScreen: React.FC<ModerationScreenProps> = ({
                     </div>
                 ))
             )
-        )}
-
-        {/* Users Tab (Ban Tools) */}
-        {activeTab === 'users' && (
-            <div className="space-y-4">
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                    <h3 className="font-bold mb-3 flex items-center gap-2 text-gray-800">
-                        <Ban size={18} className="text-red-500" /> 帳號停權管理
-                    </h3>
-                    <div className="flex gap-2 mb-2">
-                        <input 
-                            type="text" 
-                            placeholder="輸入學號 (Student ID)" 
-                            value={targetBanId}
-                            onChange={e => setTargetBanId(e.target.value)}
-                            className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm outline-none focus:border-red-500"
-                        />
-                    </div>
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={() => {
-                                if(confirm(`確定停權 ${targetBanId}?`)) {
-                                    onBanUser(targetBanId);
-                                    setTargetBanId('');
-                                }
-                            }}
-                            className="flex-1 bg-red-100 text-red-600 px-4 py-2 rounded font-bold text-sm hover:bg-red-200 flex items-center justify-center gap-1"
-                        >
-                            <Ban size={14} /> 停權
-                        </button>
-                        <button 
-                            onClick={() => {
-                                if(confirm(`確定解除停權 ${targetBanId}?`)) {
-                                    onUnbanUser(targetBanId);
-                                    setTargetBanId('');
-                                }
-                            }}
-                            className="flex-1 bg-green-100 text-green-600 px-4 py-2 rounded font-bold text-sm hover:bg-green-200 flex items-center justify-center gap-1"
-                        >
-                            <Unlock size={14} /> 解除
-                        </button>
-                    </div>
-                </div>
-                
-                <div className="text-xs text-gray-500 mt-4 text-center">
-                    提示：停權後使用者將無法登入系統。
-                </div>
-            </div>
         )}
       </div>
     </div>

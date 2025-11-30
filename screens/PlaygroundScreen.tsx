@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll } from 'lucide-react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll, Circle, RefreshCw } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
@@ -123,7 +123,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               
               <CategoryCard 
                   title="休閒益智" 
-                  count="3 款遊戲"
+                  count="5 款遊戲"
                   icon={<Puzzle size={24} />} 
                   color="bg-gradient-to-br from-orange-400 to-pink-500"
                   onClick={() => setView('PUZZLE')}
@@ -201,6 +201,22 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       icon={<Scroll size={24} />} 
                       colorClass="bg-amber-600"
                       onClick={() => onNavigate('xiangqi')}
+                      tags={['雙人']}
+                  />
+                  <GameItem 
+                      title="五子棋" 
+                      desc="經典五子連珠，簡單卻深奧。" 
+                      icon={<Circle size={24} />} 
+                      colorClass="bg-stone-500"
+                      onClick={() => onNavigate('gomoku')}
+                      tags={['雙人']}
+                  />
+                  <GameItem 
+                      title="黑白棋 (Othello)" 
+                      desc="翻轉對手棋子，佔領最多棋盤。" 
+                      icon={<RefreshCw size={24} />} 
+                      colorClass="bg-green-600"
+                      onClick={() => onNavigate('othello')}
                       tags={['雙人']}
                   />
               </div>
