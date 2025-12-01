@@ -307,7 +307,7 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
             console.error("Error fetching leaderboard (Legacy):", retry.error);
             return [];
         }
-        data = retry.data;
+        data = retry.data as any;
     }
 
     if (!data) return [];
