@@ -1,0 +1,6 @@
+
+-- Enable Black Market Currency Column
+ALTER TABLE users ADD COLUMN black_market_coins BIGINT DEFAULT 0;
+
+-- Optional: Reset BMC for testing (Execute if needed)
+-- UPDATE users SET black_market_coins = 1000;

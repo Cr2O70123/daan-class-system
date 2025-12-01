@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair } from 'lucide-react';
 import { User, Product, LeaderboardEntry } from '../types';
 import { updateUserInDb } from '../services/authService';
 import { fetchClassLeaderboard, transferBlackCoins } from '../services/dataService';
@@ -214,21 +214,39 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         const target = userList.find(u => u.studentId === targetId);
         if (!target) return;
 
+        const isWanted = wantedList.some(w => w.studentId === targetId);
+
         const toolId = tool === 'basic' ? 'chip_basic' : 'chip_adv';
         const toolIdx = user.inventory.indexOf(toolId);
         if (toolIdx === -1) { alert("你沒有此駭客晶片！請先購買。"); return; }
 
-        if (!confirm(`確定要對 ${target.name} 使用 ${tool === 'basic' ? '基礎' : '高階'} 晶片嗎？\n(消耗 1 個晶片)`)) return;
+        let msg = `確定要對 ${target.name} 使用 ${tool === 'basic' ? '基礎' : '高階'} 晶片嗎？`;
+        if (isWanted) {
+            msg += `\n\n🎯 目標是通緝犯！\n- 攻擊成功率 +20%\n- 50% 機率不消耗晶片\n- 成功額外獲得 500 BMC 賞金`;
+        } else {
+            msg += `\n(消耗 1 個晶片)`;
+        }
+
+        if (!confirm(msg)) return;
 
         setIsHacking(true);
         setHeistLog(prev => [`正在連接 ${target.name} 的防火牆...`, ...prev]);
 
-        // Consume Tool
+        // Consume Logic (50% save chance for wanted)
+        const consumeChance = isWanted ? 0.5 : 1.0;
+        const shouldConsume = Math.random() < consumeChance;
+        
         const newInv = [...user.inventory];
-        newInv.splice(toolIdx, 1);
+        if (shouldConsume) {
+            newInv.splice(toolIdx, 1);
+        } else {
+            setHeistLog(prev => [`[SYSTEM] 政府資助：晶片未消耗！`, ...prev]);
+        }
         
         setTimeout(async () => {
             let successRate = tool === 'basic' ? 0.3 : 0.6;
+            if (isWanted) successRate += 0.2; // Bonus success rate
+
             const stealAmount = Math.floor((target.blackMarketCoins || 0) * (Math.random() * 0.04 + 0.01));
             
             if (stealAmount <= 0) {
@@ -243,8 +261,13 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             if (isSuccess) {
                 try {
                     await transferBlackCoins(targetId, user.studentId, stealAmount); 
-                    setHeistLog(prev => [`[SUCCESS] 駭入成功！竊取了 ${stealAmount} BMC`, ...prev]);
-                    const updatedUser = { ...user, inventory: newInv, blackMarketCoins: (user.blackMarketCoins || 0) + stealAmount };
+                    
+                    const bounty = isWanted ? 500 : 0;
+                    const totalGain = stealAmount + bounty;
+
+                    setHeistLog(prev => [`[SUCCESS] 駭入成功！竊取 ${stealAmount} BMC ${isWanted ? `+ 賞金 ${bounty}` : ''}`, ...prev]);
+                    
+                    const updatedUser = { ...user, inventory: newInv, blackMarketCoins: (user.blackMarketCoins || 0) + totalGain };
                     await updateUserInDb(updatedUser);
                     setUser(updatedUser);
                     createNotification(targetId, 'system', '警報：帳戶入侵', `${user.name} 駭入了你的帳戶並竊取了 ${stealAmount} BMC！`);
@@ -458,11 +481,12 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             </h3>
                             <div className="grid grid-cols-3 gap-2 relative z-10">
                                 {wantedList.map((target, idx) => (
-                                    <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center">
+                                    <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center relative overflow-hidden">
                                         <div className="text-xs text-red-400 font-bold mb-1">NO.{idx+1}</div>
                                         <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatarColor} flex items-center justify-center font-bold`}>{target.name[0]}</div>
                                         <div className="text-xs text-gray-300 truncate">{target.name}</div>
                                         <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.blackMarketCoins}</div>
+                                        <div className="absolute inset-0 border-2 border-red-600/30 animate-pulse pointer-events-none"></div>
                                     </div>
                                 ))}
                             </div>
@@ -482,31 +506,37 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                         )}
 
                         <div className="space-y-2">
-                            {userList.map(u => (
-                                <div key={u.studentId} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center group hover:border-blue-900 transition-colors">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
-                                        <div>
-                                            <div className="text-sm font-bold text-gray-200">{u.isStealth ? 'UNKOWN' : u.name}</div>
-                                            <div className="text-[10px] text-gray-500">Lv.{u.level}</div>
+                            {userList.map(u => {
+                                const isWanted = wantedList.some(w => w.studentId === u.studentId);
+                                return (
+                                    <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
+                                            <div>
+                                                <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                                                    {u.isStealth ? 'UNKOWN' : u.name}
+                                                    {isWanted && <span className="text-[9px] bg-red-600 text-white px-1.5 rounded animate-pulse">WANTED</span>}
+                                                </div>
+                                                <div className="text-[10px] text-gray-500">Lv.{u.level}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => handleP2PTransfer(u.studentId, u.name)}
+                                                className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
+                                            >
+                                                轉帳
+                                            </button>
+                                            <button 
+                                                onClick={() => handleHack(u.studentId, 'basic')}
+                                                className={`px-3 py-1 text-xs rounded border transition-colors flex items-center gap-1 ${isWanted ? 'bg-red-900 hover:bg-red-800 text-white border-red-500 shadow-sm shadow-red-900' : 'bg-gray-800 hover:bg-red-900 text-red-400 border-red-900'}`}
+                                            >
+                                                {isWanted && <Crosshair size={10}/>} 駭入
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => handleP2PTransfer(u.studentId, u.name)}
-                                            className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
-                                        >
-                                            轉帳
-                                        </button>
-                                        <button 
-                                            onClick={() => handleHack(u.studentId, 'basic')}
-                                            className="px-3 py-1 bg-gray-800 hover:bg-red-900 text-red-400 text-xs rounded border border-red-900 transition-colors"
-                                        >
-                                            駭入
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                 )}
