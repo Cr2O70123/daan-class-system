@@ -50,7 +50,7 @@ const RulesModal = ({ onClose }: { onClose: () => void }) => (
 
 export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ user, onBack, onFinish }) => {
     const [gameState, setGameState] = useState<'BETTING' | 'PLAYING' | 'GAMEOVER' | 'CASHED_OUT'>('BETTING');
-    const [bet, setBet] = useState(10);
+    const [betStr, setBetStr] = useState('10');
     const [multiplier, setMultiplier] = useState(1.0);
     const [chambers, setChambers] = useState([0,0,0,0,0,1]); // 1 = Bullet, 0 = Empty
     const [currentRound, setCurrentRound] = useState(0); // 0 to 5
@@ -58,11 +58,15 @@ export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ us
     const [showRules, setShowRules] = useState(false);
 
     const handleStart = () => {
+        const bet = parseInt(betStr);
+        if (isNaN(bet) || bet <= 0) {
+            alert("請輸入有效賭注");
+            return;
+        }
         if ((user.blackMarketCoins || 0) < bet) {
             alert("黑幣不足，請前往交易所兌換");
             return;
         }
-        if (bet <= 0) return;
 
         // Shuffle chambers
         const newChambers = [0,0,0,0,0,0];
@@ -77,6 +81,7 @@ export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ us
     };
 
     const pullTrigger = () => {
+        const bet = parseInt(betStr);
         // Check current chamber
         const isBullet = chambers[currentRound] === 1;
         
@@ -103,6 +108,7 @@ export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ us
     };
 
     const cashOut = () => {
+        const bet = parseInt(betStr);
         const winnings = Math.floor(bet * multiplier);
         const netWin = winnings - bet;
         setGameState('CASHED_OUT');
@@ -152,10 +158,19 @@ export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ us
 
                             <label className="text-xs text-red-600 font-bold uppercase tracking-widest mb-4 block text-center">Bet Amount (BMC)</label>
                             
-                            <div className="flex items-center justify-between bg-black p-3 rounded-xl mb-6 border border-gray-800 shadow-inner">
-                                <button onClick={() => setBet(Math.max(10, bet - 10))} className="w-10 h-10 bg-gray-900 rounded-lg font-bold text-xl hover:bg-gray-800 text-gray-400 transition-colors border border-gray-700">-</button>
-                                <span className="text-3xl font-black text-white">{bet}</span>
-                                <button onClick={() => setBet(Math.min((user.blackMarketCoins || 0), bet + 10))} className="w-10 h-10 bg-gray-900 rounded-lg font-bold text-xl hover:bg-gray-800 text-gray-400 transition-colors border border-gray-700">+</button>
+                            <div className="flex gap-2 mb-6">
+                                <input 
+                                    type="number" 
+                                    value={betStr}
+                                    onChange={(e) => setBetStr(e.target.value)}
+                                    className="w-full bg-black text-white text-center font-black text-2xl py-3 rounded-xl border border-gray-800 focus:border-red-600 outline-none"
+                                />
+                                <button 
+                                    onClick={() => setBetStr((user.blackMarketCoins || 0).toString())}
+                                    className="bg-gray-800 hover:bg-gray-700 text-xs font-bold px-3 rounded-lg text-red-400"
+                                >
+                                    MAX
+                                </button>
                             </div>
                             
                             <button 
@@ -197,7 +212,7 @@ export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ us
                         <div className="space-y-1">
                             <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">Potential Payout</div>
                             <div className="text-6xl font-black text-green-500 drop-shadow-lg tracking-tighter">
-                                {Math.floor(bet * multiplier)}
+                                {Math.floor(parseInt(betStr) * multiplier)}
                             </div>
                             <div className="text-sm text-purple-400 font-bold bg-purple-900/30 px-3 py-1 rounded-full inline-block border border-purple-500/30">
                                 Current Multiplier: x{multiplier.toFixed(1)}
@@ -230,7 +245,7 @@ export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ us
                         <h2 className="text-5xl font-black text-red-600 mb-2 tracking-tighter">WASTED</h2>
                         <div className="bg-red-900/20 border border-red-900/50 p-4 rounded-xl mb-8">
                             <p className="text-gray-300 font-bold uppercase tracking-wider text-sm">Lost Bet</p>
-                            <p className="text-2xl font-black text-white">{bet} BMC</p>
+                            <p className="text-2xl font-black text-white">{betStr} BMC</p>
                         </div>
                         <button onClick={() => setGameState('BETTING')} className="w-full bg-white text-black px-8 py-4 rounded-xl font-black text-lg hover:bg-gray-200 flex items-center justify-center gap-2 mx-auto shadow-xl transition-colors">
                             <RotateCcw size={20}/> TRY AGAIN
@@ -247,7 +262,7 @@ export const RussianRouletteScreen: React.FC<RussianRouletteScreenProps> = ({ us
                         <h2 className="text-4xl font-black text-white mb-2 tracking-tight">SURVIVED</h2>
                         <div className="bg-green-900/20 border border-green-900/50 p-6 rounded-xl mb-8">
                             <p className="text-gray-400 font-bold uppercase tracking-wider text-xs mb-1">Total Winnings</p>
-                            <p className="text-4xl font-black text-green-400">+{Math.floor(bet * multiplier) - bet} BMC</p>
+                            <p className="text-4xl font-black text-green-400">+{Math.floor(parseInt(betStr) * multiplier) - parseInt(betStr)} BMC</p>
                         </div>
                         <button onClick={() => setGameState('BETTING')} className="w-full bg-white text-black px-8 py-4 rounded-xl font-black text-lg hover:bg-gray-200 flex items-center justify-center gap-2 mx-auto shadow-xl transition-colors">
                             <RotateCcw size={20}/> PLAY AGAIN

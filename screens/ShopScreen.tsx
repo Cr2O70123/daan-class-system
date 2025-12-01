@@ -8,13 +8,13 @@ interface ShopScreenProps {
   onBuy: (product: Product) => void;
 }
 
-// Extended Product List - App Internal Items Only
+// Extended Product List - Rebalanced Prices
 const PRODUCTS: Product[] = [
   // --- Rare / Special Items ---
   { 
       id: 'frame_beta', 
       name: '內測紀念框', 
-      price: 99999, // Unattainable price just in case
+      price: 99999, 
       color: 'bg-amber-100 text-amber-600', 
       icon: <Crown size={20} />, 
       description: '內測專屬紀念，榮耀象徵', 
@@ -23,11 +23,11 @@ const PRODUCTS: Product[] = [
       tag: '限定' 
   },
 
-  // --- Consumables (Updated) ---
+  // --- Consumables ---
   { 
       id: 'item_heart_refill', 
       name: '能量飲料', 
-      price: 20, // Updated Price
+      price: 50, // Price Increased
       color: 'bg-red-100 text-red-600', 
       icon: <Zap size={20} className="fill-red-600" />, 
       description: '恢復 5 次遊玩次數', 
@@ -35,36 +35,35 @@ const PRODUCTS: Product[] = [
       tag: '補給'
   },
 
-  // --- Avatar Frames (New) ---
-  { id: 'frame_gold', name: '黃金光環', price: 2000, color: 'bg-yellow-100 text-yellow-600', icon: <Crown size={20} />, description: '尊爵不凡的金色光環 (頭像框)', category: 'frame' },
-  { id: 'frame_neon', name: '霓虹科技', price: 1500, color: 'bg-cyan-100 text-cyan-600', icon: <Zap size={20} />, description: '充滿未來感的藍色霓虹 (頭像框)', category: 'frame' },
-  { id: 'frame_fire', name: '烈焰燃燒', price: 1200, color: 'bg-orange-100 text-orange-600', icon: <Zap size={20} />, description: '像火焰一樣的熱情 (頭像框)', category: 'frame' },
-  { id: 'frame_pixel', name: '復古像素', price: 1000, color: 'bg-purple-100 text-purple-600', icon: <LayoutGrid size={20} />, description: '8-bit 風格像素邊框 (頭像框)', category: 'frame' },
-  { id: 'frame_cyber', name: 'Cyber Punk', price: 1800, color: 'bg-blue-900 text-cyan-400', icon: <Zap size={20} />, description: '賽博龐克風格，故障藝術', category: 'frame', isRare: true },
-  { id: 'frame_angel', name: '天使之翼', price: 2500, color: 'bg-white text-yellow-500 border border-yellow-200', icon: <Feather size={20} />, description: '純潔與神聖的象徵', category: 'frame', isRare: true },
+  // --- Avatar Frames ---
+  { id: 'frame_pixel', name: '復古像素', price: 1500, color: 'bg-purple-100 text-purple-600', icon: <LayoutGrid size={20} />, description: '8-bit 風格像素邊框 (頭像框)', category: 'frame' },
+  { id: 'frame_fire', name: '烈焰燃燒', price: 2500, color: 'bg-orange-100 text-orange-600', icon: <Zap size={20} />, description: '像火焰一樣的熱情 (頭像框)', category: 'frame' },
+  { id: 'frame_neon', name: '霓虹科技', price: 3000, color: 'bg-cyan-100 text-cyan-600', icon: <Zap size={20} />, description: '充滿未來感的藍色霓虹 (頭像框)', category: 'frame' },
+  { id: 'frame_gold', name: '黃金光環', price: 5000, color: 'bg-yellow-100 text-yellow-600', icon: <Crown size={20} />, description: '尊爵不凡的金色光環 (頭像框)', category: 'frame', isRare: true },
+  { id: 'frame_cyber', name: 'Cyber Punk', price: 4500, color: 'bg-blue-900 text-cyan-400', icon: <Zap size={20} />, description: '賽博龐克風格，故障藝術', category: 'frame', isRare: true },
+  { id: 'frame_angel', name: '天使之翼', price: 8000, color: 'bg-white text-yellow-500 border border-yellow-200', icon: <Feather size={20} />, description: '純潔與神聖的象徵', category: 'frame', isRare: true },
 
-  // --- Cosmetics (外觀) ---
-  { id: 'name_rainbow', name: '彩虹暱稱', price: 800, color: 'bg-pink-100 text-pink-600', icon: <Palette size={20} />, description: '七彩霓虹燈，全場焦點', category: 'cosmetic' },
-  { id: 'bubble_matrix', name: '駭客氣泡', price: 600, color: 'bg-green-100 text-green-600', icon: <MessageCircle size={20} />, description: '留言背景變成黑客任務風格', category: 'cosmetic' },
-  { id: 'name_blue', name: '海洋藍暱稱', price: 300, color: 'bg-blue-100 text-blue-600', icon: <Palette size={20} />, description: '將你的名字變成清爽的藍色', category: 'cosmetic' },
-  { id: 'name_red', name: '熱血紅暱稱', price: 300, color: 'bg-red-100 text-red-600', icon: <Palette size={20} />, description: '將你的名字變成熱血的紅色', category: 'cosmetic' },
-  { id: 'title_master', name: '稱號：卷王', price: 1000, color: 'bg-yellow-100 text-yellow-700', icon: <Crown size={20} />, description: '個人頁面顯示「卷王」稱號', category: 'cosmetic' },
-  { id: 'title_newbie', name: '稱號：萌新', price: 100, color: 'bg-green-100 text-green-700', icon: <Smile size={20} />, description: '個人頁面顯示「萌新」稱號', category: 'cosmetic' },
+  // --- Cosmetics ---
+  { id: 'title_newbie', name: '稱號：萌新', price: 200, color: 'bg-green-100 text-green-700', icon: <Smile size={20} />, description: '個人頁面顯示「萌新」稱號', category: 'cosmetic' },
+  { id: 'name_blue', name: '海洋藍暱稱', price: 1000, color: 'bg-blue-100 text-blue-600', icon: <Palette size={20} />, description: '將你的名字變成清爽的藍色', category: 'cosmetic' },
+  { id: 'name_red', name: '熱血紅暱稱', price: 1000, color: 'bg-red-100 text-red-600', icon: <Palette size={20} />, description: '將你的名字變成熱血的紅色', category: 'cosmetic' },
+  { id: 'bubble_matrix', name: '駭客氣泡', price: 1500, color: 'bg-green-100 text-green-600', icon: <MessageCircle size={20} />, description: '留言背景變成黑客任務風格', category: 'cosmetic' },
+  { id: 'name_rainbow', name: '彩虹暱稱', price: 3000, color: 'bg-pink-100 text-pink-600', icon: <Palette size={20} />, description: '七彩霓虹燈，全場焦點', category: 'cosmetic' },
+  { id: 'title_master', name: '稱號：卷王', price: 5000, color: 'bg-yellow-100 text-yellow-700', icon: <Crown size={20} />, description: '個人頁面顯示「卷王」稱號', category: 'cosmetic' },
 
-  // --- Tools (功能) ---
-  { id: 'card_pin', name: '問題置頂卡', price: 250, color: 'bg-orange-100 text-orange-600', icon: <Pin size={20} />, description: '讓你的問題在首頁置頂 24 小時', category: 'tool' },
+  // --- Tools (Rename Card Removed) ---
   { 
       id: 'card_anon', 
       name: '匿名發問卡', 
-      price: 50, 
+      price: 100, // Price adjusted
       color: 'bg-gray-100 text-gray-600', 
       icon: <Ghost size={20} />, 
       description: '這一次發問不會顯示你的名字', 
       category: 'tool',
-      tag: '特價'
+      tag: '實用'
   },
-  { id: 'badge_star', name: '學霸徽章', price: 500, color: 'bg-amber-100 text-amber-600', icon: <Star size={20} />, description: '個人頁面顯示榮譽徽章', category: 'tool' },
-  { id: 'item_rename', name: '改名卡 (優惠)', price: 40, color: 'bg-purple-100 text-purple-600', icon: <RefreshCw size={20} />, description: '修改暱稱 (原價50PT)', category: 'tool', tag: '限時' },
+  { id: 'card_pin', name: '問題置頂卡', price: 500, color: 'bg-orange-100 text-orange-600', icon: <Pin size={20} />, description: '讓你的問題在首頁置頂 24 小時', category: 'tool' },
+  { id: 'badge_star', name: '學霸徽章', price: 2000, color: 'bg-amber-100 text-amber-600', icon: <Star size={20} />, description: '個人頁面顯示榮譽徽章', category: 'tool' },
 ];
 
 export const ShopScreen: React.FC<ShopScreenProps> = ({ user, onBuy }) => {

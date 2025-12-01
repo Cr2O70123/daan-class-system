@@ -68,6 +68,9 @@ export interface User {
 
   // Notifications (HBuilderX)
   pushClientId?: string;
+
+  // Black Market Status
+  isStealth?: boolean; // New: Hide from leaderboards/heists
 }
 
 export interface Notification {
@@ -151,6 +154,7 @@ export interface LeaderboardEntry {
   avatarFrame?: string;
   checkInStreak?: number; // New
   lastCheckInDate?: string; // New
+  blackMarketCoins?: number; // New
 }
 
 export interface Product {

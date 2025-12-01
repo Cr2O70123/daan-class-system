@@ -285,7 +285,7 @@ export const unbanUser = async (studentId: string) => {
 
 // --- Class Leaderboard ---
 
-export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[] & { blackMarketCoins?: number }> => {
+export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
     // Removed lifetime_points from select to avoid error if column was dropped from DB
     const { data, error } = await supabase
         .from('users')

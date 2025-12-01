@@ -62,59 +62,37 @@ const RulesModal = ({ onClose }: { onClose: () => void }) => (
     </div>
 );
 
-// --- Chip Component ---
-const Chip = ({ value, onClick, selected, disabled }: { value: number | 'ALL', onClick: () => void, selected: boolean, disabled?: boolean }) => (
-    <button 
-        onClick={onClick}
-        disabled={disabled}
-        className={`
-            relative w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center border-4 shadow-xl transition-all active:scale-95 flex-shrink-0
-            ${selected ? 'scale-110 ring-4 ring-yellow-400 z-10' : 'hover:scale-105 opacity-90'}
-            ${value === 10 ? 'bg-blue-600 border-blue-400 border-dashed' : 
-              value === 50 ? 'bg-red-600 border-red-400 border-dashed' : 
-              value === 100 ? 'bg-green-600 border-green-400 border-dashed' :
-              'bg-black border-yellow-500 border-dashed'}
-            ${disabled ? 'opacity-50 cursor-not-allowed grayscale' : ''}
-        `}
-    >
-        <div className="absolute inset-2 rounded-full border-2 border-white/20"></div>
-        <span className="font-black text-white text-xs drop-shadow-md">
-            {value === 'ALL' ? 'ALL' : value}
-        </span>
-    </button>
-);
-
 export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBack, onFinish }) => {
   const [showRules, setShowRules] = useState(true);
   
   const [currentCard, setCurrentCard] = useState(getRandomCard());
   const [nextCard, setNextCard] = useState<ReturnType<typeof getRandomCard> | null>(null);
-  const [betAmount, setBetAmount] = useState<number>(10);
+  const [betAmountStr, setBetAmountStr] = useState<string>('10');
   const [gameState, setGameState] = useState<'IDLE' | 'PLAYING' | 'RESULT'>('IDLE');
   const [result, setResult] = useState<'WIN' | 'LOSE' | 'PUSH' | null>(null);
   const [history, setHistory] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false); // New lock state
+  const [isProcessing, setIsProcessing] = useState(false); 
 
   const handleBet = (guess: 'HIGH' | 'LOW') => {
-      // SECURITY FIX: Prevent spam clicking
       if (isProcessing) return;
+      const amount = parseInt(betAmountStr);
       
-      if (betAmount <= 0) {
-          alert("請選擇下注金額");
+      if (isNaN(amount) || amount <= 0) {
+          alert("請輸入有效下注金額");
           return;
       }
-      if (betAmount > (user.blackMarketCoins || 0)) {
+      if (amount > (user.blackMarketCoins || 0)) {
           alert("黑幣不足！請前往交易所兌換。");
           return;
       }
 
-      setIsProcessing(true); // Lock
+      setIsProcessing(true); 
       setGameState('PLAYING');
       
       // Draw next card
       let draw = getRandomCard();
       while (draw.rank === currentCard.rank && draw.suit === currentCard.suit) {
-          draw = getRandomCard(); // Avoid exact duplicate card for realism
+          draw = getRandomCard(); 
       }
       
       setNextCard(draw);
@@ -123,7 +101,7 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
       let outcome: 'WIN' | 'LOSE' | 'PUSH' = 'LOSE';
       
       if (draw.value === currentCard.value) {
-          outcome = 'LOSE'; // House wins on tie
+          outcome = 'LOSE'; 
       } else if (guess === 'HIGH' && draw.value > currentCard.value) {
           outcome = 'WIN';
       } else if (guess === 'LOW' && draw.value < currentCard.value) {
@@ -137,15 +115,15 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
           
           let netChange = 0;
           if (outcome === 'WIN') {
-              netChange = betAmount; 
-              setHistory(prev => [`WIN +${betAmount}`, ...prev.slice(0, 4)]);
+              netChange = amount; 
+              setHistory(prev => [`WIN +${amount}`, ...prev.slice(0, 4)]);
           } else {
-              netChange = -betAmount; 
-              setHistory(prev => [`LOST -${betAmount}`, ...prev.slice(0, 4)]);
+              netChange = -amount; 
+              setHistory(prev => [`LOST -${amount}`, ...prev.slice(0, 4)]);
           }
           
           onFinish(netChange);
-          setIsProcessing(false); // Unlock only after finish
+          setIsProcessing(false); 
       }, 1000); 
   };
 
@@ -154,12 +132,6 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
       setNextCard(null);
       setGameState('IDLE');
       setResult(null);
-  };
-
-  const setBet = (val: number | 'ALL') => {
-      if (gameState !== 'IDLE') return;
-      if (val === 'ALL') setBetAmount(user.blackMarketCoins || 0);
-      else setBetAmount(val);
   };
 
   return (
@@ -250,7 +222,7 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
                             {result === 'WIN' ? 'WIN' : 'LOSE'}
                         </div>
                         <div className={`text-xl md:text-2xl font-bold mb-8 px-6 py-2 rounded-full border-2 ${result === 'WIN' ? 'bg-yellow-500/20 border-yellow-500 text-yellow-100' : 'bg-red-500/20 border-red-500 text-red-100'}`}>
-                            {result === 'WIN' ? `+${betAmount} BMC` : `-${betAmount} BMC`}
+                            {result === 'WIN' ? `+${betAmountStr} BMC` : `-${betAmountStr} BMC`}
                         </div>
                         <button 
                             onClick={resetGame}
@@ -261,18 +233,26 @@ export const HighLowGameScreen: React.FC<HighLowGameScreenProps> = ({ user, onBa
                     </div>
                 )}
 
-                {/* Chips Area */}
+                {/* Betting Control Area */}
                 <div className={`w-full mt-auto mb-2 transition-opacity duration-300 ${gameState !== 'IDLE' ? 'opacity-30 pointer-events-none' : 'opacity-100'}`}>
-                    <div className="flex justify-center gap-2 mb-6 overflow-x-auto py-2 no-scrollbar">
-                        <Chip value={10} onClick={() => setBet(10)} selected={betAmount === 10} />
-                        <Chip value={50} onClick={() => setBet(50)} selected={betAmount === 50} />
-                        <Chip value={100} onClick={() => setBet(100)} selected={betAmount === 100} />
-                        <Chip value="ALL" onClick={() => setBet('ALL')} selected={betAmount === (user.blackMarketCoins || 0)} />
-                    </div>
-
-                    <div className="bg-black/40 rounded-xl p-2 flex items-center justify-center border border-yellow-600/30 mb-6">
-                        <span className="text-yellow-500 text-xs font-bold mr-2 uppercase tracking-wider">Bet Amount</span>
-                        <span className="text-2xl font-mono font-black text-white">{betAmount}</span>
+                    
+                    {/* Custom Bet Input */}
+                    <div className="bg-black/40 rounded-xl p-3 flex flex-col items-center justify-center border border-yellow-600/30 mb-4">
+                        <label className="text-yellow-500 text-xs font-bold mb-1 uppercase tracking-wider">Bet Amount</label>
+                        <div className="flex w-full gap-2 items-center">
+                            <input 
+                                type="number"
+                                value={betAmountStr}
+                                onChange={(e) => setBetAmountStr(e.target.value)}
+                                className="w-full bg-transparent text-2xl font-mono font-black text-white text-center outline-none border-b-2 border-yellow-500/50 focus:border-yellow-400"
+                            />
+                            <button 
+                                onClick={() => setBetAmountStr((user.blackMarketCoins || 0).toString())}
+                                className="text-xs bg-yellow-600/30 text-yellow-400 px-2 py-1 rounded font-bold hover:bg-yellow-600/50"
+                            >
+                                MAX
+                            </button>
+                        </div>
                     </div>
 
                     {/* Action Buttons */}

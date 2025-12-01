@@ -49,6 +49,7 @@ const RussianRouletteScreen = React.lazy(() => import('./screens/RussianRoulette
 const XiangqiScreen = React.lazy(() => import('./screens/XiangqiScreen').then(module => ({ default: module.XiangqiScreen })));
 const GomokuScreen = React.lazy(() => import('./screens/GomokuScreen').then(module => ({ default: module.GomokuScreen })));
 const OthelloScreen = React.lazy(() => import('./screens/OthelloScreen').then(module => ({ default: module.OthelloScreen })));
+const CrashGameScreen = React.lazy(() => import('./screens/CrashGameScreen').then(module => ({ default: module.CrashGameScreen })));
 
 // Helper to get frame styles
 const getFrameStyle = (frameId?: string) => {
@@ -498,9 +499,12 @@ const App = () => {
   const handleBmcGameFinish = async (netBmc: number) => {
       if (isMaintenanceMode) return;
       if (!user) return;
-      const updatedUser = { ...user, blackMarketCoins: (user.blackMarketCoins || 0) + netBmc };
-      try { await updateUserInDb(updatedUser); setUser(updatedUser); } catch(e) {}
-      setActiveFeature(null);
+      const updatedUser = { ...user, blackMarketCoins: Math.max(0, (user.blackMarketCoins || 0) + netBmc) };
+      try { 
+          await updateUserInDb(updatedUser); 
+          setUser(updatedUser); 
+          // Do NOT close active feature, allow replay in same screen
+      } catch(e) {}
   };
 
   const handleAddResource = async (t: string, d: string, tags: string[], i: string[]) => { 
@@ -536,6 +540,7 @@ const App = () => {
               {id === 'xiangqi' && <XiangqiScreen onBack={handleCloseFeature} />}
               {id === 'gomoku' && <GomokuScreen onBack={handleCloseFeature} />}
               {id === 'othello' && <OthelloScreen onBack={handleCloseFeature} />}
+              {id === 'crash_game' && <CrashGameScreen user={user} onBack={handleCloseFeature} onFinish={handleBmcGameFinish} />}
           </Suspense>
       );
   };

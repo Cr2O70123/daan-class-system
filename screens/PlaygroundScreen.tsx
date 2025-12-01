@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll, Circle, RefreshCw } from 'lucide-react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll, Circle, RefreshCw, Rocket } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
@@ -56,6 +56,7 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: an
                         tags[0] === 'Coming Soon' ? 'bg-gray-200 text-gray-500' : 
                         tags[0] === '維護中' ? 'bg-red-500 text-white animate-pulse shadow-red-500/50 shadow-sm' :
                         tags[0] === '黑市限定' ? 'bg-purple-900 text-purple-200 border border-purple-700' :
+                        tags[0] === 'NEW' ? 'bg-green-600 text-white' :
                         'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                     }`}>
                         {tags[0]}
@@ -131,7 +132,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
 
               <CategoryCard 
                   title="博弈娛樂" 
-                  count="4 款遊戲"
+                  count="5 款遊戲"
                   icon={<Dices size={24} />} 
                   color="bg-gradient-to-br from-purple-600 to-indigo-600"
                   onClick={() => setView('GAMBLE')}
@@ -241,12 +242,21 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                           </div>
                           <div>
                               <h4 className="font-black text-white text-lg flex items-center gap-2">
-                                  暗巷交易所 <span className="text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded">HOT</span>
+                                  暗巷交易所 <span className="text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded">PvP</span>
                               </h4>
-                              <p className="text-xs text-gray-400">黑幣兌換與非法道具</p>
+                              <p className="text-xs text-gray-400">駭客行動與非法道具</p>
                           </div>
                       </div>
                   </div>
+
+                  <GameItem 
+                      title="Cyber Crash" 
+                      desc="火箭升空倍率飆升，爆炸前快跳車！" 
+                      icon={<Rocket size={24} />} 
+                      colorClass="bg-rose-600"
+                      onClick={() => onNavigate('crash_game')}
+                      tags={['NEW', '黑市限定']}
+                  />
 
                   <GameItem 
                       title="幸運轉盤" 

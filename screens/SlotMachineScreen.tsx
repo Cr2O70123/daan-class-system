@@ -81,7 +81,7 @@ const RulesModal = ({ onClose }: { onClose: () => void }) => (
 export const SlotMachineScreen: React.FC<SlotMachineScreenProps> = ({ user, onBack, onFinish }) => {
     const [reels, setReels] = useState(['7️⃣', '7️⃣', '7️⃣']);
     const [isSpinning, setIsSpinning] = useState(false);
-    const [bet, setBet] = useState(10); // BMC
+    const [betStr, setBetStr] = useState('10');
     const [winAmount, setWinAmount] = useState(0);
     const [message, setMessage] = useState("READY TO SPIN");
     const [showRules, setShowRules] = useState(false);
@@ -99,6 +99,11 @@ export const SlotMachineScreen: React.FC<SlotMachineScreenProps> = ({ user, onBa
 
     const spin = () => {
         if (isSpinning) return;
+        const bet = parseInt(betStr);
+        if (isNaN(bet) || bet <= 0) {
+            alert("請輸入有效金額");
+            return;
+        }
         if ((user.blackMarketCoins || 0) < bet) {
             alert("黑幣不足！請前往交易所");
             return;
@@ -116,12 +121,12 @@ export const SlotMachineScreen: React.FC<SlotMachineScreenProps> = ({ user, onBa
             spins++;
             if (spins > 20) {
                 clearInterval(interval);
-                finalizeSpin();
+                finalizeSpin(bet);
             }
         }, 100);
     };
 
-    const finalizeSpin = () => {
+    const finalizeSpin = (bet: number) => {
         // Determine final result
         const finalReels = [getRandomSymbol(), getRandomSymbol(), getRandomSymbol()];
         setReels(finalReels);
@@ -224,13 +229,25 @@ export const SlotMachineScreen: React.FC<SlotMachineScreenProps> = ({ user, onBa
 
                     {/* Controls */}
                     <div className="space-y-4">
-                        <div className="flex items-center justify-between bg-[#0f0f1a] p-2 rounded-xl border border-purple-800/30">
-                            <button onClick={() => setBet(Math.max(1, bet - 1))} disabled={isSpinning} className="w-10 h-10 rounded-lg bg-purple-900/50 hover:bg-purple-800 flex items-center justify-center font-bold text-xl disabled:opacity-50 transition-colors text-purple-200">-</button>
-                            <div className="flex flex-col items-center">
-                                <span className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">Bet (BMC)</span>
-                                <span className="font-black text-xl text-white">{bet}</span>
+                        {/* Bet Input */}
+                        <div className="bg-[#0f0f1a] p-3 rounded-xl border border-purple-800/30 flex flex-col items-center">
+                            <label className="text-[9px] text-gray-500 uppercase tracking-wider font-bold mb-1">Bet Amount (BMC)</label>
+                            <div className="flex w-full gap-2">
+                                <input 
+                                    type="number"
+                                    value={betStr}
+                                    onChange={(e) => setBetStr(e.target.value)}
+                                    disabled={isSpinning}
+                                    className="flex-1 bg-transparent text-center text-xl font-black text-white outline-none border-b-2 border-purple-500 focus:border-pink-500 transition-colors"
+                                />
+                                <button 
+                                    onClick={() => setBetStr((user.blackMarketCoins || 0).toString())}
+                                    disabled={isSpinning}
+                                    className="text-xs bg-purple-900/50 text-purple-300 px-2 rounded font-bold hover:bg-purple-800"
+                                >
+                                    MAX
+                                </button>
                             </div>
-                            <button onClick={() => setBet(Math.min((user.blackMarketCoins||0), bet + 1))} disabled={isSpinning} className="w-10 h-10 rounded-lg bg-purple-900/50 hover:bg-purple-800 flex items-center justify-center font-bold text-xl disabled:opacity-50 transition-colors text-purple-200">+</button>
                         </div>
 
                         <button 

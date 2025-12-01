@@ -158,10 +158,10 @@ export const OthelloScreen: React.FC<OthelloScreenProps> = ({ onBack }) => {
           </div>
       </div>
 
-      {/* Board */}
-      <div className="bg-[#27ae60] p-3 rounded-xl shadow-2xl border-8 border-[#219150] relative">
+      {/* Board - Fixed Layout using Borders */}
+      <div className="bg-[#219150] p-1 rounded-xl shadow-2xl border-4 border-[#145a32] relative select-none">
           <div 
-              className="grid gap-1 bg-[#219150]"
+              className="grid"
               style={{ 
                   gridTemplateColumns: `repeat(${BOARD_SIZE}, 1fr)`,
                   width: 'min(90vw, 360px)',
@@ -175,18 +175,16 @@ export const OthelloScreen: React.FC<OthelloScreenProps> = ({ onBack }) => {
                           <div 
                               key={`${r}-${c}`}
                               onClick={() => handleMove(r, c)}
-                              className="bg-[#27ae60] relative flex items-center justify-center cursor-pointer"
+                              className="relative flex items-center justify-center cursor-pointer border border-[#145a32]/20"
                           >
-                              {/* Grid lines implicitly handled by gap and background color */}
-                              
                               {/* Valid Move Indicator */}
                               {isValid && !gameOver && (
-                                  <div className="w-3 h-3 rounded-full bg-black/20"></div>
+                                  <div className="w-3 h-3 rounded-full bg-black/20 ring-4 ring-black/5"></div>
                               )}
 
-                              {/* Pieces */}
+                              {/* Pieces - Absolute Positioning for stability */}
                               {cell && (
-                                  <div className={`w-[85%] h-[85%] rounded-full shadow-md z-10 transition-all duration-300 transform ${cell === 'black' ? 'bg-black' : 'bg-white'} animate-in zoom-in`}>
+                                  <div className={`absolute inset-1 rounded-full shadow-md z-10 transition-all duration-300 transform ${cell === 'black' ? 'bg-black' : 'bg-white'} animate-in zoom-in`}>
                                       <div className="w-full h-full rounded-full bg-gradient-to-br from-transparent to-black/20"></div>
                                   </div>
                               )}
@@ -198,8 +196,8 @@ export const OthelloScreen: React.FC<OthelloScreenProps> = ({ onBack }) => {
           
           {/* No Move Alert */}
           {noMoveAlert && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg animate-in fade-in">
-                  <div className="bg-white px-6 py-3 rounded-xl shadow-xl font-bold text-gray-800">
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg animate-in fade-in z-20">
+                  <div className="bg-white px-6 py-3 rounded-xl shadow-xl font-bold text-gray-800 border-2 border-red-500">
                       Pass! (No moves)
                   </div>
               </div>

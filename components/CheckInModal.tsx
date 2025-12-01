@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { X, Calendar, Check, Gift, Flame, Star } from 'lucide-react';
+import { X, Calendar, Check, Gift, Flame, Star, Loader2 } from 'lucide-react';
 
 interface CheckInModalProps {
   isOpen: boolean;
@@ -12,14 +12,25 @@ interface CheckInModalProps {
 
 export const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onCheckIn, streak, isCheckedInToday }) => {
   const [animate, setAnimate] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
       if (isOpen) {
           setAnimate(true);
       } else {
           setAnimate(false);
+          setIsLoading(false); // Reset loading when closed
       }
   }, [isOpen]);
+
+  const handleCheckInClick = () => {
+      if (isLoading || isCheckedInToday) return;
+      setIsLoading(true);
+      // Small delay to show animation before calling parent logic
+      setTimeout(() => {
+          onCheckIn();
+      }, 500);
+  };
 
   if (!isOpen) return null;
 
@@ -129,15 +140,20 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onC
             </div>
 
             <button 
-                onClick={onCheckIn}
-                disabled={isCheckedInToday}
+                onClick={handleCheckInClick}
+                disabled={isCheckedInToday || isLoading}
                 className={`w-full py-4 rounded-2xl font-black text-lg shadow-lg transition-all flex items-center justify-center gap-2 transform active:scale-95 ${
                     isCheckedInToday 
                         ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-default shadow-none'
                         : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-blue-500/30'
                 }`}
             >
-                {isCheckedInToday ? (
+                {isLoading ? (
+                    <>
+                        <Loader2 className="animate-spin" size={22} />
+                        <span>簽到中...</span>
+                    </>
+                ) : isCheckedInToday ? (
                     <>
                         <Check size={22} strokeWidth={3} />
                         <span>今日已領取</span>
@@ -147,7 +163,7 @@ export const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onC
                 )}
             </button>
             
-            {!isCheckedInToday && (
+            {!isCheckedInToday && !isLoading && (
                 <p className="text-center text-[10px] text-gray-400 mt-4 flex items-center justify-center gap-1">
                     <Gift size={12} /> 連續簽到 7 天可獲得 <span className="text-yellow-500 font-bold">100 PT</span> 大獎！
                 </p>
