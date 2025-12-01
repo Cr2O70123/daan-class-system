@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, RefreshCw, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, Send, Search, Loader2, X, ArrowRightLeft, DollarSign, Database, Eye, Lock, Terminal, Radio } from 'lucide-react';
+import { ArrowLeft, RefreshCw, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, Send, Search, Loader2, X, ArrowRightLeft, DollarSign, Database, Eye, Lock, Terminal, Radio, Activity } from 'lucide-react';
 import { User, Product, LeaderboardEntry } from '../types';
 import { updateUserInDb } from '../services/authService';
 import { fetchClassLeaderboard, transferBlackCoins } from '../services/dataService';
@@ -13,7 +13,7 @@ interface BlackMarketScreenProps {
   setUser: (user: User) => void;
 }
 
-// Updated Item List - Removed Rename Card, Added functional items
+// Updated Item List
 const BLACK_MARKET_ITEMS: Product[] = [
     { id: 'chip_basic', name: '基礎破解晶片', price: 200, currency: 'BMC', color: 'bg-blue-900 text-blue-300', icon: <Terminal size={20}/>, description: '嘗試駭入他人帳戶 (30% 成功率)', category: 'black_market', tag: '消耗品' },
     { id: 'chip_adv', name: '高階滲透軟體', price: 800, currency: 'BMC', color: 'bg-red-900 text-red-300', icon: <Skull size={20}/>, description: '高機率駭入他人帳戶 (60% 成功率)', category: 'black_market', tag: '消耗品' },
@@ -25,18 +25,8 @@ const BLACK_MARKET_ITEMS: Product[] = [
     { id: 'title_dark_lord', name: '稱號：暗夜領主', price: 15000, currency: 'BMC', color: 'bg-black text-red-600', icon: <Crown size={20}/>, description: '個人頁面專屬黑色稱號', category: 'cosmetic', isRare: true },
 ];
 
-const getFrameStyle = (frameId?: string) => {
-    switch(frameId) {
-      case 'frame_gold': return 'ring-2 ring-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.6)]';
-      case 'frame_neon': return 'ring-2 ring-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)]';
-      case 'frame_fire': return 'ring-2 ring-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.6)]';
-      case 'frame_pixel': return 'ring-2 ring-purple-500 border-2 border-dashed border-white';
-      default: return 'ring-2 ring-white/20';
-    }
-};
-
 export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBack, onBuy, setUser }) => {
-    const [tab, setTab] = useState<'EXCHANGE' | 'HEIST' | 'SHOP' | 'INVENTORY'>('EXCHANGE');
+    const [tab, setTab] = useState<'EXCHANGE' | 'INTERACT' | 'SHOP' | 'INVENTORY'>('EXCHANGE');
     
     // Exchange Logic
     const [exchangeAmount, setExchangeAmount] = useState<string>(''); 
@@ -45,11 +35,10 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     const [rateTrend, setRateTrend] = useState<'UP' | 'DOWN' | 'STABLE'>('STABLE');
     const [priceHistory, setPriceHistory] = useState<number[]>([100, 102, 98, 95, 105, 110, 100, 92, 95, 100]);
     const [totalSupply, setTotalSupply] = useState(0);
+    const [marketSentiment, setMarketSentiment] = useState(1.0); // 0.8 (Bear) to 1.2 (Bull)
 
-    // Heist / P2P Data
+    // Interaction Data
     const [userList, setUserList] = useState<(LeaderboardEntry & { isStealth?: boolean })[]>([]);
-    const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
     const [heistLog, setHeistLog] = useState<string[]>([]);
     const [isHacking, setIsHacking] = useState(false);
 
@@ -67,15 +56,20 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             const total = users.reduce((sum, u) => sum + (u.blackMarketCoins || 0), 0);
             setTotalSupply(total);
             
-            // Base Rate Formula: The more total supply, the lower the rate (Inflation)
-            // Base Supply anchor: 50,000 BMC. 
-            // If Total > 50000, Rate < 100. If Total < 50000, Rate > 100.
+            // --- DYNAMIC RATE ALGORITHM ---
+            // 1. Supply Factor: More BMC = Inflation (Lower Rate)
             const anchorSupply = 50000;
+            const supplyFactor = anchorSupply / Math.max(1000, total); // e.g. 1.0 or 0.5
+            
+            // 2. Sentiment Factor (Trends): Slowly oscillates
+            const time = Date.now() / 10000; // Slowly changing
+            const sentiment = 1 + Math.sin(time) * 0.2; // 0.8 to 1.2
+            setMarketSentiment(sentiment);
+
+            // 3. Volatility (Noise)
             const volatility = (Math.random() - 0.5) * 5;
             
-            // Logarithmic scale to prevent crash
-            let calculatedRate = 100 * (anchorSupply / Math.max(1000, total)); 
-            calculatedRate += volatility;
+            let calculatedRate = 100 * supplyFactor * sentiment + volatility;
             calculatedRate = Math.max(10, Math.min(500, calculatedRate)); // Clamp
 
             setCurrentRate(prev => {
@@ -84,13 +78,16 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 return parseFloat(calculatedRate.toFixed(1));
             });
             
-            setPriceHistory(prev => [...prev.slice(1), calculatedRate]);
+            setPriceHistory(prev => {
+                const newHistory = [...prev.slice(1), calculatedRate];
+                return newHistory;
+            });
         };
 
         initMarket();
-        const interval = setInterval(initMarket, 10000); // Update every 10s
+        const interval = setInterval(initMarket, 5000); // Update every 5s
         return () => clearInterval(interval);
-    }, [user.blackMarketCoins]); // Re-calc when my coins change too
+    }, [user.blackMarketCoins]);
 
     // Update local inventory list
     useEffect(() => {
@@ -142,9 +139,6 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         if (confirm(`確定購買 ${product.name}？將扣除 ${product.price} BMC`)) {
             try {
                 const newInventory = [...user.inventory, product.id];
-                // For consumables, we allow multiple? Simplified to unique for now unless stackable logic added
-                // Let's assume unique ownership for tools/frames in this simplified version, except chips
-                
                 const updatedUser = {
                     ...user,
                     blackMarketCoins: (user.blackMarketCoins || 0) - product.price,
@@ -157,13 +151,41 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         }
     };
 
-    // --- Heist / Hack Handlers ---
+    // --- Transfer Handler ---
+    const handleP2PTransfer = async (targetId: string, targetName: string) => {
+        const amountStr = prompt(`轉帳給 ${targetName}\n請輸入 BMC 數量 (手續費 10%):`);
+        if (!amountStr) return;
+        const amount = parseInt(amountStr);
+        if (isNaN(amount) || amount <= 0) { alert("無效金額"); return; }
+        if (amount > (user.blackMarketCoins || 0)) { alert("餘額不足"); return; }
+
+        const fee = Math.ceil(amount * 0.1);
+        const actualReceive = amount - fee;
+
+        if (confirm(`確認轉帳 ${amount} BMC 給 ${targetName}？\n\n系統手續費: -${fee} BMC\n對方實收: ${actualReceive} BMC\n此操作無法復原。`)) {
+            try {
+                await transferBlackCoins(user.studentId, targetId, amount);
+                
+                // Deduct from local user state (Supabase handles the transaction but we update UI)
+                const updatedUser = { ...user, blackMarketCoins: (user.blackMarketCoins || 0) - amount };
+                await updateUserInDb(updatedUser); // Sync local state just in case
+                setUser(updatedUser);
+                
+                // Notify
+                createNotification(targetId, 'system', '收到轉帳', `${user.name} 轉給了你 ${actualReceive} BMC (已扣手續費)`);
+                alert("轉帳成功！");
+            } catch (e: any) {
+                alert("轉帳失敗: " + e.message);
+            }
+        }
+    };
+
+    // --- Hack Handlers ---
     const handleHack = async (targetId: string, tool: 'basic' | 'adv') => {
         if (isHacking) return;
         const target = userList.find(u => u.studentId === targetId);
         if (!target) return;
 
-        // Check if user has tool
         const toolId = tool === 'basic' ? 'chip_basic' : 'chip_adv';
         const toolIdx = user.inventory.indexOf(toolId);
         if (toolIdx === -1) { alert("你沒有此駭客晶片！請先購買。"); return; }
@@ -177,18 +199,8 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         const newInv = [...user.inventory];
         newInv.splice(toolIdx, 1);
         
-        // Simulation Logic
         setTimeout(async () => {
-            // Success Chance
-            // Basic: 30%, Adv: 60%
-            // Firewall reduces by 50%
-            // This is a simulation. We can't actually read target's inventory easily here without complex backend.
-            // So we simulate "Defense" based on probability or if we fetched their inventory in userList (we added it to fetchClassLeaderboard return type but strictly it might not be there without RLS update).
-            // Let's assume a base probability for now.
-            
             let successRate = tool === 'basic' ? 0.3 : 0.6;
-            
-            // Simulate stealing amount (1% - 5% of their BMC)
             const stealAmount = Math.floor((target.blackMarketCoins || 0) * (Math.random() * 0.04 + 0.01));
             
             if (stealAmount <= 0) {
@@ -201,16 +213,12 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             const isSuccess = roll < successRate;
 
             if (isSuccess) {
-                // Transfer BMC
                 try {
-                    await transferBlackCoins(targetId, user.studentId, stealAmount); // Steal: Target -> Me
+                    await transferBlackCoins(targetId, user.studentId, stealAmount); 
                     setHeistLog(prev => [`[SUCCESS] 駭入成功！竊取了 ${stealAmount} BMC`, ...prev]);
-                    
                     const updatedUser = { ...user, inventory: newInv, blackMarketCoins: (user.blackMarketCoins || 0) + stealAmount };
                     await updateUserInDb(updatedUser);
                     setUser(updatedUser);
-                    
-                    // Notify Victim
                     createNotification(targetId, 'system', '警報：帳戶入侵', `${user.name} 駭入了你的帳戶並竊取了 ${stealAmount} BMC！`);
                 } catch(e) {
                     setHeistLog(prev => [`[ERROR] 轉帳失敗 (對方可能開啟了防火牆)`, ...prev]);
@@ -218,7 +226,6 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 }
             } else {
                 setHeistLog(prev => [`[FAIL] 駭入失敗！被對手防火牆攔截。`, ...prev]);
-                // Notify Victim
                 createNotification(targetId, 'system', '警報：攔截入侵', `防火牆成功攔截了 ${user.name} 的駭客攻擊。`);
                 finishHack(newInv);
             }
@@ -247,7 +254,6 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             }
         } else if (itemId === 'item_stealth') {
             if (confirm("啟動光學迷彩？(24小時內隱藏身分)")) {
-                // In real app, verify timestamp. Here toggle state.
                 const updatedUser = { ...user, isStealth: true };
                 consumeItem(itemId, updatedUser);
                 alert("隱身模式已啟動！");
@@ -255,9 +261,6 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         } else if (itemId === 'item_megaphone') {
             const msg = prompt("輸入廣播內容 (全服可見):");
             if (msg) {
-                // Simulate broadcast via notification to everyone? Too heavy. 
-                // Just notify logic placeholder or success msg.
-                // Or send to a "World Channel" if implemented. 
                 alert("廣播已發送至暗網頻道 (模擬)");
                 consumeItem(itemId);
             }
@@ -296,7 +299,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                     <path d={`${points} L ${width},${height} L 0,${height} Z`} fill={isUp ? "rgba(239,68,68,0.1)" : "rgba(16,185,129,0.1)"} />
                     <polyline points={points} fill="none" stroke={strokeColor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <div className="absolute top-2 left-2 text-[10px] text-gray-500 font-mono bg-black/50 px-1 rounded">GLOBAL INDEX</div>
+                <div className="absolute top-2 left-2 text-[10px] text-gray-500 font-mono bg-black/50 px-1 rounded">全服大盤走勢</div>
             </div>
         );
     };
@@ -328,7 +331,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             <div className="flex p-2 gap-2 z-10 bg-black border-b border-gray-800 overflow-x-auto">
                 {[
                     {id: 'EXCHANGE', icon: <ArrowRightLeft size={14}/>, label: '匯率'},
-                    {id: 'HEIST', icon: <Terminal size={14}/>, label: '駭客行動'},
+                    {id: 'INTERACT', icon: <Users size={14}/>, label: '玩家互動'},
                     {id: 'SHOP', icon: <ShoppingBag size={14}/>, label: '黑市'},
                     {id: 'INVENTORY', icon: <Database size={14}/>, label: '背包'}
                 ].map(t => (
@@ -351,9 +354,18 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             <div className="flex justify-between items-start mb-1">
                                 <div>
                                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                                        <Shield size={20} className="text-green-500"/> 市場匯率
+                                        <Shield size={20} className="text-green-500"/> 匯率看板
                                     </h2>
-                                    <p className="text-xs text-gray-500 mt-1">Total Supply: {totalSupply.toLocaleString()}</p>
+                                    <div className="flex gap-4 mt-2">
+                                        <div className="text-xs text-gray-500">
+                                            <div className="uppercase text-[9px] mb-0.5 opacity-70">Supply</div>
+                                            <div>{totalSupply.toLocaleString()}</div>
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            <div className="uppercase text-[9px] mb-0.5 opacity-70">Sentiment</div>
+                                            <div className={marketSentiment > 1 ? "text-green-400" : "text-red-400"}>{marketSentiment > 1 ? "Bullish" : "Bearish"}</div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="text-right">
                                     <div className={`text-2xl font-mono font-black flex items-center gap-1 justify-end ${rateTrend === 'UP' ? 'text-red-500' : rateTrend === 'DOWN' ? 'text-green-500' : 'text-white'}`}>
@@ -397,25 +409,25 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                     </div>
                 )}
 
-                {/* --- HEIST TAB (New Interaction) --- */}
-                {tab === 'HEIST' && (
+                {/* --- INTERACT TAB (Renamed from HEIST, added Transfer) --- */}
+                {tab === 'INTERACT' && (
                     <div className="space-y-4">
-                        <div className="bg-red-900/20 border border-red-800/50 p-4 rounded-xl mb-4">
-                            <h3 className="font-bold text-red-400 flex items-center gap-2 mb-2"><Terminal size={18}/> 駭客終端機</h3>
+                        <div className="bg-gradient-to-r from-gray-900 to-black border border-gray-700 p-4 rounded-xl mb-4">
+                            <h3 className="font-bold text-white mb-2 flex items-center gap-2"><Activity size={18}/> 玩家列表</h3>
                             <p className="text-xs text-gray-400 leading-relaxed">
-                                使用晶片駭入其他玩家帳戶竊取黑幣。注意：對手若安裝防火牆，駭入將會失敗並暴露行蹤。
+                                可以對其他玩家進行 <span className="text-blue-400 font-bold">轉帳</span> (需手續費) 或 <span className="text-red-400 font-bold">駭入</span> (有風險)。
                             </p>
                         </div>
 
                         {heistLog.length > 0 && (
                             <div className="bg-black border border-green-900/50 p-3 rounded-lg font-mono text-xs h-32 overflow-y-auto mb-4 text-green-400 space-y-1">
-                                {heistLog.map((log, i) => <div key={i}>&gt; {log}</div>)}
+                                {heistLog.map((log, i) => <div key={i}>{'>'} {log}</div>)}
                             </div>
                         )}
 
                         <div className="space-y-2">
                             {userList.map(u => (
-                                <div key={u.studentId} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center group hover:border-red-900 transition-colors">
+                                <div key={u.studentId} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center group hover:border-blue-900 transition-colors">
                                     <div className="flex items-center gap-3">
                                         <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
                                         <div>
@@ -425,16 +437,16 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     </div>
                                     <div className="flex gap-2">
                                         <button 
-                                            onClick={() => handleHack(u.studentId, 'basic')}
+                                            onClick={() => handleP2PTransfer(u.studentId, u.name)}
                                             className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
                                         >
-                                            滲透 (30%)
+                                            轉帳
                                         </button>
                                         <button 
-                                            onClick={() => handleHack(u.studentId, 'adv')}
+                                            onClick={() => handleHack(u.studentId, 'basic')}
                                             className="px-3 py-1 bg-gray-800 hover:bg-red-900 text-red-400 text-xs rounded border border-red-900 transition-colors"
                                         >
-                                            強攻 (60%)
+                                            駭入
                                         </button>
                                     </div>
                                 </div>
