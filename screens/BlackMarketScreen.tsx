@@ -409,7 +409,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
 
                         {heistLog.length > 0 && (
                             <div className="bg-black border border-green-900/50 p-3 rounded-lg font-mono text-xs h-32 overflow-y-auto mb-4 text-green-400 space-y-1">
-                                {heistLog.map((log, i) => <div key={i}>> {log}</div>)}
+                                {heistLog.map((log, i) => <div key={i}>&gt; {log}</div>)}
                             </div>
                         )}
 

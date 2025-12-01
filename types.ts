@@ -155,6 +155,7 @@ export interface LeaderboardEntry {
   checkInStreak?: number; // New
   lastCheckInDate?: string; // New
   blackMarketCoins?: number; // New
+  isStealth?: boolean; // New
 }
 
 export interface Product {
