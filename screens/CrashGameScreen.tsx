@@ -18,7 +18,7 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
     const [history, setHistory] = useState<number[]>([]);
     
     // Animation refs
-    const requestRef = useRef<number>();
+    const requestRef = useRef<number>(0);
     const startTimeRef = useRef<number>(0);
 
     const houseEdge = 0.04; // 4% House Edge

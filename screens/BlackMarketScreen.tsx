@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, RefreshCw, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, Send, Search, Loader2, X, ArrowRightLeft, DollarSign, Database, Eye, Lock, Terminal, Radio, Activity } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren } from 'lucide-react';
 import { User, Product, LeaderboardEntry } from '../types';
 import { updateUserInDb } from '../services/authService';
 import { fetchClassLeaderboard, transferBlackCoins } from '../services/dataService';
@@ -13,9 +13,14 @@ interface BlackMarketScreenProps {
   setUser: (user: User) => void;
 }
 
-// Updated Item List
+// Define Icon first to avoid reference errors
+const TerminalIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+);
+
+// Base Prices (Will be affected by inflation)
 const BLACK_MARKET_ITEMS: Product[] = [
-    { id: 'chip_basic', name: '基礎破解晶片', price: 200, currency: 'BMC', color: 'bg-blue-900 text-blue-300', icon: <Terminal size={20}/>, description: '嘗試駭入他人帳戶 (30% 成功率)', category: 'black_market', tag: '消耗品' },
+    { id: 'chip_basic', name: '基礎破解晶片', price: 200, currency: 'BMC', color: 'bg-blue-900 text-blue-300', icon: <TerminalIcon />, description: '嘗試駭入他人帳戶 (30% 成功率)', category: 'black_market', tag: '消耗品' },
     { id: 'chip_adv', name: '高階滲透軟體', price: 800, currency: 'BMC', color: 'bg-red-900 text-red-300', icon: <Skull size={20}/>, description: '高機率駭入他人帳戶 (60% 成功率)', category: 'black_market', tag: '消耗品' },
     { id: 'item_firewall', name: '主動式防火牆', price: 500, currency: 'BMC', color: 'bg-green-900 text-green-300', icon: <Shield size={20}/>, description: '抵擋一次駭客攻擊 (自動消耗)', category: 'black_market', tag: '被動' },
     { id: 'item_spy', name: '間諜衛星', price: 1500, currency: 'BMC', color: 'bg-purple-900 text-purple-300', icon: <Eye size={20}/>, description: '查看任意玩家的詳細資產與狀態', category: 'black_market', tag: '情報' },
@@ -25,20 +30,27 @@ const BLACK_MARKET_ITEMS: Product[] = [
     { id: 'title_dark_lord', name: '稱號：暗夜領主', price: 15000, currency: 'BMC', color: 'bg-black text-red-600', icon: <Crown size={20}/>, description: '個人頁面專屬黑色稱號', category: 'cosmetic', isRare: true },
 ];
 
+// Helper to calculate dynamic price based on inflation
+const getDynamicPrice = (basePrice: number, multiplier: number) => {
+    return Math.ceil(basePrice * multiplier);
+};
+
 export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBack, onBuy, setUser }) => {
     const [tab, setTab] = useState<'EXCHANGE' | 'INTERACT' | 'SHOP' | 'INVENTORY'>('EXCHANGE');
     
-    // Exchange Logic
+    // Exchange & Economy Logic
     const [exchangeAmount, setExchangeAmount] = useState<string>(''); 
     const [exchangeMode, setExchangeMode] = useState<'BUY' | 'SELL'>('BUY');
     const [currentRate, setCurrentRate] = useState(100.0);
     const [rateTrend, setRateTrend] = useState<'UP' | 'DOWN' | 'STABLE'>('STABLE');
-    const [priceHistory, setPriceHistory] = useState<number[]>([100, 102, 98, 95, 105, 110, 100, 92, 95, 100]);
+    const [priceHistory, setPriceHistory] = useState<number[]>([100, 100, 100, 100, 100, 100, 100, 100, 100, 100]);
     const [totalSupply, setTotalSupply] = useState(0);
-    const [marketSentiment, setMarketSentiment] = useState(1.0); // 0.8 (Bear) to 1.2 (Bull)
+    const [inflationMultiplier, setInflationMultiplier] = useState(1.0);
+    const [marketSentiment, setMarketSentiment] = useState(0); // -1 (Bear) to 1 (Bull)
 
     // Interaction Data
     const [userList, setUserList] = useState<(LeaderboardEntry & { isStealth?: boolean })[]>([]);
+    const [wantedList, setWantedList] = useState<LeaderboardEntry[]>([]); // Top 3 holders
     const [heistLog, setHeistLog] = useState<string[]>([]);
     const [isHacking, setIsHacking] = useState(false);
 
@@ -49,27 +61,45 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     useEffect(() => {
         const initMarket = async () => {
             const users = await fetchClassLeaderboard();
-            // Filter out self and banned
-            setUserList(users.filter(u => u.studentId !== user.studentId));
+            // Filter out self
+            const otherUsers = users.filter(u => u.studentId !== user.studentId);
+            setUserList(otherUsers);
+
+            // Determine Wanted List (Top 3 holders of BMC)
+            const topHolders = [...users]
+                .filter(u => !u.isStealth && (u.blackMarketCoins || 0) > 0) // Only show if they have coins
+                .sort((a, b) => (b.blackMarketCoins || 0) - (a.blackMarketCoins || 0))
+                .slice(0, 3);
+            setWantedList(topHolders);
             
-            // Calculate Total Supply for Rate
+            // Calculate Total Supply
             const total = users.reduce((sum, u) => sum + (u.blackMarketCoins || 0), 0);
             setTotalSupply(total);
             
-            // --- DYNAMIC RATE ALGORITHM ---
-            // 1. Supply Factor: More BMC = Inflation (Lower Rate)
-            const anchorSupply = 50000;
-            const supplyFactor = anchorSupply / Math.max(1000, total); // e.g. 1.0 or 0.5
+            // --- DYNAMIC ECONOMY ALGORITHM ---
+            const ANCHOR_SUPPLY = 50000;
             
-            // 2. Sentiment Factor (Trends): Slowly oscillates
-            const time = Date.now() / 10000; // Slowly changing
-            const sentiment = 1 + Math.sin(time) * 0.2; // 0.8 to 1.2
-            setMarketSentiment(sentiment);
+            // 1. Inflation Multiplier (For Item Prices)
+            let infMult = 1.0;
+            if (total > ANCHOR_SUPPLY) {
+                // If supply doubles (100k), prices increase by 50%
+                infMult = 1 + ((total - ANCHOR_SUPPLY) / ANCHOR_SUPPLY) * 0.5; 
+            }
+            setInflationMultiplier(Math.max(0.8, infMult)); // Min 0.8x price
 
-            // 3. Volatility (Noise)
-            const volatility = (Math.random() - 0.5) * 5;
+            // 2. Exchange Rate (PT per 1 BMC)
+            // Base Rate logic: More supply = BMC worth LESS PT
+            let baseRate = 100 * (ANCHOR_SUPPLY / Math.max(10000, total)); 
             
-            let calculatedRate = 100 * supplyFactor * sentiment + volatility;
+            // Add Time-Based Trend (Sine wave to simulate market cycles)
+            const time = Date.now() / 10000; // Slowly changing
+            const trend = Math.sin(time) * 20; // +/- 20 PT swing based on "cycle"
+            setMarketSentiment(Math.sin(time)); // For UI indicator
+
+            // Add Random Noise (Volatility)
+            const noise = (Math.random() - 0.5) * 10; // +/- 5 PT jitter
+
+            let calculatedRate = baseRate + trend + noise;
             calculatedRate = Math.max(10, Math.min(500, calculatedRate)); // Clamp
 
             setCurrentRate(prev => {
@@ -85,7 +115,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         };
 
         initMarket();
-        const interval = setInterval(initMarket, 5000); // Update every 5s
+        const interval = setInterval(initMarket, 3000); // Update every 3s
         return () => clearInterval(interval);
     }, [user.blackMarketCoins]);
 
@@ -110,7 +140,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         } else {
             if ((user.blackMarketCoins || 0) < amount) { alert("黑幣不足！"); return; }
             const rawGain = Math.floor(amount * currentRate);
-            const fee = Math.ceil(rawGain * 0.15); // 15% Fee for selling back
+            const fee = Math.ceil(rawGain * 0.15); // 15% Fee
             const finalGain = rawGain - fee;
 
             if (confirm(`匯率 ${currentRate.toFixed(1)} PT/BMC\n出售 ${amount} BMC\n預估價值: ${rawGain} PT\n手續費(15%): -${fee} PT\n實際獲得: ${finalGain} PT\n確定出售？`)) {
@@ -135,13 +165,15 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
 
     // --- Shop Handlers ---
     const handleBuyItem = async (product: Product) => {
-        if ((user.blackMarketCoins || 0) < product.price) { alert("黑幣不足"); return; }
-        if (confirm(`確定購買 ${product.name}？將扣除 ${product.price} BMC`)) {
+        const currentPrice = getDynamicPrice(product.price, inflationMultiplier);
+        
+        if ((user.blackMarketCoins || 0) < currentPrice) { alert("黑幣不足"); return; }
+        if (confirm(`確定購買 ${product.name}？\n當前市價: ${currentPrice} BMC`)) {
             try {
                 const newInventory = [...user.inventory, product.id];
                 const updatedUser = {
                     ...user,
-                    blackMarketCoins: (user.blackMarketCoins || 0) - product.price,
+                    blackMarketCoins: (user.blackMarketCoins || 0) - currentPrice,
                     inventory: newInventory
                 };
                 await updateUserInDb(updatedUser);
@@ -165,13 +197,9 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         if (confirm(`確認轉帳 ${amount} BMC 給 ${targetName}？\n\n系統手續費: -${fee} BMC\n對方實收: ${actualReceive} BMC\n此操作無法復原。`)) {
             try {
                 await transferBlackCoins(user.studentId, targetId, amount);
-                
-                // Deduct from local user state (Supabase handles the transaction but we update UI)
                 const updatedUser = { ...user, blackMarketCoins: (user.blackMarketCoins || 0) - amount };
-                await updateUserInDb(updatedUser); // Sync local state just in case
+                await updateUserInDb(updatedUser); 
                 setUser(updatedUser);
-                
-                // Notify
                 createNotification(targetId, 'system', '收到轉帳', `${user.name} 轉給了你 ${actualReceive} BMC (已扣手續費)`);
                 alert("轉帳成功！");
             } catch (e: any) {
@@ -345,7 +373,10 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 z-10 pb-safe">
+            <div 
+                className="flex-1 overflow-y-auto p-4 z-10 pb-24 min-h-0" 
+                style={{ WebkitOverflowScrolling: 'touch' }}
+            >
                 
                 {/* --- EXCHANGE TAB --- */}
                 {tab === 'EXCHANGE' && (
@@ -358,14 +389,21 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     </h2>
                                     <div className="flex gap-4 mt-2">
                                         <div className="text-xs text-gray-500">
-                                            <div className="uppercase text-[9px] mb-0.5 opacity-70">Supply</div>
+                                            <div className="uppercase text-[9px] mb-0.5 opacity-70">市場總量 (Supply)</div>
                                             <div>{totalSupply.toLocaleString()}</div>
                                         </div>
                                         <div className="text-xs text-gray-500">
-                                            <div className="uppercase text-[9px] mb-0.5 opacity-70">Sentiment</div>
-                                            <div className={marketSentiment > 1 ? "text-green-400" : "text-red-400"}>{marketSentiment > 1 ? "Bullish" : "Bearish"}</div>
+                                            <div className="uppercase text-[9px] mb-0.5 opacity-70">市場情緒 (Sentiment)</div>
+                                            <div className={marketSentiment > 0 ? "text-green-400" : "text-red-400"}>
+                                                {marketSentiment > 0 ? "看漲 Bullish" : "看跌 Bearish"}
+                                            </div>
                                         </div>
                                     </div>
+                                    {inflationMultiplier > 1.1 && (
+                                        <div className="text-xs text-red-400 mt-2 font-bold flex items-center gap-1">
+                                            <AlertTriangle size={12}/> 通貨膨脹警告: 商品價格 x{inflationMultiplier.toFixed(1)}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="text-right">
                                     <div className={`text-2xl font-mono font-black flex items-center gap-1 justify-end ${rateTrend === 'UP' ? 'text-red-500' : rateTrend === 'DOWN' ? 'text-green-500' : 'text-white'}`}>
@@ -409,10 +447,28 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                     </div>
                 )}
 
-                {/* --- INTERACT TAB (Renamed from HEIST, added Transfer) --- */}
+                {/* --- INTERACT TAB --- */}
                 {tab === 'INTERACT' && (
                     <div className="space-y-4">
-                        <div className="bg-gradient-to-r from-gray-900 to-black border border-gray-700 p-4 rounded-xl mb-4">
+                        {/* Wanted List */}
+                        <div className="bg-gradient-to-r from-red-900/40 to-black border border-red-800 rounded-xl p-4 relative overflow-hidden">
+                            <div className="absolute right-0 top-0 opacity-20"><Siren size={80} className="text-red-500"/></div>
+                            <h3 className="font-black text-red-500 text-lg mb-3 flex items-center gap-2 relative z-10">
+                                <Target size={20}/> 懸賞名單 (Top 3)
+                            </h3>
+                            <div className="grid grid-cols-3 gap-2 relative z-10">
+                                {wantedList.map((target, idx) => (
+                                    <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center">
+                                        <div className="text-xs text-red-400 font-bold mb-1">NO.{idx+1}</div>
+                                        <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatarColor} flex items-center justify-center font-bold`}>{target.name[0]}</div>
+                                        <div className="text-xs text-gray-300 truncate">{target.name}</div>
+                                        <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.blackMarketCoins}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-xl mb-4">
                             <h3 className="font-bold text-white mb-2 flex items-center gap-2"><Activity size={18}/> 玩家列表</h3>
                             <p className="text-xs text-gray-400 leading-relaxed">
                                 可以對其他玩家進行 <span className="text-blue-400 font-bold">轉帳</span> (需手續費) 或 <span className="text-red-400 font-bold">駭入</span> (有風險)。
@@ -458,8 +514,14 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 {/* --- SHOP TAB --- */}
                 {tab === 'SHOP' && (
                     <div className="grid grid-cols-1 gap-3">
+                        {inflationMultiplier > 1.1 && (
+                            <div className="bg-red-900/30 text-red-400 text-xs p-2 rounded text-center border border-red-900/50">
+                                🔥 通膨警告：物價上漲 {((inflationMultiplier-1)*100).toFixed(0)}%
+                            </div>
+                        )}
                         {BLACK_MARKET_ITEMS.map(item => {
-                            const canAfford = (user.blackMarketCoins || 0) >= item.price;
+                            const dynamicPrice = getDynamicPrice(item.price, inflationMultiplier);
+                            const canAfford = (user.blackMarketCoins || 0) >= dynamicPrice;
                             const isOwned = item.category !== 'consumable' && (user.inventory.includes(item.id) || user.avatarFrame === item.id);
                             
                             return (
@@ -473,7 +535,10 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                             {item.tag && <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{item.tag}</span>}
                                         </div>
                                         <p className="text-[10px] text-gray-500 line-clamp-1">{item.description}</p>
-                                        <div className="text-purple-400 font-mono text-xs font-bold mt-1">{item.price} BMC</div>
+                                        <div className="text-purple-400 font-mono text-xs font-bold mt-1">
+                                            {dynamicPrice} BMC 
+                                            {inflationMultiplier > 1.05 && <span className="text-[9px] text-red-500 ml-1">↑</span>}
+                                        </div>
                                     </div>
                                     <button 
                                         disabled={!canAfford || isOwned}

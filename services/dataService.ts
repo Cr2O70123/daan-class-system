@@ -286,17 +286,31 @@ export const unbanUser = async (studentId: string) => {
 // --- Class Leaderboard ---
 
 export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
-    // Removed lifetime_points from select to avoid error if column was dropped from DB
-    const { data, error } = await supabase
+    // Attempt to fetch with new columns first (black_market_coins)
+    let { data, error } = await supabase
         .from('users')
         .select('name, student_id, points, black_market_coins, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
         .eq('is_banned', false)
         .limit(1000);
 
+    // If fetching 'black_market_coins' fails (e.g. column doesn't exist yet), fallback to legacy schema
     if (error) {
-        console.error("Error fetching leaderboard:", error);
-        return [];
+        console.warn("Fetch leaderboard with BMC failed (Schema mismatch?), attempting legacy fallback...", error.message);
+        
+        const retry = await supabase
+            .from('users')
+            .select('name, student_id, points, avatar_color, avatar_image, avatar_frame, consecutive_check_in_days, last_check_in_date')
+            .eq('is_banned', false)
+            .limit(1000);
+            
+        if (retry.error) {
+            console.error("Error fetching leaderboard (Legacy):", retry.error);
+            return [];
+        }
+        data = retry.data;
     }
+
+    if (!data) return [];
 
     const uniqueMap = new Map();
     data.forEach((u: any) => {
@@ -317,8 +331,8 @@ export const fetchClassLeaderboard = async (): Promise<LeaderboardEntry[]> => {
         name: u.name,
         studentId: u.student_id,
         points: u.points, 
-        blackMarketCoins: u.black_market_coins || 0, 
-        level: calculateLevel(u.points), // Fallback level calc using current points if lifetime unavailable
+        blackMarketCoins: u.black_market_coins || 0, // Default to 0 if missing
+        level: calculateLevel(u.points),
         avatarColor: u.avatar_color || 'bg-gray-400',
         avatarImage: u.avatar_image,
         avatarFrame: u.avatar_frame,
@@ -341,12 +355,16 @@ export const transferBlackCoins = async (senderId: string, receiverId: string, a
     } catch (e: any) {
         console.warn("RPC Failed, trying client-side fallback:", e.message);
         
-        // Fallback: Client-side update (Not recommended for prod security, but works for prototype if RLS allows)
+        // Fallback: Client-side update
         if (amount <= 0) throw new Error("Invalid amount");
 
-        // 1. Fetch Sender
+        // 1. Fetch Sender (Safe check for column existence)
         const { data: sender, error: sErr } = await supabase.from('users').select('black_market_coins').eq('student_id', senderId).single();
-        if(sErr || !sender) throw new Error("Sender not found");
+        if(sErr) {
+             console.error("Transfer failed: Sender fetch error", sErr);
+             throw new Error("系統資料庫更新中，暫無法轉帳 (DB_COL_MISSING)");
+        }
+        if(!sender) throw new Error("Sender not found");
         if((sender.black_market_coins || 0) < amount) throw new Error("Insufficient funds");
 
         // 2. Fetch Receiver
@@ -373,6 +391,7 @@ export const transferBlackCoins = async (senderId: string, receiverId: string, a
 export const fetchPkLeaderboard = async (mode: 'CLASSIC' | 'OVERLOAD' = 'CLASSIC'): Promise<LeaderboardEntry[]> => {
     const ratingColumn = mode === 'OVERLOAD' ? 'pk_rating_overload' : 'pk_rating';
     
+    // Check if column exists by trying to select it. If fails, return empty.
     const { data, error } = await supabase
         .from('users')
         .select(`name, student_id, ${ratingColumn}, avatar_color, avatar_image, avatar_frame`)
@@ -381,7 +400,7 @@ export const fetchPkLeaderboard = async (mode: 'CLASSIC' | 'OVERLOAD' = 'CLASSIC
         .limit(50);
 
     if (error) {
-        console.error("Error fetching PK leaderboard:", error);
+        console.error("Error fetching PK leaderboard (possibly missing column):", error);
         return [];
     }
 
@@ -440,8 +459,7 @@ export const fetchGameLeaderboard = async (gameId: string = 'word_challenge'): P
         return [];
     }
 
-    // Filter by gameId in memory (since we store it in JSONB avatar_data)
-    // Default to 'word_challenge' if gameId is missing in data (backward compatibility)
+    // Filter by gameId in memory
     const validData = data.filter((row: any) => {
         const rowGameId = row.avatar_data?.gameId || 'word_challenge';
         return rowGameId === gameId;
@@ -470,7 +488,6 @@ export const fetchGameLeaderboard = async (gameId: string = 'word_challenge'): P
             sortedEntries.forEach((entry: any) => {
                 const userProfile = userData.find((u: any) => u.student_id === entry.student_id);
                 if (userProfile) {
-                    // Update visual data but keep the score/gameId context
                     entry.avatar_data = {
                         ...entry.avatar_data,
                         color: userProfile.avatar_color,
