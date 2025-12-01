@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair, Loader2 } from 'lucide-react';
 import { User, Product, LeaderboardEntry } from '../types';
 import { updateUserInDb } from '../services/authService';
 import { fetchClassLeaderboard, transferBlackCoins } from '../services/dataService';
@@ -47,6 +47,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     const [totalSupply, setTotalSupply] = useState(0);
     const [inflationMultiplier, setInflationMultiplier] = useState(1.0);
     const [marketSentiment, setMarketSentiment] = useState(0); // -1 (Bear) to 1 (Bull)
+    const [isMarketLoading, setIsMarketLoading] = useState(true); // Prevents exploit before data loads
 
     // Interaction Data
     const [userList, setUserList] = useState<(LeaderboardEntry & { isStealth?: boolean })[]>([]);
@@ -112,6 +113,9 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 const newHistory = [...prev.slice(1), calculatedRate];
                 return newHistory;
             });
+
+            // Mark as loaded to enable interactions
+            setIsMarketLoading(false);
         };
 
         initMarket();
@@ -127,6 +131,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
 
     // --- Exchange Handlers ---
     const handleExchange = async () => {
+        if (isMarketLoading) return;
         const amount = parseInt(exchangeAmount);
         if (isNaN(amount) || amount <= 0) { alert("請輸入有效金額"); return; }
 
@@ -165,6 +170,8 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
 
     // --- Shop Handlers ---
     const handleBuyItem = async (product: Product) => {
+        if (isMarketLoading) { alert("市場數據同步中，請稍候..."); return; }
+        
         const currentPrice = getDynamicPrice(product.price, inflationMultiplier);
         
         if ((user.blackMarketCoins || 0) < currentPrice) { alert("黑幣不足"); return; }
@@ -413,16 +420,22 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     <div className="flex gap-4 mt-2">
                                         <div className="text-xs text-gray-500">
                                             <div className="uppercase text-[9px] mb-0.5 opacity-70">市場總量 (Supply)</div>
-                                            <div>{totalSupply.toLocaleString()}</div>
+                                            <div className={isMarketLoading ? "animate-pulse bg-gray-700 h-4 w-12 rounded" : ""}>
+                                                {isMarketLoading ? "" : totalSupply.toLocaleString()}
+                                            </div>
                                         </div>
                                         <div className="text-xs text-gray-500">
                                             <div className="uppercase text-[9px] mb-0.5 opacity-70">市場情緒 (Sentiment)</div>
-                                            <div className={marketSentiment > 0 ? "text-green-400" : "text-red-400"}>
-                                                {marketSentiment > 0 ? "看漲 Bullish" : "看跌 Bearish"}
-                                            </div>
+                                            {isMarketLoading ? (
+                                                <div className="animate-pulse bg-gray-700 h-4 w-16 rounded"></div>
+                                            ) : (
+                                                <div className={marketSentiment > 0 ? "text-green-400" : "text-red-400"}>
+                                                    {marketSentiment > 0 ? "看漲 Bullish" : "看跌 Bearish"}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    {inflationMultiplier > 1.1 && (
+                                    {!isMarketLoading && inflationMultiplier > 1.1 && (
                                         <div className="text-xs text-red-400 mt-2 font-bold flex items-center gap-1">
                                             <AlertTriangle size={12}/> 通貨膨脹警告: 商品價格 x{inflationMultiplier.toFixed(1)}
                                         </div>
@@ -436,10 +449,20 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     <span className="text-xs text-gray-500">PT / 1 BMC</span>
                                 </div>
                             </div>
-                            {renderChart()}
+                            
+                            {isMarketLoading ? (
+                                <div className="relative h-32 w-full mt-4 bg-gray-900/50 rounded-xl border border-gray-800 flex items-center justify-center">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Loader2 className="animate-spin text-purple-500" size={24} />
+                                        <span className="text-[10px] text-gray-500 uppercase tracking-widest">Analyzing Market...</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                renderChart()
+                            )}
                         </div>
 
-                        <div className="bg-black/40 rounded-xl p-4 border border-gray-800 space-y-4">
+                        <div className={`bg-black/40 rounded-xl p-4 border border-gray-800 space-y-4 ${isMarketLoading ? 'opacity-50 pointer-events-none' : ''}`}>
                             <div className="flex bg-gray-900 rounded-lg p-1">
                                 <button onClick={() => { setExchangeMode('BUY'); setExchangeAmount(''); }} className={`flex-1 py-2 rounded font-bold text-sm ${exchangeMode === 'BUY' ? 'bg-green-600 text-white' : 'text-gray-500'}`}>買入</button>
                                 <button onClick={() => { setExchangeMode('SELL'); setExchangeAmount(''); }} className={`flex-1 py-2 rounded font-bold text-sm ${exchangeMode === 'SELL' ? 'bg-red-600 text-white' : 'text-gray-500'}`}>賣出</button>
@@ -464,7 +487,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                 onClick={handleExchange}
                                 className={`w-full py-3 rounded-xl font-black transition-all shadow-lg active:scale-[0.98] ${exchangeMode === 'BUY' ? 'bg-green-700 hover:bg-green-600' : 'bg-red-700 hover:bg-red-600'}`}
                             >
-                                確認交易
+                                {isMarketLoading ? '市場同步中...' : '確認交易'}
                             </button>
                         </div>
                     </div>
@@ -480,15 +503,25 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                 <Target size={20}/> 懸賞名單 (Top 3)
                             </h3>
                             <div className="grid grid-cols-3 gap-2 relative z-10">
-                                {wantedList.map((target, idx) => (
-                                    <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center relative overflow-hidden">
-                                        <div className="text-xs text-red-400 font-bold mb-1">NO.{idx+1}</div>
-                                        <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatarColor} flex items-center justify-center font-bold`}>{target.name[0]}</div>
-                                        <div className="text-xs text-gray-300 truncate">{target.name}</div>
-                                        <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.blackMarketCoins}</div>
-                                        <div className="absolute inset-0 border-2 border-red-600/30 animate-pulse pointer-events-none"></div>
-                                    </div>
-                                ))}
+                                {isMarketLoading ? (
+                                    [1, 2, 3].map(i => (
+                                        <div key={i} className="bg-black/60 p-2 rounded-lg border border-red-900/30 text-center relative overflow-hidden animate-pulse">
+                                            <div className="h-3 w-8 bg-red-900/50 rounded mx-auto mb-2"></div>
+                                            <div className="w-10 h-10 rounded-full mx-auto mb-2 bg-gray-800"></div>
+                                            <div className="h-3 w-16 bg-gray-800 rounded mx-auto"></div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    wantedList.map((target, idx) => (
+                                        <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center relative overflow-hidden">
+                                            <div className="text-xs text-red-400 font-bold mb-1">NO.{idx+1}</div>
+                                            <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatarColor} flex items-center justify-center font-bold`}>{target.name[0]}</div>
+                                            <div className="text-xs text-gray-300 truncate">{target.name}</div>
+                                            <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.blackMarketCoins}</div>
+                                            <div className="absolute inset-0 border-2 border-red-600/30 animate-pulse pointer-events-none"></div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
 
@@ -506,37 +539,55 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                         )}
 
                         <div className="space-y-2">
-                            {userList.map(u => {
-                                const isWanted = wantedList.some(w => w.studentId === u.studentId);
-                                return (
-                                    <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
+                            {isMarketLoading ? (
+                                [1, 2, 3, 4, 5].map(i => (
+                                    <div key={i} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center animate-pulse">
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
+                                            <div className="w-8 h-8 rounded-full bg-gray-800"></div>
                                             <div>
-                                                <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                                                    {u.isStealth ? 'UNKOWN' : u.name}
-                                                    {isWanted && <span className="text-[9px] bg-red-600 text-white px-1.5 rounded animate-pulse">WANTED</span>}
-                                                </div>
-                                                <div className="text-[10px] text-gray-500">Lv.{u.level}</div>
+                                                <div className="h-3 w-20 bg-gray-800 rounded mb-1"></div>
+                                                <div className="h-2 w-10 bg-gray-800 rounded"></div>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => handleP2PTransfer(u.studentId, u.name)}
-                                                className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
-                                            >
-                                                轉帳
-                                            </button>
-                                            <button 
-                                                onClick={() => handleHack(u.studentId, 'basic')}
-                                                className={`px-3 py-1 text-xs rounded border transition-colors flex items-center gap-1 ${isWanted ? 'bg-red-900 hover:bg-red-800 text-white border-red-500 shadow-sm shadow-red-900' : 'bg-gray-800 hover:bg-red-900 text-red-400 border-red-900'}`}
-                                            >
-                                                {isWanted && <Crosshair size={10}/>} 駭入
-                                            </button>
+                                            <div className="w-10 h-6 bg-gray-800 rounded"></div>
+                                            <div className="w-10 h-6 bg-gray-800 rounded"></div>
                                         </div>
                                     </div>
-                                )
-                            })}
+                                ))
+                            ) : (
+                                userList.map(u => {
+                                    const isWanted = wantedList.some(w => w.studentId === u.studentId);
+                                    return (
+                                        <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
+                                                <div>
+                                                    <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                                                        {u.isStealth ? 'UNKOWN' : u.name}
+                                                        {isWanted && <span className="text-[9px] bg-red-600 text-white px-1.5 rounded animate-pulse">WANTED</span>}
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-500">Lv.{u.level}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => handleP2PTransfer(u.studentId, u.name)}
+                                                    className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
+                                                >
+                                                    轉帳
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleHack(u.studentId, 'basic')}
+                                                    className={`px-3 py-1 text-xs rounded border transition-colors flex items-center gap-1 ${isWanted ? 'bg-red-900 hover:bg-red-800 text-white border-red-500 shadow-sm shadow-red-900' : 'bg-gray-800 hover:bg-red-900 text-red-400 border-red-900'}`}
+                                                >
+                                                    {isWanted && <Crosshair size={10}/>} 駭入
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
+                                })
+                            )}
                         </div>
                     </div>
                 )}
@@ -544,42 +595,50 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 {/* --- SHOP TAB --- */}
                 {tab === 'SHOP' && (
                     <div className="grid grid-cols-1 gap-3">
-                        {inflationMultiplier > 1.1 && (
-                            <div className="bg-red-900/30 text-red-400 text-xs p-2 rounded text-center border border-red-900/50">
-                                🔥 通膨警告：物價上漲 {((inflationMultiplier-1)*100).toFixed(0)}%
+                        {isMarketLoading ? (
+                            <div className="text-center py-4 text-gray-500 text-xs flex items-center justify-center gap-2">
+                                <Loader2 size={14} className="animate-spin"/> 正在同步市場價格...
                             </div>
+                        ) : (
+                            <>
+                                {inflationMultiplier > 1.1 && (
+                                    <div className="bg-red-900/30 text-red-400 text-xs p-2 rounded text-center border border-red-900/50">
+                                        🔥 通膨警告：物價上漲 {((inflationMultiplier-1)*100).toFixed(0)}%
+                                    </div>
+                                )}
+                                {BLACK_MARKET_ITEMS.map(item => {
+                                    const dynamicPrice = getDynamicPrice(item.price, inflationMultiplier);
+                                    const canAfford = (user.blackMarketCoins || 0) >= dynamicPrice;
+                                    const isOwned = item.category !== 'consumable' && (user.inventory.includes(item.id) || user.avatarFrame === item.id);
+                                    
+                                    return (
+                                        <div key={item.id} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex gap-3 items-center relative overflow-hidden">
+                                            <div className={`w-12 h-12 rounded-lg ${item.color} flex items-center justify-center shrink-0 shadow-lg`}>
+                                                {item.icon}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start">
+                                                    <h3 className="font-bold text-gray-200 text-sm">{item.name}</h3>
+                                                    {item.tag && <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{item.tag}</span>}
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 line-clamp-1">{item.description}</p>
+                                                <div className="text-purple-400 font-mono text-xs font-bold mt-1">
+                                                    {dynamicPrice} BMC 
+                                                    {inflationMultiplier > 1.05 && <span className="text-[9px] text-red-500 ml-1">↑</span>}
+                                                </div>
+                                            </div>
+                                            <button 
+                                                disabled={!canAfford || isOwned}
+                                                onClick={() => handleBuyItem(item)}
+                                                className={`px-4 py-2 rounded-lg text-xs font-bold ${isOwned ? 'bg-gray-800 text-gray-500' : canAfford ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-500 border border-red-900'}`}
+                                            >
+                                                {isOwned ? '已擁有' : '購買'}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </>
                         )}
-                        {BLACK_MARKET_ITEMS.map(item => {
-                            const dynamicPrice = getDynamicPrice(item.price, inflationMultiplier);
-                            const canAfford = (user.blackMarketCoins || 0) >= dynamicPrice;
-                            const isOwned = item.category !== 'consumable' && (user.inventory.includes(item.id) || user.avatarFrame === item.id);
-                            
-                            return (
-                                <div key={item.id} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex gap-3 items-center relative overflow-hidden">
-                                    <div className={`w-12 h-12 rounded-lg ${item.color} flex items-center justify-center shrink-0 shadow-lg`}>
-                                        {item.icon}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-start">
-                                            <h3 className="font-bold text-gray-200 text-sm">{item.name}</h3>
-                                            {item.tag && <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{item.tag}</span>}
-                                        </div>
-                                        <p className="text-[10px] text-gray-500 line-clamp-1">{item.description}</p>
-                                        <div className="text-purple-400 font-mono text-xs font-bold mt-1">
-                                            {dynamicPrice} BMC 
-                                            {inflationMultiplier > 1.05 && <span className="text-[9px] text-red-500 ml-1">↑</span>}
-                                        </div>
-                                    </div>
-                                    <button 
-                                        disabled={!canAfford || isOwned}
-                                        onClick={() => handleBuyItem(item)}
-                                        className={`px-4 py-2 rounded-lg text-xs font-bold ${isOwned ? 'bg-gray-800 text-gray-500' : canAfford ? 'bg-purple-700 text-white' : 'bg-gray-800 text-gray-500 border border-red-900'}`}
-                                    >
-                                        {isOwned ? '已擁有' : '購買'}
-                                    </button>
-                                </div>
-                            );
-                        })}
                     </div>
                 )}
 
