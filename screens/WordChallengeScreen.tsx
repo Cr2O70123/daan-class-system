@@ -15,7 +15,7 @@ interface WordChallengeScreenProps {
 
 const INITIAL_TIME = 30; // Seconds
 
-// Sound Effect Helper using Web Audio API
+// FIXED: Sound Effect Helper using Web Audio API with proper cleanup
 const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | 'levelup' | 'timeout') => {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -29,7 +29,8 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | '
     gain.connect(ctx.destination);
     
     const now = ctx.currentTime;
-    
+    let duration = 0.5; // Default safe duration
+
     switch (type) {
       case 'correct':
         osc.type = 'sine';
@@ -37,8 +38,7 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | '
         osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1); // C6
         gain.gain.setValueAtTime(0.1, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now);
-        osc.stop(now + 0.3);
+        duration = 0.3;
         break;
       case 'wrong':
         osc.type = 'sawtooth';
@@ -46,16 +46,14 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | '
         osc.frequency.linearRampToValueAtTime(100, now + 0.2);
         gain.gain.setValueAtTime(0.1, now);
         gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-        osc.start(now);
-        osc.stop(now + 0.3);
+        duration = 0.3;
         break;
       case 'tick':
         osc.type = 'square';
         osc.frequency.setValueAtTime(800, now);
         gain.gain.setValueAtTime(0.05, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-        osc.start(now);
-        osc.stop(now + 0.05);
+        duration = 0.05;
         break;
       case 'gameover':
         osc.type = 'triangle';
@@ -63,8 +61,7 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | '
         osc.frequency.exponentialRampToValueAtTime(100, now + 1);
         gain.gain.setValueAtTime(0.2, now);
         gain.gain.linearRampToValueAtTime(0, now + 1);
-        osc.start(now);
-        osc.stop(now + 1);
+        duration = 1;
         break;
       case 'start':
           osc.type = 'sine';
@@ -72,8 +69,7 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | '
           osc.frequency.setValueAtTime(880, now + 0.1);
           gain.gain.setValueAtTime(0.1, now);
           gain.gain.linearRampToValueAtTime(0, now + 0.3);
-          osc.start(now);
-          osc.stop(now + 0.3);
+          duration = 0.3;
           break;
       case 'levelup':
           osc.type = 'triangle';
@@ -83,8 +79,7 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | '
           osc.frequency.setValueAtTime(880, now + 0.3); // A5
           gain.gain.setValueAtTime(0.1, now);
           gain.gain.linearRampToValueAtTime(0, now + 0.6);
-          osc.start(now);
-          osc.stop(now + 0.6);
+          duration = 0.6;
           break;
       case 'timeout':
           osc.type = 'sawtooth';
@@ -92,10 +87,20 @@ const playSound = (type: 'correct' | 'wrong' | 'tick' | 'gameover' | 'start' | '
           osc.frequency.linearRampToValueAtTime(100, now + 0.5);
           gain.gain.setValueAtTime(0.2, now);
           gain.gain.linearRampToValueAtTime(0, now + 0.5);
-          osc.start(now);
-          osc.stop(now + 0.5);
+          duration = 0.5;
           break;
     }
+    
+    osc.start(now);
+    osc.stop(now + duration);
+
+    // Close Context after sound finishes to prevent limit reached error
+    setTimeout(() => {
+        if (ctx.state !== 'closed') {
+            ctx.close();
+        }
+    }, duration * 1000 + 100);
+
   } catch (e) {
     // Ignore audio errors
   }

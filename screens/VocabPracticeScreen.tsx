@@ -43,6 +43,9 @@ export const VocabPracticeScreen: React.FC<VocabPracticeScreenProps> = ({ onBack
   }, [mode, quizIndex, currentWords, quizFinished]);
 
   const speak = (text: string) => {
+    // FIX: Cancel previous utterance to prevent queue buildup crash
+    window.speechSynthesis.cancel();
+    
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
     window.speechSynthesis.speak(utterance);
