@@ -4,3 +4,31 @@ ALTER TABLE users ADD COLUMN black_market_coins BIGINT DEFAULT 0;
 
 -- Optional: Reset BMC for testing (Execute if needed)
 -- UPDATE users SET black_market_coins = 1000;
+
+-- [NEW] Optimization: Calculate Market Stats on Server Side
+-- This function drastically reduces bandwidth by calculating sums and sorting on the server
+CREATE OR REPLACE FUNCTION get_black_market_stats()
+RETURNS json AS $$
+DECLARE
+  total_supply bigint;
+  top_holders json;
+BEGIN
+  -- 1. Calculate Total Supply (Fast Sum)
+  SELECT COALESCE(SUM(black_market_coins), 0) INTO total_supply FROM users WHERE is_banned = false;
+
+  -- 2. Get Top 3 Holders (Wanted List)
+  SELECT json_agg(t) INTO top_holders FROM (
+    SELECT name, student_id, black_market_coins, avatar_color, avatar_image, avatar_frame
+    FROM users
+    WHERE is_banned = false AND black_market_coins > 0
+    ORDER BY black_market_coins DESC
+    LIMIT 3
+  ) t;
+
+  -- Return Combined JSON
+  RETURN json_build_object(
+    'totalSupply', total_supply,
+    'topHolders', COALESCE(top_holders, '[]'::json)
+  );
+END;
+$$ LANGUAGE plpgsql;

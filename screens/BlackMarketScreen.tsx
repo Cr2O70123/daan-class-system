@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair, Loader2, RefreshCw } from 'lucide-react';
 import { User, Product, LeaderboardEntry } from '../types';
 import { updateUserInDb } from '../services/authService';
-import { fetchClassLeaderboard, transferBlackCoins } from '../services/dataService';
+import { fetchClassLeaderboard, transferBlackCoins, fetchBlackMarketStats } from '../services/dataService';
 import { createNotification } from '../services/notificationService';
 
 interface BlackMarketScreenProps {
@@ -47,35 +47,27 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     const [totalSupply, setTotalSupply] = useState(0);
     const [inflationMultiplier, setInflationMultiplier] = useState(1.0);
     const [marketSentiment, setMarketSentiment] = useState(0); // -1 (Bear) to 1 (Bull)
-    const [isMarketLoading, setIsMarketLoading] = useState(true); // Prevents exploit before data loads
+    const [isMarketLoading, setIsMarketLoading] = useState(true); 
 
     // Interaction Data
     const [userList, setUserList] = useState<(LeaderboardEntry & { isStealth?: boolean })[]>([]);
-    const [wantedList, setWantedList] = useState<LeaderboardEntry[]>([]); // Top 3 holders
+    const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+    const [wantedList, setWantedList] = useState<any[]>([]); // Simplified type for stats
     const [heistLog, setHeistLog] = useState<string[]>([]);
     const [isHacking, setIsHacking] = useState(false);
 
     // Inventory Data
     const [myBlackMarketItems, setMyBlackMarketItems] = useState<string[]>([]);
 
-    // 1. Initial Load & Market Simulation
+    // 1. Optimized Market Polling (Run frequently, but low bandwidth)
     useEffect(() => {
-        const initMarket = async () => {
-            const users = await fetchClassLeaderboard();
-            // Filter out self
-            const otherUsers = users.filter(u => u.studentId !== user.studentId);
-            setUserList(otherUsers);
-
-            // Determine Wanted List (Top 3 holders of BMC)
-            const topHolders = [...users]
-                .filter(u => !u.isStealth && (u.blackMarketCoins || 0) > 0) // Only show if they have coins
-                .sort((a, b) => (b.blackMarketCoins || 0) - (a.blackMarketCoins || 0))
-                .slice(0, 3);
-            setWantedList(topHolders);
+        const updateEconomy = async () => {
+            // Fetch lightweight stats
+            const stats = await fetchBlackMarketStats();
             
-            // Calculate Total Supply
-            const total = users.reduce((sum, u) => sum + (u.blackMarketCoins || 0), 0);
+            const total = stats.totalSupply;
             setTotalSupply(total);
+            setWantedList(stats.topHolders);
             
             // --- DYNAMIC ECONOMY ALGORITHM ---
             const ANCHOR_SUPPLY = 50000;
@@ -83,22 +75,21 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             // 1. Inflation Multiplier (For Item Prices)
             let infMult = 1.0;
             if (total > ANCHOR_SUPPLY) {
-                // If supply doubles (100k), prices increase by 50%
                 infMult = 1 + ((total - ANCHOR_SUPPLY) / ANCHOR_SUPPLY) * 0.5; 
             }
-            setInflationMultiplier(Math.max(0.8, infMult)); // Min 0.8x price
+            setInflationMultiplier(Math.max(0.8, infMult)); 
 
             // 2. Exchange Rate (PT per 1 BMC)
             // Base Rate logic: More supply = BMC worth LESS PT
             let baseRate = 100 * (ANCHOR_SUPPLY / Math.max(10000, total)); 
             
             // Add Time-Based Trend (Sine wave to simulate market cycles)
-            const time = Date.now() / 10000; // Slowly changing
-            const trend = Math.sin(time) * 20; // +/- 20 PT swing based on "cycle"
-            setMarketSentiment(Math.sin(time)); // For UI indicator
+            const time = Date.now() / 10000; 
+            const trend = Math.sin(time) * 20; 
+            setMarketSentiment(Math.sin(time)); 
 
             // Add Random Noise (Volatility)
-            const noise = (Math.random() - 0.5) * 10; // +/- 5 PT jitter
+            const noise = (Math.random() - 0.5) * 10; 
 
             let calculatedRate = baseRate + trend + noise;
             calculatedRate = Math.max(10, Math.min(500, calculatedRate)); // Clamp
@@ -118,10 +109,30 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             setIsMarketLoading(false);
         };
 
-        initMarket();
-        const interval = setInterval(initMarket, 3000); // Update every 3s
+        updateEconomy();
+        const interval = setInterval(updateEconomy, 3000); // 3s polling for economy is fine if optimized
         return () => clearInterval(interval);
     }, [user.blackMarketCoins]);
+
+    // 2. Heavy User List Fetching (Only on Interact Tab or Mount)
+    const loadFullUserList = async () => {
+        setIsLoadingUsers(true);
+        try {
+            const users = await fetchClassLeaderboard();
+            const otherUsers = users.filter(u => u.studentId !== user.studentId);
+            setUserList(otherUsers);
+        } catch (e) {
+            console.error(e);
+        }
+        setIsLoadingUsers(false);
+    };
+
+    // Load users only when switching to INTERACT tab for the first time
+    useEffect(() => {
+        if (tab === 'INTERACT' && userList.length === 0) {
+            loadFullUserList();
+        }
+    }, [tab]);
 
     // Update local inventory list
     useEffect(() => {
@@ -221,7 +232,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         const target = userList.find(u => u.studentId === targetId);
         if (!target) return;
 
-        const isWanted = wantedList.some(w => w.studentId === targetId);
+        const isWanted = wantedList.some(w => w.student_id === targetId); // Note: wantedList uses DB column names now
 
         const toolId = tool === 'basic' ? 'chip_basic' : 'chip_adv';
         const toolIdx = user.inventory.indexOf(toolId);
@@ -308,7 +319,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 alert(`[偵查報告]\n目標: ${target.name}\nPT: ${target.points}\nBMC: ${target.blackMarketCoins || 0}\n等級: ${target.level}`);
                 consumeItem(itemId);
             } else {
-                alert("找不到目標");
+                alert("找不到目標 (請先進入玩家互動分頁載入列表)");
             }
         } else if (itemId === 'item_stealth') {
             if (confirm("啟動光學迷彩？(24小時內隱藏身分)")) {
@@ -496,7 +507,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 {/* --- INTERACT TAB --- */}
                 {tab === 'INTERACT' && (
                     <div className="space-y-4">
-                        {/* Wanted List */}
+                        {/* Wanted List - Populated by RPC */}
                         <div className="bg-gradient-to-r from-red-900/40 to-black border border-red-800 rounded-xl p-4 relative overflow-hidden">
                             <div className="absolute right-0 top-0 opacity-20"><Siren size={80} className="text-red-500"/></div>
                             <h3 className="font-black text-red-500 text-lg mb-3 flex items-center gap-2 relative z-10">
@@ -515,9 +526,9 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     wantedList.map((target, idx) => (
                                         <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center relative overflow-hidden">
                                             <div className="text-xs text-red-400 font-bold mb-1">NO.{idx+1}</div>
-                                            <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatarColor} flex items-center justify-center font-bold`}>{target.name[0]}</div>
+                                            <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatar_color} flex items-center justify-center font-bold`}>{target.name[0]}</div>
                                             <div className="text-xs text-gray-300 truncate">{target.name}</div>
-                                            <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.blackMarketCoins}</div>
+                                            <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.black_market_coins}</div>
                                             <div className="absolute inset-0 border-2 border-red-600/30 animate-pulse pointer-events-none"></div>
                                         </div>
                                     ))
@@ -525,11 +536,20 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             </div>
                         </div>
 
-                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-xl mb-4">
-                            <h3 className="font-bold text-white mb-2 flex items-center gap-2"><Activity size={18}/> 玩家列表</h3>
-                            <p className="text-xs text-gray-400 leading-relaxed">
-                                可以對其他玩家進行 <span className="text-blue-400 font-bold">轉帳</span> (需手續費) 或 <span className="text-red-400 font-bold">駭入</span> (有風險)。
-                            </p>
+                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-xl mb-4 flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-white mb-2 flex items-center gap-2"><Activity size={18}/> 玩家列表</h3>
+                                <p className="text-xs text-gray-400 leading-relaxed">
+                                    載入列表以互動
+                                </p>
+                            </div>
+                            <button 
+                                onClick={loadFullUserList} 
+                                disabled={isLoadingUsers}
+                                className="bg-blue-900 hover:bg-blue-800 text-blue-100 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                            >
+                                <RefreshCw size={12} className={isLoadingUsers ? "animate-spin" : ""}/> {isLoadingUsers ? '載入中' : '刷新列表'}
+                            </button>
                         </div>
 
                         {heistLog.length > 0 && (
@@ -539,7 +559,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                         )}
 
                         <div className="space-y-2">
-                            {isMarketLoading ? (
+                            {isLoadingUsers ? (
                                 [1, 2, 3, 4, 5].map(i => (
                                     <div key={i} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center animate-pulse">
                                         <div className="flex items-center gap-3">
@@ -549,15 +569,13 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                                 <div className="h-2 w-10 bg-gray-800 rounded"></div>
                                             </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <div className="w-10 h-6 bg-gray-800 rounded"></div>
-                                            <div className="w-10 h-6 bg-gray-800 rounded"></div>
-                                        </div>
                                     </div>
                                 ))
+                            ) : userList.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500 text-xs">點擊「刷新列表」查看玩家</div>
                             ) : (
                                 userList.map(u => {
-                                    const isWanted = wantedList.some(w => w.studentId === u.studentId);
+                                    const isWanted = wantedList.some(w => w.student_id === u.studentId);
                                     return (
                                         <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
                                             <div className="flex items-center gap-3">

@@ -386,6 +386,61 @@ export const transferBlackCoins = async (senderId: string, receiverId: string, a
     }
 };
 
+// --- NEW: Optimized Black Market Stats Fetcher ---
+export interface BlackMarketStats {
+    totalSupply: number;
+    topHolders: {
+        name: string;
+        student_id: string;
+        black_market_coins: number;
+        avatar_color: string;
+        avatar_image?: string;
+        avatar_frame?: string;
+    }[];
+}
+
+export const fetchBlackMarketStats = async (): Promise<BlackMarketStats> => {
+    try {
+        // Try RPC first (Fastest)
+        const { data, error } = await supabase.rpc('get_black_market_stats');
+        
+        if (!error && data) {
+            return data as BlackMarketStats;
+        }
+
+        console.warn("RPC fetch failed, falling back to lightweight queries", error);
+
+        // Fallback Strategy: 2 lightweight parallel queries
+        // 1. Get Top 3 (Limit 3)
+        const topPromise = supabase
+            .from('users')
+            .select('name, student_id, black_market_coins, avatar_color, avatar_image, avatar_frame')
+            .eq('is_banned', false)
+            .gt('black_market_coins', 0)
+            .order('black_market_coins', { ascending: false })
+            .limit(3);
+
+        // 2. Get Sum (Only fetch ID and Coins column to reduce bandwidth)
+        const sumPromise = supabase
+            .from('users')
+            .select('black_market_coins')
+            .eq('is_banned', false);
+
+        const [topRes, sumRes] = await Promise.all([topPromise, sumPromise]);
+
+        const total = (sumRes.data || []).reduce((acc: number, curr: any) => acc + (curr.black_market_coins || 0), 0);
+        
+        return {
+            totalSupply: total,
+            topHolders: (topRes.data || []) as any
+        };
+
+    } catch (e) {
+        console.error("Critical error fetching market stats", e);
+        return { totalSupply: 0, topHolders: [] };
+    }
+};
+
 // --- PK Leaderboard (Updated) ---
 
 export const fetchPkLeaderboard = async (mode: 'CLASSIC' | 'OVERLOAD' = 'CLASSIC'): Promise<LeaderboardEntry[]> => {
