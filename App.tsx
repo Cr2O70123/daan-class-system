@@ -50,6 +50,8 @@ const XiangqiScreen = React.lazy(() => import('./screens/XiangqiScreen').then(mo
 const GomokuScreen = React.lazy(() => import('./screens/GomokuScreen').then(module => ({ default: module.GomokuScreen })));
 const OthelloScreen = React.lazy(() => import('./screens/OthelloScreen').then(module => ({ default: module.OthelloScreen })));
 const CrashGameScreen = React.lazy(() => import('./screens/CrashGameScreen').then(module => ({ default: module.CrashGameScreen })));
+const ConnectFourScreen = React.lazy(() => import('./screens/ConnectFourScreen').then(module => ({ default: module.ConnectFourScreen })));
+const MemoryGameScreen = React.lazy(() => import('./screens/MemoryGameScreen').then(module => ({ default: module.MemoryGameScreen })));
 
 // Helper to get frame styles
 const getFrameStyle = (frameId?: string) => {
@@ -541,6 +543,8 @@ const App = () => {
               {id === 'gomoku' && <GomokuScreen onBack={handleCloseFeature} />}
               {id === 'othello' && <OthelloScreen onBack={handleCloseFeature} />}
               {id === 'crash_game' && <CrashGameScreen user={user} onBack={handleCloseFeature} onFinish={handleBmcGameFinish} />}
+              {id === 'connect_four' && <ConnectFourScreen onBack={handleCloseFeature} />}
+              {id === 'memory_game' && <MemoryGameScreen user={user} onBack={handleCloseFeature} onFinish={handleFinishChallenge} />}
           </Suspense>
       );
   };

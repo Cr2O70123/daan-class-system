@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll, Circle, RefreshCw, Rocket } from 'lucide-react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll, Circle, RefreshCw, Rocket, Target, Box } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
@@ -124,7 +124,7 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               
               <CategoryCard 
                   title="休閒益智" 
-                  count="5 款遊戲"
+                  count="7 款遊戲"
                   icon={<Puzzle size={24} />} 
                   color="bg-gradient-to-br from-orange-400 to-pink-500"
                   onClick={() => setView('PUZZLE')}
@@ -195,6 +195,22 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
                       colorClass="bg-blue-500"
                       onClick={() => onNavigate('block_blast')}
                       tags={['舒壓']}
+                  />
+                  <GameItem 
+                      title="四子棋 (Connect 4)" 
+                      desc="經典連線對戰，先連成四子者勝。" 
+                      icon={<Target size={24} />} 
+                      colorClass="bg-red-500"
+                      onClick={() => onNavigate('connect_four')}
+                      tags={['NEW', '雙人']}
+                  />
+                  <GameItem 
+                      title="翻牌記憶 (Memory)" 
+                      desc="考驗記憶力，找出所有配對。" 
+                      icon={<Box size={24} />} 
+                      colorClass="bg-purple-500"
+                      onClick={() => onNavigate('memory_game')}
+                      tags={['NEW', '腦力']}
                   />
                   <GameItem 
                       title="中國象棋" 
