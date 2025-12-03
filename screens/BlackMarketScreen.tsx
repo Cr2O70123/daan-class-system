@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair, Loader2, RefreshCw, Plus, Minus, Info, Box, HelpCircle, FileText } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair, Loader2, RefreshCw, Plus, Minus, Info, Box, HelpCircle, FileText, WifiOff } from 'lucide-react';
 import { User, Product } from '../types';
 import { updateUserInDb } from '../services/authService';
 import { transferBlackCoins, fetchBlackMarketStats, fetchUserListLite } from '../services/dataService';
@@ -22,15 +22,16 @@ const getDynamicPrice = (base: number, multiplier: number) => {
     return Math.ceil(base * multiplier);
 };
 
+// Updated Prices to reflect "900k+" economy
 const BLACK_MARKET_ITEMS: Product[] = [
-    { id: 'chip_basic', name: '基礎破解晶片', price: 200, currency: 'BMC', color: 'bg-blue-900 text-blue-300', icon: <TerminalIcon />, description: '嘗試駭入他人帳戶 (30% 成功率)', category: 'black_market', tag: '消耗品' },
-    { id: 'chip_adv', name: '高階滲透軟體', price: 800, currency: 'BMC', color: 'bg-red-900 text-red-300', icon: <Skull size={20}/>, description: '高機率駭入他人帳戶 (60% 成功率)', category: 'black_market', tag: '消耗品' },
-    { id: 'item_firewall', name: '主動式防火牆', price: 500, currency: 'BMC', color: 'bg-green-900 text-green-300', icon: <Shield size={20}/>, description: '被動抵擋駭客攻擊 (機率性)', category: 'black_market', tag: '被動' },
-    { id: 'item_spy', name: '間諜衛星', price: 1500, currency: 'BMC', color: 'bg-purple-900 text-purple-300', icon: <Eye size={20}/>, description: '查看任意玩家的詳細資產與狀態', category: 'black_market', tag: '情報' },
-    { id: 'item_stealth', name: '光學迷彩', price: 3000, currency: 'BMC', color: 'bg-slate-700 text-slate-300', icon: <UserMinus size={20}/>, description: '從排行榜與駭客名單中消失 24 小時', category: 'black_market', tag: 'BUFF' },
-    { id: 'item_megaphone', name: '暗網廣播', price: 1000, currency: 'BMC', color: 'bg-yellow-900 text-yellow-300', icon: <Volume2 size={20}/>, description: '發送一條匿名全服公告', category: 'black_market', tag: '消耗品' },
-    { id: 'frame_glitch', name: '故障藝術框', price: 8000, currency: 'BMC', color: 'bg-indigo-900 text-cyan-400', icon: <Zap size={20}/>, description: '稀有動態故障風格頭像框', category: 'frame', isRare: true },
-    { id: 'title_dark_lord', name: '稱號：暗夜領主', price: 15000, currency: 'BMC', color: 'bg-black text-red-600', icon: <Crown size={20}/>, description: '個人頁面專屬黑色稱號', category: 'cosmetic', isRare: true },
+    { id: 'chip_basic', name: '基礎破解晶片', price: 15000, currency: 'BMC', color: 'bg-blue-900 text-blue-300', icon: <TerminalIcon />, description: '嘗試駭入他人帳戶 (30% 成功率)', category: 'black_market', tag: '消耗品' },
+    { id: 'chip_adv', name: '高階滲透軟體', price: 60000, currency: 'BMC', color: 'bg-red-900 text-red-300', icon: <Skull size={20}/>, description: '高機率駭入他人帳戶 (60% 成功率)', category: 'black_market', tag: '消耗品' },
+    { id: 'item_firewall', name: '主動式防火牆', price: 45000, currency: 'BMC', color: 'bg-green-900 text-green-300', icon: <Shield size={20}/>, description: '被動抵擋駭客攻擊 (機率性)', category: 'black_market', tag: '被動' },
+    { id: 'item_spy', name: '間諜衛星', price: 120000, currency: 'BMC', color: 'bg-purple-900 text-purple-300', icon: <Eye size={20}/>, description: '查看任意玩家的詳細資產與狀態', category: 'black_market', tag: '情報' },
+    { id: 'item_stealth', name: '光學迷彩', price: 350000, currency: 'BMC', color: 'bg-slate-700 text-slate-300', icon: <UserMinus size={20}/>, description: '從排行榜與駭客名單中消失 24 小時', category: 'black_market', tag: 'BUFF' },
+    { id: 'item_megaphone', name: '暗網廣播', price: 80000, currency: 'BMC', color: 'bg-yellow-900 text-yellow-300', icon: <Volume2 size={20}/>, description: '發送一條匿名全服公告', category: 'black_market', tag: '消耗品' },
+    { id: 'frame_glitch', name: '故障藝術框', price: 950000, currency: 'BMC', color: 'bg-indigo-900 text-cyan-400', icon: <Zap size={20}/>, description: '稀有動態故障風格頭像框', category: 'frame', isRare: true },
+    { id: 'title_dark_lord', name: '稱號：暗夜領主', price: 2000000, currency: 'BMC', color: 'bg-black text-red-600', icon: <Crown size={20}/>, description: '個人頁面專屬黑色稱號', category: 'cosmetic', isRare: true },
 ];
 
 export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBack, onBuy, setUser }) => {
@@ -71,20 +72,20 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     useEffect(() => {
         const updateEconomy = async () => {
             try {
-                const stats = await fetchBlackMarketStats();
+                // Wrap in try-catch to prevent page crash if RPC fails
+                const stats = await fetchBlackMarketStats().catch(() => ({ totalSupply: 500000, topHolders: [] }));
                 
                 const total = stats.totalSupply;
                 setTotalSupply(total);
                 setWantedList(stats.topHolders);
                 
                 // --- Supply-Demand Rate Logic ---
-                // Base anchor: 100,000 BMC in circulation = 100.0 Rate
-                const ANCHOR_SUPPLY = 100000;
+                // Higher Supply = Lower BMC Value = Lower Rate (PT/BMC)
+                // Lower Supply = Higher BMC Value = Higher Rate
+                const ANCHOR_SUPPLY = 500000; // Adjusted for higher prices
                 const BASE_RATE = 100;
 
-                // Scarcity Ratio: If Supply is High, Value Drops (Inflation)
-                // If Supply is Low, Value Rises (Deflation)
-                // Ratio = Anchor / Current
+                // Scarcity Ratio
                 let scarcityRatio = ANCHOR_SUPPLY / Math.max(10000, total);
                 
                 // Dampen the ratio
@@ -92,16 +93,15 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
 
                 // Add Market Noise (+/- 10%)
                 const time = Date.now();
-                const noise = (Math.sin(time / 20000) * 5) + (Math.random() * 4 - 2);
+                const noise = (Math.sin(time / 20000) * 15) + (Math.random() * 10 - 5);
                 
                 let calculatedRate = targetRate + noise;
-                calculatedRate = Math.max(50, Math.min(300, calculatedRate)); // Clamp
+                calculatedRate = Math.max(10, Math.min(500, calculatedRate)); // Clamp
 
-                // Inflation logic for Shop Prices
-                // If Rate is Low (BMC is cheap/abundant), prices go UP
+                // Inflation logic
                 let infMult = 1.0;
-                if (calculatedRate < 80) {
-                    infMult = 1 + ((80 - calculatedRate) / 80) * 0.8; // Up to 1.8x
+                if (calculatedRate < 50) {
+                    infMult = 1 + ((50 - calculatedRate) / 50) * 1.5; 
                 }
                 setInflationMultiplier(infMult);
 
@@ -118,7 +118,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 });
 
                 // Sentiment
-                setMarketSentiment(calculatedRate > 100 ? 1 : -1);
+                setMarketSentiment(calculatedRate > BASE_RATE ? 1 : -1);
 
             } catch (e) {
                 console.error("Market update failed", e);
@@ -243,8 +243,8 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
 
     // --- Gacha Handlers ---
     const handleGacha = async () => {
-        const PRICE = 200; // 200 BMC
-        if ((user.blackMarketCoins || 0) < PRICE) { alert("BMC 不足"); return; }
+        const PRICE = 10000; // Increased Gacha Price
+        if ((user.blackMarketCoins || 0) < PRICE) { alert(`BMC 不足，需要 ${PRICE}`); return; }
         if (isGachaRolling) return;
 
         setIsGachaRolling(true);
@@ -262,24 +262,24 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         // Prepare base user update
         let updatedUser = { ...user, blackMarketCoins: deductedCoins };
 
-        if (rand < 0.05) {
-            // 5% Jackpot
-            reward = { type: '大獎 (JACKPOT)', value: '+500 BMC', color: 'text-yellow-400' };
-            updatedUser.blackMarketCoins += 500;
-        } else if (rand < 0.20) {
-            // 15% Small Profit
-            reward = { type: '中獎 (WIN)', value: '+300 BMC', color: 'text-green-400' };
-            updatedUser.blackMarketCoins += 300;
-        } else if (rand < 0.50) {
+        if (rand < 0.01) {
+            // 1% Jackpot
+            reward = { type: '大獎 (JACKPOT)', value: '+50,000 BMC', color: 'text-yellow-400' };
+            updatedUser.blackMarketCoins += 50000;
+        } else if (rand < 0.10) {
+            // 10% Small Profit
+            reward = { type: '中獎 (WIN)', value: '+20,000 BMC', color: 'text-green-400' };
+            updatedUser.blackMarketCoins += 20000;
+        } else if (rand < 0.40) {
             // 30% Break Even
-            reward = { type: '保本 (SAFE)', value: '+200 BMC', color: 'text-blue-400' };
-            updatedUser.blackMarketCoins += 200;
-        } else if (rand < 0.70) {
+            reward = { type: '保本 (SAFE)', value: '+10,000 BMC', color: 'text-blue-400' };
+            updatedUser.blackMarketCoins += 10000;
+        } else if (rand < 0.60) {
             // 20% Item (Chip)
             reward = { type: '道具 (ITEM)', value: '基礎破解晶片 x1', color: 'text-purple-400' };
             updatedUser.inventory = [...updatedUser.inventory, 'chip_basic'];
         } else {
-            // 30% Loss (Trash)
+            // 40% Loss (Trash)
             reward = { type: '銘謝惠顧', value: '0 BMC', color: 'text-gray-500' };
         }
 
@@ -539,7 +539,6 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                 {tab === 'EXCHANGE' && (
                     <div className="space-y-6">
                         <div className="bg-gray-900 rounded-2xl p-6 border border-gray-800 shadow-2xl relative overflow-hidden">
-                            {/* ... (Exchange Chart UI same as before) ... */}
                             <div className="flex justify-between items-start mb-1">
                                 <div>
                                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -678,63 +677,69 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             </div>
                         )}
 
-                        {userListError && (
-                            <div className="text-center p-4 border border-red-900/50 rounded-xl bg-red-900/20 text-red-400 text-xs">
-                                無法載入玩家列表。請檢查網路或稍後再試。
-                                <button onClick={loadFullUserList} className="block mx-auto mt-2 underline font-bold">重試</button>
+                        {userListError ? (
+                            <div className="text-center p-6 border border-red-900/50 rounded-xl bg-red-900/20 text-red-400 flex flex-col items-center justify-center gap-3 animate-in fade-in">
+                                <div className="bg-red-900/30 p-3 rounded-full"><WifiOff size={24} /></div>
+                                <div>
+                                    <h4 className="font-bold text-sm mb-1">加密連線失敗 (Offline Mode)</h4>
+                                    <p className="text-xs opacity-80">無法載入玩家列表。請檢查網路或稍後再試。</p>
+                                </div>
+                                <button onClick={loadFullUserList} className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors">
+                                    重新連線
+                                </button>
                             </div>
-                        )}
-
-                        <div className="space-y-2">
-                            {isLoadingUsers ? (
-                                [1, 2, 3, 4, 5].map(i => (
-                                    <div key={i} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center animate-pulse">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gray-800"></div>
-                                            <div>
-                                                <div className="h-3 w-20 bg-gray-800 rounded mb-1"></div>
-                                                <div className="h-2 w-10 bg-gray-800 rounded"></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            ) : userList.length === 0 && !userListError ? (
-                                <div className="text-center py-8 text-gray-500 text-xs">點擊「刷新列表」查看玩家</div>
-                            ) : (
-                                userList.map(u => {
-                                    const isWanted = wantedList.some(w => w.student_id === u.studentId);
-                                    return (
-                                        <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
+                        ) : (
+                            <div className="space-y-2">
+                                {isLoadingUsers ? (
+                                    [1, 2, 3, 4, 5].map(i => (
+                                        <div key={i} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center animate-pulse">
                                             <div className="flex items-center gap-3">
-                                                {/* Optimized: Using color only, no image for lists */}
-                                                <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
+                                                <div className="w-8 h-8 rounded-full bg-gray-800"></div>
                                                 <div>
-                                                    <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                                                        {u.isStealth ? 'UNKOWN' : u.name}
-                                                        {isWanted && <span className="text-[9px] bg-red-600 text-white px-1.5 rounded animate-pulse">WANTED</span>}
-                                                    </div>
-                                                    <div className="text-[10px] text-gray-500">Lv.{u.level} • {u.blackMarketCoins} BMC</div>
+                                                    <div className="h-3 w-20 bg-gray-800 rounded mb-1"></div>
+                                                    <div className="h-2 w-10 bg-gray-800 rounded"></div>
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    onClick={() => handleP2PTransfer(u.studentId, u.name)}
-                                                    className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
-                                                >
-                                                    轉帳
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleHack(u.studentId, 'basic')}
-                                                    className={`px-3 py-1 text-xs rounded border transition-colors flex items-center gap-1 ${isWanted ? 'bg-red-900 hover:bg-red-800 text-white border-red-500 shadow-sm shadow-red-900' : 'bg-gray-800 hover:bg-red-900 text-red-400 border-red-900'}`}
-                                                >
-                                                    {isWanted && <Crosshair size={10}/>} 駭入
-                                                </button>
-                                            </div>
                                         </div>
-                                    )
-                                })
-                            )}
-                        </div>
+                                    ))
+                                ) : userList.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500 text-xs">點擊「刷新列表」查看玩家</div>
+                                ) : (
+                                    userList.map(u => {
+                                        const isWanted = wantedList.some(w => w.student_id === u.studentId);
+                                        return (
+                                            <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    {/* Optimized: Using color only, no image for lists */}
+                                                    <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                                                            {u.isStealth ? 'UNKOWN' : u.name}
+                                                            {isWanted && <span className="text-[9px] bg-red-600 text-white px-1.5 rounded animate-pulse">WANTED</span>}
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-500">Lv.{u.level} • {u.blackMarketCoins} BMC</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => handleP2PTransfer(u.studentId, u.name)}
+                                                        className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
+                                                    >
+                                                        轉帳
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleHack(u.studentId, 'basic')}
+                                                        className={`px-3 py-1 text-xs rounded border transition-colors flex items-center gap-1 ${isWanted ? 'bg-red-900 hover:bg-red-800 text-white border-red-500 shadow-sm shadow-red-900' : 'bg-gray-800 hover:bg-red-900 text-red-400 border-red-900'}`}
+                                                    >
+                                                        {isWanted && <Crosshair size={10}/>} 駭入
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -775,7 +780,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                                     </div>
                                                     <p className="text-[10px] text-gray-500 line-clamp-1">{item.description}</p>
                                                     <div className="text-purple-400 font-mono text-xs font-bold mt-1">
-                                                        {dynamicPrice} BMC 
+                                                        {dynamicPrice.toLocaleString()} BMC 
                                                         {inflationMultiplier > 1.05 && <span className="text-[9px] text-red-500 ml-1">↑</span>}
                                                     </div>
                                                 </div>
@@ -805,7 +810,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                                                 : 'bg-gray-800 text-gray-500 border border-red-900/50 cursor-not-allowed'
                                                     }`}
                                                 >
-                                                    {isOwned ? '已擁有' : `購買 (${totalItemPrice})`}
+                                                    {isOwned ? '已擁有' : `購買 (${totalItemPrice.toLocaleString()})`}
                                                 </button>
                                             </div>
                                         </div>
@@ -816,7 +821,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                     </div>
                 )}
 
-                {/* --- GACHA TAB --- */}
+                {/* ... GACHA & INVENTORY TABS KEPT SAME ... */}
                 {tab === 'GACHA' && (
                     <div className="flex flex-col items-center justify-center p-4 animate-in fade-in">
                         <div className="w-full max-w-sm bg-gray-900 border-2 border-purple-500/50 rounded-3xl p-6 relative overflow-hidden shadow-[0_0_50px_rgba(168,85,247,0.2)] text-center">
@@ -827,7 +832,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             <div className="mb-6">
                                 <Box size={64} className={`mx-auto text-purple-400 mb-4 ${isGachaRolling ? 'animate-bounce' : ''}`} />
                                 <h2 className="text-2xl font-black text-white tracking-widest">加密補給箱</h2>
-                                <p className="text-xs text-purple-300 font-bold mt-1">每次抽取消耗 200 BMC</p>
+                                <p className="text-xs text-purple-300 font-bold mt-1">每次抽取消耗 10,000 BMC</p>
                             </div>
 
                             {/* Result Display */}
@@ -846,14 +851,14 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
 
                             <button 
                                 onClick={handleGacha}
-                                disabled={isGachaRolling || (user.blackMarketCoins || 0) < 200}
+                                disabled={isGachaRolling || (user.blackMarketCoins || 0) < 10000}
                                 className={`w-full py-4 rounded-xl font-black text-lg transition-all ${
-                                    isGachaRolling || (user.blackMarketCoins || 0) < 200
+                                    isGachaRolling || (user.blackMarketCoins || 0) < 10000
                                     ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                                     : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg hover:scale-105 active:scale-95'
                                 }`}
                             >
-                                {isGachaRolling ? '解密中...' : '開啟補給箱 (200)'}
+                                {isGachaRolling ? '解密中...' : '開啟補給箱 (10k)'}
                             </button>
 
                             {/* Rules Section */}
@@ -862,18 +867,17 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     <HelpCircle size={12}/> 機率說明
                                 </h4>
                                 <ul className="text-[10px] text-gray-500 space-y-1">
-                                    <li className="flex justify-between"><span className="text-yellow-500">大獎 (500 BMC)</span> <span>5%</span></li>
-                                    <li className="flex justify-between"><span className="text-green-500">中獎 (300 BMC)</span> <span>15%</span></li>
-                                    <li className="flex justify-between"><span className="text-blue-500">保本 (200 BMC)</span> <span>30%</span></li>
+                                    <li className="flex justify-between"><span className="text-yellow-500">大獎 (50k BMC)</span> <span>1%</span></li>
+                                    <li className="flex justify-between"><span className="text-green-500">中獎 (20k BMC)</span> <span>10%</span></li>
+                                    <li className="flex justify-between"><span className="text-blue-500">保本 (10k BMC)</span> <span>30%</span></li>
                                     <li className="flex justify-between"><span className="text-purple-500">道具 (破解晶片)</span> <span>20%</span></li>
-                                    <li className="flex justify-between"><span>銘謝惠顧</span> <span>30%</span></li>
+                                    <li className="flex justify-between"><span>銘謝惠顧</span> <span>40%</span></li>
                                 </ul>
                             </div>
                         </div>
                     </div>
                 )}
 
-                {/* --- INVENTORY TAB --- */}
                 {tab === 'INVENTORY' && (
                     <div className="grid grid-cols-2 gap-3">
                         {myBlackMarketItems.length === 0 ? (

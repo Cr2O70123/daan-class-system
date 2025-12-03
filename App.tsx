@@ -19,7 +19,7 @@ import { UpdateAnnouncementModal } from './components/UpdateAnnouncementModal';
 import { AiTutorScreen } from './screens/AiTutorScreen';
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult, PkGameMode } from './types';
-import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2, Users, Clock } from 'lucide-react';
+import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2, Users, Clock, Server, CheckCircle2 } from 'lucide-react';
 
 // Services
 import { calculateLevel } from './services/levelService';
@@ -92,46 +92,67 @@ const MaintenanceScreen = () => (
     </div>
 );
 
-// Login Queue Overlay
+// Enhanced Login Queue Overlay
 const LoginQueueOverlay = ({ position, onCancel }: { position: number, onCancel: () => void }) => {
     const peopleAhead = Math.max(0, position - 1);
     
+    // Simulate estimated wait time based on position
+    // Add randomness to make it feel real (sometimes stalls)
+    const estMinutes = Math.floor((position * 2) / 60);
+    const estSeconds = (position * 2) % 60;
+    
+    const formattedTime = estMinutes > 0 ? `${estMinutes}分 ${estSeconds}秒` : `${estSeconds} 秒`;
+
     return (
         <div className="fixed inset-0 z-[999] bg-[#0f172a] flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
-            <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mb-8 border border-blue-500/30 shadow-[0_0_40px_rgba(59,130,246,0.3)] relative overflow-hidden">
-                <div className="absolute inset-0 bg-blue-500/20 animate-ping rounded-full"></div>
-                <Users size={40} className="text-blue-400 relative z-10" />
+            {/* Server Status Header */}
+            <div className="absolute top-8 left-0 right-0 flex justify-center">
+                <div className="bg-slate-800/80 backdrop-blur px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-mono border border-slate-700">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
+                    <span className="text-slate-400">SERVER LOAD: <span className="text-yellow-400 font-bold">HIGH (98%)</span></span>
+                </div>
+            </div>
+
+            <div className="relative mb-10">
+                <div className="w-32 h-32 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/30 shadow-[0_0_50px_rgba(59,130,246,0.2)] relative overflow-hidden">
+                    <div className="absolute inset-0 bg-blue-500/10 animate-ping rounded-full" style={{animationDuration: '3s'}}></div>
+                    <Server size={48} className="text-blue-400 relative z-10" />
+                </div>
+                {/* Connecting lines decoration */}
+                <div className="absolute -left-12 top-1/2 w-12 h-[1px] bg-gradient-to-r from-transparent to-blue-500/50"></div>
+                <div className="absolute -right-12 top-1/2 w-12 h-[1px] bg-gradient-to-l from-transparent to-blue-500/50"></div>
             </div>
             
             <h1 className="text-3xl font-black mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
-                伺服器滿載
+                正在排隊進入
             </h1>
-            <p className="text-slate-400 text-sm mb-10 font-medium">目前登入人數過多，請依序排隊...</p>
+            <p className="text-slate-400 text-sm mb-8 font-medium">目前伺服器滿載，請勿關閉視窗...</p>
             
-            <div className="bg-slate-800/50 backdrop-blur-md p-8 rounded-3xl border border-slate-700 w-full max-w-xs shadow-2xl relative overflow-hidden">
+            <div className="bg-slate-800/50 backdrop-blur-md p-6 rounded-3xl border border-slate-700 w-full max-w-xs shadow-2xl relative overflow-hidden">
                 {/* Progress Bar Background */}
-                <div className="absolute bottom-0 left-0 h-1 bg-blue-600 animate-[pulse_2s_infinite]" style={{width: '100%'}}></div>
+                <div className="absolute top-0 left-0 h-1 bg-blue-500 animate-[loading_2s_ease-in-out_infinite]" style={{width: '30%'}}></div>
+                <style>{`@keyframes loading { 0% { left: -30%; } 100% { left: 130%; } }`}</style>
                 
-                <div className="flex justify-between items-center mb-6">
-                    <div className="text-left">
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="text-left p-3 bg-slate-900/50 rounded-xl">
                         <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Queue Position</div>
-                        <div className="text-4xl font-mono font-black text-white">#{position}</div>
+                        <div className="text-3xl font-mono font-black text-white">#{position}</div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right p-3 bg-slate-900/50 rounded-xl">
                         <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">People Ahead</div>
-                        <div className="text-4xl font-mono font-black text-blue-500">{peopleAhead}</div>
+                        <div className="text-3xl font-mono font-black text-blue-500">{peopleAhead}</div>
                     </div>
                 </div>
                 
-                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 bg-slate-900/50 py-2 rounded-lg">
-                    <Clock size={14} className="text-blue-400 animate-spin-slow" /> 
-                    <span>預估等待: <span className="text-white font-bold">{Math.ceil(position * 1.5)}</span> 秒</span>
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 bg-slate-900/80 py-2 rounded-lg border border-slate-700/50">
+                    <Clock size={14} className="text-blue-400 animate-pulse" /> 
+                    <span>預估等待: <span className="text-white font-bold font-mono">{formattedTime}</span></span>
                 </div>
             </div>
 
             <button 
                 onClick={onCancel}
-                className="mt-12 text-slate-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors px-6 py-3 rounded-full hover:bg-white/5"
+                className="mt-12 text-slate-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors px-6 py-3 rounded-full hover:bg-white/5 border border-transparent hover:border-slate-700"
             >
                 <X size={18} /> 取消排隊
             </button>
@@ -205,6 +226,7 @@ const App = () => {
   // Queue System State
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const queueIntervalRef = useRef<number | null>(null);
+  const targetUserRef = useRef<User | null>(null); // Store user while queuing
   
   // Data States
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -260,25 +282,45 @@ const App = () => {
       const isServerBusy = Math.random() > 0.5 && !targetUser.isAdmin;
       
       if (isServerBusy) {
-          // Assign random queue position (e.g. 10 to 30)
-          const pos = Math.floor(Math.random() * 20) + 10;
+          // Assign random queue position (e.g. 50 to 150 to feel REAL)
+          const pos = Math.floor(Math.random() * 100) + 50;
           setQueuePosition(pos);
+          targetUserRef.current = targetUser;
           
-          // Start countdown
+          // Start variable countdown (Real queue simulation)
+          // Speed depends on position: faster when far, slower when close
           if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
-          queueIntervalRef.current = window.setInterval(() => {
+          
+          const processQueue = () => {
               setQueuePosition(prev => {
                   if (prev === null) return null;
+                  
+                  // If finished
                   if (prev <= 1) {
-                      // Queue finished
                       if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
-                      setUser(targetUser); // Login Success
+                      setUser(targetUserRef.current); // Login Success
                       return null;
                   }
-                  // Randomly decrement by 1 or 3 to simulate movement
-                  return Math.max(1, prev - Math.floor(Math.random() * 3 + 1));
+
+                  // Non-linear decrement logic
+                  // Sometimes stick (0 drop), sometimes fast drop (3-5), usually small drop (1-2)
+                  const rand = Math.random();
+                  let drop = 1;
+                  
+                  if (rand > 0.9) drop = 0; // Stalled
+                  else if (rand > 0.7) drop = Math.floor(Math.random() * 4) + 2; // Fast batch
+                  else drop = Math.floor(Math.random() * 2) + 1; // Normal
+
+                  return Math.max(1, prev - drop);
               });
-          }, 1500); // Check every 1.5s
+              
+              // Variable interval for next tick (0.5s to 2s) to feel organic
+              const nextTick = Math.random() * 1500 + 500;
+              queueIntervalRef.current = window.setTimeout(processQueue, nextTick);
+          };
+          
+          processQueue(); // Start loop
+
       } else {
           // No queue needed
           setUser(targetUser);
@@ -286,9 +328,10 @@ const App = () => {
   };
 
   const cancelQueue = () => {
-      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
+      if (queueIntervalRef.current) clearTimeout(queueIntervalRef.current);
       setQueuePosition(null);
-      // Effectively cancels login process
+      targetUserRef.current = null;
+      // Effectively cancels login process, stay on login screen
   };
 
   const handleTabChange = (newTab: Tab) => {
