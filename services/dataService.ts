@@ -412,13 +412,14 @@ export const fetchBlackMarketStats = async () => {
 };
 
 export const fetchUserListLite = async () => {
-    // Optimized: Exclude 'avatar_image' (base64) to reduce payload size significantly
+    // FIX: Must include 'inventory' for firewall check logic in the UI
+    // Excluding avatar_image to reduce size, but we need other props
     const { data, error } = await supabase
         .from('users')
-        .select('name, student_id, black_market_coins, avatar_color, avatar_frame, level, is_stealth')
+        .select('name, student_id, black_market_coins, avatar_color, avatar_frame, level, is_stealth, inventory, points')
         .eq('is_banned', false)
         .order('black_market_coins', { ascending: false })
-        .limit(100); // Hard limit to prevent crash
+        .limit(100); 
     
     if (error) throw error;
     
@@ -428,8 +429,8 @@ export const fetchUserListLite = async () => {
         avatarColor: u.avatar_color,
         blackMarketCoins: u.black_market_coins,
         avatarFrame: u.avatar_frame,
-        isStealth: u.is_stealth
-        // Intentionally no avatarImage
+        isStealth: u.is_stealth,
+        inventory: typeof u.inventory === 'string' ? JSON.parse(u.inventory) : (u.inventory || [])
     }));
 };
 
@@ -437,7 +438,6 @@ export const transferBlackCoins = async (fromId: string, toId: string, amount: n
     if (amount <= 0) throw new Error("Invalid amount");
 
     // This ideally should be a DB Transaction (RPC)
-    // Client-side simulation with optimistic locking risk, but sufficient for this scope
     
     // 1. Deduct from Sender
     const { data: sender, error: fetchErr } = await supabase.from('users').select('black_market_coins').eq('student_id', fromId).single();

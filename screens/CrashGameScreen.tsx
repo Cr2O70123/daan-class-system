@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Rocket, TrendingUp, Gem, Zap, History, XCircle, RotateCcw, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowLeft, Rocket, Gem, XCircle, CheckCircle2 } from 'lucide-react';
 import { User } from '../types';
 
 interface CrashGameScreenProps {
@@ -16,24 +16,48 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
     const [cashedOutAt, setCashedOutAt] = useState<number | null>(null);
     const [history, setHistory] = useState<number[]>([]);
     
-    // Refs for Game Logic
+    // Refs for Game Logic (Mutable values that don't trigger re-renders directly inside loop)
+    const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const requestRef = useRef<number>(0);
     const startTimeRef = useRef<number>(0);
     const crashPointRef = useRef<number>(0);
-    const stateRef = useRef<'IDLE' | 'RUNNING' | 'CRASHED' | 'CASHED_OUT'>('IDLE'); // Ref to access state inside animation loop
+    const animationRef = useRef<number>(0);
 
     // House Edge 4%
     const houseEdge = 0.04; 
 
-    // --- Logic ---
+    // Resize Canvas Helper
+    const updateCanvasSize = useCallback(() => {
+        if (containerRef.current && canvasRef.current) {
+            const { width, height } = containerRef.current.getBoundingClientRect();
+            // Set resolution to match device pixel ratio for sharp rendering
+            const dpr = window.devicePixelRatio || 1;
+            canvasRef.current.width = width * dpr;
+            canvasRef.current.height = height * dpr;
+            
+            // Force redraw if idle
+            if (gameState === 'IDLE') {
+                drawGraph(1.00, false);
+            }
+        }
+    }, [gameState]);
+
+    // Initial Resize
+    useEffect(() => {
+        window.addEventListener('resize', updateCanvasSize);
+        // Delay slightly to ensure layout is ready
+        const timer = setTimeout(updateCanvasSize, 50);
+        return () => {
+            window.removeEventListener('resize', updateCanvasSize);
+            clearTimeout(timer);
+            cancelAnimationFrame(animationRef.current);
+        };
+    }, [updateCanvasSize]);
 
     const generateCrashPoint = () => {
-        // E = 1 / (rand * (1 - edge))
         const r = Math.random();
         const crash = 1 / (r * (1 - houseEdge));
-        // 1% chance of instant crash at 1.00x
-        if (Math.random() < 0.01) return 1.00;
+        if (Math.random() < 0.01) return 1.00; // 1% Instant crash
         return Math.max(1.00, Math.floor(crash * 100) / 100);
     };
 
@@ -49,195 +73,172 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
         }
 
         // Reset State
-        setGameState('RUNNING');
-        stateRef.current = 'RUNNING';
-        setCashedOutAt(null);
         setMultiplier(1.00);
+        setCashedOutAt(null);
+        setGameState('RUNNING');
         
+        // Init Game Refs
         crashPointRef.current = generateCrashPoint();
-        // console.log("Crash Point (Dev):", crashPointRef.current);
-
         startTimeRef.current = Date.now();
-        requestRef.current = requestAnimationFrame(gameLoop);
     };
 
-    const gameLoop = () => {
-        const now = Date.now();
-        const elapsed = (now - startTimeRef.current) / 1000; // seconds
-        
-        // Growth function: Exponential
-        // Starts slow, speeds up
-        const currentM = 1.00 + Math.pow(elapsed, 2) * 0.1 + elapsed * 0.05;
-        
-        // Check Crash
-        if (currentM >= crashPointRef.current) {
-            handleCrash(crashPointRef.current);
-        } else {
-            setMultiplier(currentM);
-            drawGraph(currentM, false);
-            if (stateRef.current === 'RUNNING' || stateRef.current === 'CASHED_OUT') {
-                requestRef.current = requestAnimationFrame(gameLoop);
+    const stopGame = () => {
+        if (gameState === 'RUNNING') {
+            const currentM = multiplier; // Capture current state
+            setCashedOutAt(currentM);
+            setGameState('CASHED_OUT');
+            
+            const betAmount = parseInt(bet);
+            const winnings = Math.floor(betAmount * currentM);
+            const profit = winnings - betAmount;
+            
+            onFinish(profit);
+        }
+    };
+
+    // The Game Loop
+    useEffect(() => {
+        if (gameState !== 'RUNNING' && gameState !== 'CASHED_OUT') return;
+
+        const loop = () => {
+            const now = Date.now();
+            const elapsed = (now - startTimeRef.current) / 1000;
+            
+            // Growth Function: Exponential
+            // M(t) = e^(0.06 * t)
+            const currentM = Math.pow(Math.E, 0.06 * elapsed);
+            
+            if (currentM >= crashPointRef.current) {
+                // CRASH!
+                setMultiplier(crashPointRef.current);
+                setGameState('CRASHED');
+                setHistory(prev => [crashPointRef.current, ...prev].slice(0, 8));
+                
+                // If user didn't cash out, they lose
+                if (gameState === 'RUNNING') {
+                    const betAmount = parseInt(bet);
+                    onFinish(-betAmount);
+                }
+                
+                drawGraph(crashPointRef.current, true);
+            } else {
+                // Continue
+                setMultiplier(currentM);
+                drawGraph(currentM, false);
+                animationRef.current = requestAnimationFrame(loop);
             }
-        }
-    };
+        };
 
-    const handleCrash = (finalPoint: number) => {
-        // Stop Loop
-        cancelAnimationFrame(requestRef.current!);
-        
-        setGameState('CRASHED');
-        stateRef.current = 'CRASHED';
-        setMultiplier(finalPoint);
-        setHistory(prev => [finalPoint, ...prev].slice(0, 8));
-        
-        drawGraph(finalPoint, true);
+        animationRef.current = requestAnimationFrame(loop);
 
-        // Calculate Result
-        const betAmount = parseInt(bet);
-        if (cashedOutAt !== null) {
-            // Already cashed out, nothing to do (profit handled in cashOut)
-        } else {
-            // Lost
-            onFinish(-betAmount);
-        }
-    };
+        return () => cancelAnimationFrame(animationRef.current);
+    }, [gameState]); // Re-run effect only when gameState changes drastically
 
-    const cashOut = () => {
-        if (stateRef.current !== 'RUNNING') return;
-        
-        const currentM = multiplier; // Capture current multiplier
-        setCashedOutAt(currentM);
-        setGameState('CASHED_OUT');
-        stateRef.current = 'CASHED_OUT';
-
-        const betAmount = parseInt(bet);
-        const winnings = Math.floor(betAmount * currentM);
-        const profit = winnings - betAmount;
-        
-        onFinish(profit);
-    };
-
-    // --- Drawing ---
-
+    // Draw Logic
     const drawGraph = (currentM: number, isCrashed: boolean) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const width = canvas.width;
-        const height = canvas.height;
-
-        // Clear
+        const dpr = window.devicePixelRatio || 1;
+        const width = canvas.width / dpr;
+        const height = canvas.height / dpr;
+        
+        ctx.resetTransform();
+        ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, width, height);
 
-        // Dynamic Scale: As multiplier grows, we zoom out the graph vertically
-        // Max Y axis is roughly currentM + padding
-        const maxY = Math.max(2, currentM * 1.2);
         const padding = 40;
-        const graphWidth = width - padding;
-        const graphHeight = height - padding;
-
-        // Origin at bottom-left (padding, height-padding)
         const originX = padding;
         const originY = height - padding;
+        const graphWidth = width - padding * 2;
+        const graphHeight = height - padding * 2;
 
-        // Draw Grid Lines (Horizontal)
+        // Dynamic Y-Axis Scaling
+        // Keep the rocket vertically centered roughly, so Max Y is roughly CurrentM * 1.5
+        const maxY = Math.max(2, currentM * 1.2);
+        
+        // Dynamic X-Axis (Time) Scaling
+        // Let's say 10 seconds fits on screen initially, then scales
+        const elapsed = (Date.now() - startTimeRef.current) / 1000;
+        const maxX = Math.max(10, elapsed * 1.2);
+
+        // Draw Grid
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.lineWidth = 1;
         ctx.font = '10px monospace';
         ctx.fillStyle = '#64748b';
         ctx.textAlign = 'right';
 
-        const step = Math.ceil(maxY / 5);
+        // Y Axis Labels
         for (let i = 0; i <= 5; i++) {
-            const val = i * step;
-            if (val === 0) continue;
-            const y = originY - (val / maxY) * graphHeight;
-            
+            const val = 1 + (maxY - 1) * (i / 5);
+            const y = originY - (i / 5) * graphHeight;
             ctx.beginPath();
-            ctx.moveTo(padding, y);
-            ctx.lineTo(width, y);
+            ctx.moveTo(originX, y);
+            ctx.lineTo(originX + graphWidth, y);
             ctx.stroke();
-            
-            ctx.fillText(val + 'x', padding - 5, y + 3);
+            ctx.fillText(val.toFixed(1) + 'x', originX - 5, y + 3);
         }
 
-        // Draw Curve
-        // X represents time (approx). Let's map X from 0 to width based on time elapsed?
-        // Or simpler: Draw a bezier curve from origin to current point.
-        // As game progresses, the rocket moves UP and RIGHT.
-        
-        // Progress (0 to 1) for X axis based on time. 
-        // To keep the rocket visible, we shift X back if it gets too far, creating a scrolling effect.
-        // Simplified visual: Rocket moves diagonally.
-        
-        const timeElapsed = (Date.now() - startTimeRef.current) / 1000;
-        // visualX goes from 0 to 1 over approx 10 seconds?
-        // Let's keep the rocket fixed at 80% width if time > X
-        
-        let rocketX = originX + (timeElapsed * 50); // Move 50px per second
-        if (rocketX > width - 100) rocketX = width - 100; // Cap visual X
-
-        const rocketY = originY - ((currentM - 1) / (maxY - 1)) * graphHeight;
-
-        // Draw Line
+        // Rocket Curve Calculation
+        // We plot from t=0 to t=elapsed
         ctx.beginPath();
         ctx.moveTo(originX, originY);
-        // Quadratic curve for smoothness
-        ctx.quadraticCurveTo(
-            originX + (rocketX - originX) / 2, 
-            originY, 
-            rocketX, 
-            rocketY
-        );
+
+        // Plot points
+        const step = Math.max(0.1, elapsed / 100);
+        let finalX = originX;
+        let finalY = originY;
+
+        for (let t = 0; t <= elapsed; t += step) {
+            const m = Math.pow(Math.E, 0.06 * t);
+            
+            const x = originX + (t / maxX) * graphWidth;
+            const y = originY - ((m - 1) / (maxY - 1)) * graphHeight;
+            
+            ctx.lineTo(x, y);
+            finalX = x;
+            finalY = y;
+        }
         
-        ctx.lineWidth = 4;
+        // Complete path to current pos
+        const currentYPixel = originY - ((currentM - 1) / (maxY - 1)) * graphHeight;
+        const currentXPixel = originX + (elapsed / maxX) * graphWidth;
+        ctx.lineTo(currentXPixel, currentYPixel);
+
+        ctx.lineWidth = 3;
         ctx.strokeStyle = isCrashed ? '#ef4444' : (cashedOutAt ? '#10b981' : '#3b82f6');
         ctx.stroke();
 
-        // Fill area under graph
-        ctx.lineTo(rocketX, originY);
+        // Fill
+        ctx.lineTo(currentXPixel, originY);
         ctx.lineTo(originX, originY);
         ctx.fillStyle = isCrashed 
             ? 'rgba(239, 68, 68, 0.1)' 
             : (cashedOutAt ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)');
         ctx.fill();
 
-        // Draw Rocket / Crash Icon
+        // Rocket Icon
         ctx.save();
-        ctx.translate(rocketX, rocketY);
-        
+        ctx.translate(currentXPixel, currentYPixel);
         if (isCrashed) {
-            // Draw Explosion or Text
-            ctx.fillStyle = '#ef4444';
-            ctx.font = 'bold 16px sans-serif';
+            ctx.font = '30px sans-serif';
             ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             ctx.fillText("💥", 0, 0);
         } else {
-            // Draw Rocket
-            const angle = -45 * (Math.PI / 180); // 45 degree up
+            // Angle based on derivative? Or just fixed 45deg for style
+            // Actual derivative of e^0.06t is always positive increasing.
+            const angle = -45 * (Math.PI / 180);
             ctx.rotate(angle);
-            ctx.fillStyle = '#facc15'; // Yellow fire
-            ctx.font = '20px sans-serif';
+            ctx.font = '24px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText("🚀", 0, 0);
         }
         ctx.restore();
-    };
-
-    useEffect(() => {
-        // Initial Canvas Draw
-        drawGraph(1.00, false);
-        return () => cancelAnimationFrame(requestRef.current!);
-    }, []);
-
-    // Helper color
-    const getMultiplierColor = (val: number) => {
-        if (val < 2) return 'text-white';
-        if (val < 10) return 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]';
-        return 'text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.6)] animate-pulse';
     };
 
     return (
@@ -259,20 +260,14 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
                 </div>
             </div>
 
-            {/* Game Area (Flexible) */}
-            <div className="flex-1 relative flex flex-col min-h-0">
-                
-                {/* Canvas Layer */}
-                <div className="absolute inset-0 z-0">
-                    <canvas 
-                        ref={canvasRef} 
-                        width={window.innerWidth} 
-                        height={window.innerHeight * 0.6} // 60% of height for canvas
-                        className="w-full h-full"
-                    />
+            {/* Game Area */}
+            <div className="flex-1 relative flex flex-col min-h-0 bg-[#0F172A]">
+                {/* Canvas Container */}
+                <div ref={containerRef} className="absolute inset-0 z-0">
+                    <canvas ref={canvasRef} className="block w-full h-full" />
                 </div>
 
-                {/* Overlay UI (Multiplier Center) */}
+                {/* Overlay UI */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 flex-col">
                     {gameState === 'CRASHED' ? (
                         <div className="text-center animate-in zoom-in duration-200">
@@ -283,17 +278,17 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
                         </div>
                     ) : (
                         <div className="text-center">
-                            <h1 className={`text-7xl font-black ${getMultiplierColor(multiplier)} mb-2 tabular-nums tracking-tighter transition-all`}>
+                            <h1 className={`text-7xl font-black ${multiplier < 2 ? 'text-white' : 'text-green-400'} mb-2 tabular-nums tracking-tighter transition-all`}>
                                 {multiplier.toFixed(2)}x
                             </h1>
                             {gameState === 'RUNNING' && (
-                                <div className="text-blue-400 text-xs font-bold uppercase tracking-[0.3em] animate-pulse">Flying...</div>
+                                <div className="text-blue-400 text-xs font-bold uppercase tracking-[0.3em] animate-pulse">Taking Off...</div>
                             )}
                         </div>
                     )}
                 </div>
 
-                {/* History Bar (Top) */}
+                {/* History Bar */}
                 <div className="absolute top-2 right-2 flex flex-col gap-1.5 items-end z-20 max-h-[200px] overflow-hidden pointer-events-none">
                     {history.map((h, i) => (
                         <div key={i} className={`px-2 py-1 rounded text-[10px] font-bold backdrop-blur-sm border ${h >= 2 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-slate-700/50 border-slate-600 text-slate-400'}`}>
@@ -303,10 +298,8 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
                 </div>
             </div>
 
-            {/* Control Panel (Fixed Bottom) */}
+            {/* Controls */}
             <div className="bg-slate-800 border-t border-slate-700 p-4 shrink-0 z-20 pb-safe">
-                
-                {/* Cash Out Status Info */}
                 {cashedOutAt && (
                     <div className="mb-3 bg-green-500/20 border border-green-500/50 rounded-xl p-3 flex justify-between items-center animate-in slide-in-from-bottom duration-300">
                         <div className="flex items-center gap-2 text-green-400 font-bold">
@@ -322,9 +315,7 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
                     </div>
                 )}
 
-                {/* Controls Grid */}
                 <div className="flex gap-3 items-stretch h-14">
-                    {/* Bet Input */}
                     <div className="flex-1 bg-slate-900 rounded-xl border border-slate-600 flex items-center px-3 focus-within:border-blue-500 transition-colors relative">
                         <span className="text-xs text-slate-500 font-bold uppercase absolute top-1 left-3">Bet</span>
                         <input 
@@ -340,7 +331,6 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
                         </div>
                     </div>
 
-                    {/* Main Button */}
                     <div className="flex-1">
                         {gameState === 'IDLE' || gameState === 'CRASHED' || gameState === 'CASHED_OUT' ? (
                             <button 
@@ -352,7 +342,7 @@ export const CrashGameScreen: React.FC<CrashGameScreenProps> = ({ user, onBack, 
                             </button>
                         ) : (
                             <button 
-                                onClick={cashOut}
+                                onClick={stopGame}
                                 disabled={cashedOutAt !== null}
                                 className={`w-full h-full rounded-xl font-black text-xl shadow-[0_4px_0_rgba(0,0,0,0.2)] active:shadow-none active:translate-y-1 transition-all flex flex-col items-center justify-center leading-none ${cashedOutAt ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-green-500 hover:bg-green-400 text-white'}`}
                             >

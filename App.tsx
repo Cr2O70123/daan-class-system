@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { BottomNav } from './components/BottomNav';
 import { LoginScreen } from './screens/LoginScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -19,7 +19,7 @@ import { UpdateAnnouncementModal } from './components/UpdateAnnouncementModal';
 import { AiTutorScreen } from './screens/AiTutorScreen';
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult, PkGameMode } from './types';
-import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2 } from 'lucide-react';
+import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2, Users } from 'lucide-react';
 
 // Services
 import { calculateLevel } from './services/levelService';
@@ -92,6 +92,32 @@ const MaintenanceScreen = () => (
     </div>
 );
 
+// Login Queue Overlay
+const LoginQueueOverlay = ({ position, onCancel }: { position: number, onCancel: () => void }) => (
+    <div className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in">
+        <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.2)]">
+            <Users size={40} className="text-blue-400 animate-pulse" />
+        </div>
+        <h1 className="text-2xl font-black mb-2 tracking-wide">伺服器滿載</h1>
+        <p className="text-gray-400 text-sm mb-8">目前在線人數過多，請稍候...</p>
+        
+        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 w-full max-w-xs shadow-xl">
+            <div className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Queue Position</div>
+            <div className="text-5xl font-mono font-black text-blue-500 mb-2">{position}</div>
+            <div className="text-xs text-gray-400 flex items-center justify-center gap-2">
+                <Loader2 size={12} className="animate-spin" /> 預估等待時間: {Math.ceil(position * 2)} 秒
+            </div>
+        </div>
+
+        <button 
+            onClick={onCancel}
+            className="mt-8 text-gray-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors"
+        >
+            <X size={16} /> 取消排隊
+        </button>
+    </div>
+);
+
 // Header Component
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
     const xp = user.points;
@@ -155,6 +181,10 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
+  // Queue System State
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const queueIntervalRef = useRef<number | null>(null);
+  
   // Data States
   const [questions, setQuestions] = useState<Question[]>([]);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -201,6 +231,43 @@ const App = () => {
 
       return () => { supabase.removeChannel(channel); };
   }, []);
+
+  // --- Queue Logic ---
+  const startQueue = (targetUser: User) => {
+      // Simulate server load check (Random 30% chance to queue for non-admins)
+      const isServerBusy = Math.random() > 0.7 && !targetUser.isAdmin;
+      
+      if (isServerBusy) {
+          // Assign random queue position
+          const pos = Math.floor(Math.random() * 20) + 5;
+          setQueuePosition(pos);
+          
+          // Start countdown
+          if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
+          queueIntervalRef.current = window.setInterval(() => {
+              setQueuePosition(prev => {
+                  if (prev === null) return null;
+                  if (prev <= 1) {
+                      // Queue finished
+                      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
+                      setUser(targetUser); // Login Success
+                      return null;
+                  }
+                  // Randomly decrement by 1 or 2 to simulate movement
+                  return Math.max(1, prev - Math.floor(Math.random() * 2 + 1));
+              });
+          }, 2000); // Check every 2s
+      } else {
+          // No queue needed
+          setUser(targetUser);
+      }
+  };
+
+  const cancelQueue = () => {
+      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
+      setQueuePosition(null);
+      // Effectively cancels login process
+  };
 
   const handleTabChange = (newTab: Tab) => {
       // Reset all overlays when changing tabs
@@ -260,6 +327,7 @@ const App = () => {
         try {
             const sessionUser = await checkSession();
             if (sessionUser) {
+                // If session exists, skip queue for UX (or implement reduced queue)
                 setUser(sessionUser);
                 checkDailyReset(sessionUser);
                 refreshNotifications(sessionUser.studentId);
@@ -354,8 +422,9 @@ const App = () => {
   const handleLogin = async (name: string, studentId: string) => {
     try {
         const loggedUser = await login(name, studentId);
-        setUser(loggedUser);
-        checkDailyReset(loggedUser);
+        // Trigger Queue Check
+        startQueue(loggedUser);
+        if (loggedUser) checkDailyReset(loggedUser);
     } catch (error: any) { alert("登入失敗: " + error.message); }
   };
 
@@ -518,9 +587,16 @@ const App = () => {
 
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin"/></div>;
   if (isMaintenanceMode && user && user.studentId !== '1204233') return <MaintenanceScreen />;
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
+  
+  // Login or Queue Screen
+  if (!user) {
+      if (queuePosition !== null) {
+          return <LoginQueueOverlay position={queuePosition} onCancel={cancelQueue} />;
+      }
+      return <LoginScreen onLogin={handleLogin} />;
+  }
 
-  // --- FEATURE RENDERER ---
+  // --- RENDER FULL APP ---
   const renderActiveFeature = () => {
       if (!activeFeature) return null;
       const { id, params } = activeFeature;

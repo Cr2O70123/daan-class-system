@@ -151,20 +151,11 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
       setRotateBoard(false);
   };
 
-  // Local Rotation Logic
+  // Online Rotation Logic (Auto rotate if I am black)
   useEffect(() => {
-      if (playType === 'LOCAL' && gameMode === 'STANDARD') {
-          // If Red turn, rotate 0. If Black turn, rotate 180.
-          setRotateBoard(turn === 'black');
-      }
-  }, [turn, playType, gameMode]);
-
-  // Online Rotation Logic
-  useEffect(() => {
-      if (playType === 'ONLINE' && myColor === 'black') {
-          setRotateBoard(true);
-      } else if (playType === 'ONLINE' && myColor === 'red') {
-          setRotateBoard(false);
+      if (playType === 'ONLINE') {
+          if (myColor === 'black') setRotateBoard(true);
+          else setRotateBoard(false);
       }
   }, [myColor, playType]);
 
@@ -205,11 +196,6 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
             if (status === 'SUBSCRIBED') {
                 await roomChannel.track({ user: user.name });
                 setRoomId(code);
-                // Assign colors based on room creation vs joining
-                // Simple logic: If creating random room, assume host is Red. 
-                // But simplified: Creator (host) = Red, Joiner = Black.
-                // We determine this by how the user entered. 
-                // If create -> Red. If join -> Black.
             }
         });
 
@@ -254,7 +240,6 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
       return getValidMovesForStandard(r, c, currentBoard);
   };
 
-  // ... (Keep existing Standard/Dark logic functions here)
   const getValidMovesForStandard = (r: number, c: number, boardState: (Piece|null)[][]): Position[] => {
       const piece = boardState[r][c];
       if (!piece) return [];
@@ -357,7 +342,7 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
   // --- Interaction Logic ---
   const handleSquareClick = (r: number, c: number) => {
       if (winner) return;
-      if (playType === 'ONLINE' && turn !== myColor) return; // Not my turn
+      if (playType === 'ONLINE' && turn !== myColor) return; 
 
       const clickedPiece = board[r][c];
 
@@ -370,7 +355,6 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
           setLastMove({from: {r, c}, to: {r, c}});
           const next = turn === 'red' ? 'black' : 'red';
           setTurn(next);
-          // Online sync not implemented for Dark Chess yet (Simplified for prompt)
           return;
       }
 
@@ -423,7 +407,7 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
   };
 
   const playSound = (type: string) => {
-      // (Simplified sound logic - reusing from previous)
+      // Sound placeholders
   };
 
   // --- Render Board ---
@@ -439,8 +423,6 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
   const endY = boardHeight - startY;
 
   const renderBoardLines = () => {
-      // ... (Standard SVG rendering same as before, simplified for this XML block)
-      // Including standard grid lines
       return (
           <svg width="100%" height="100%" viewBox={`0 0 ${boardWidth} ${boardHeight}`} className="absolute inset-0 pointer-events-none z-0" preserveAspectRatio="none">
               <rect x="0" y="0" width={boardWidth} height={boardHeight} fill="#F3E5AB" rx="4" />
@@ -493,7 +475,7 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
           <div className="fixed inset-0 z-50 bg-[#1a1a1a] flex flex-col items-center justify-center font-sans p-6">
               <h2 className="text-2xl text-white mb-6 font-bold">選擇棋盤模式</h2>
               <div className="grid gap-4 w-full max-w-sm">
-                  <button onClick={() => initBoard('STANDARD')} className="bg-[#3e2723] text-[#F3E5AB] p-4 rounded-xl font-bold border-2 border-[#8d6e63]">標準大盤 (輪流旋轉)</button>
+                  <button onClick={() => initBoard('STANDARD')} className="bg-[#3e2723] text-[#F3E5AB] p-4 rounded-xl font-bold border-2 border-[#8d6e63]">標準大盤 (可手動翻轉)</button>
                   <button onClick={() => initBoard('DARK')} className="bg-[#263238] text-[#cfd8dc] p-4 rounded-xl font-bold border-2 border-[#546e7a]">暗棋小盤</button>
               </div>
               <button onClick={() => setPlayType(null)} className="mt-8 text-gray-500">上一步</button>
@@ -550,8 +532,12 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
             <div className={`px-4 py-2 rounded-full font-bold text-lg shadow-lg pointer-events-auto backdrop-blur-md transition-colors ${turn === 'red' ? 'bg-red-900/80 text-red-100 border border-red-500' : 'bg-gray-800/80 text-gray-200 border border-gray-500'}`}>
                 {turn === 'red' ? '紅方回合' : '黑方回合'}
             </div>
+            {/* Manual Rotate Button - Fixed to only toggle between 0 and 180 */}
             {playType === 'LOCAL' && (
-                <button onClick={() => setRotateBoard(!rotateBoard)} className="p-2 bg-gray-800/80 text-white rounded-full pointer-events-auto backdrop-blur-md">
+                <button 
+                    onClick={() => setRotateBoard(!rotateBoard)} 
+                    className="p-2 bg-gray-800/80 text-white rounded-full pointer-events-auto backdrop-blur-md flex items-center gap-1 hover:bg-gray-700 active:scale-95 transition-transform"
+                >
                     <RotateCw size={24} />
                 </button>
             )}
@@ -563,8 +549,12 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
             </div>
         )}
 
-        {/* Board Container with Rotation */}
-        <div className="w-full flex items-center justify-center p-2 h-full transition-transform duration-700 ease-in-out" style={{ transform: rotateBoard ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+        {/* Board Container */}
+        {/* Applied fixed transition-transform duration-500 to smoothen rotation */}
+        <div 
+            className="w-full flex items-center justify-center p-2 h-full transition-transform duration-500 ease-in-out" 
+            style={{ transform: rotateBoard ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        >
             <div className="relative bg-[#5c4033] rounded-lg shadow-2xl border-4 border-[#3e2723] overflow-hidden"
                 style={{ 
                     width: 'min(95vw, 500px)', 
@@ -583,7 +573,12 @@ export const XiangqiScreen: React.FC<XiangqiScreenProps> = ({ onBack, user }) =>
                                 const isLastMoveDst = lastMove?.to.r === r && lastMove?.to.c === c;
 
                                 return (
-                                    <div key={`${r}-${c}`} onClick={() => handleSquareClick(r, c)} className="relative flex items-center justify-center cursor-pointer w-full h-full" style={{ transform: rotateBoard ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.7s' }}>
+                                    <div 
+                                        key={`${r}-${c}`} 
+                                        onClick={() => handleSquareClick(r, c)} 
+                                        className="relative flex items-center justify-center cursor-pointer w-full h-full" 
+                                        style={{ transform: rotateBoard ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.5s' }}
+                                    >
                                         {isValid && <div className={`absolute w-3 h-3 rounded-full ${piece ? 'ring-2 ring-green-500 ring-offset-1 bg-transparent' : 'bg-green-600/50'} z-0`}></div>}
                                         {(isLastMoveSrc || isLastMoveDst) && <div className="absolute w-full h-full border-2 border-blue-400/50 rounded-lg pointer-events-none"></div>}
                                         {piece && (
