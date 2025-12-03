@@ -19,7 +19,7 @@ import { UpdateAnnouncementModal } from './components/UpdateAnnouncementModal';
 import { AiTutorScreen } from './screens/AiTutorScreen';
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult, PkGameMode } from './types';
-import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2, Users } from 'lucide-react';
+import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2, Users, Clock } from 'lucide-react';
 
 // Services
 import { calculateLevel } from './services/levelService';
@@ -93,30 +93,51 @@ const MaintenanceScreen = () => (
 );
 
 // Login Queue Overlay
-const LoginQueueOverlay = ({ position, onCancel }: { position: number, onCancel: () => void }) => (
-    <div className="fixed inset-0 z-[999] bg-black/90 backdrop-blur-md flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in">
-        <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 border border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.2)]">
-            <Users size={40} className="text-blue-400 animate-pulse" />
-        </div>
-        <h1 className="text-2xl font-black mb-2 tracking-wide">伺服器滿載</h1>
-        <p className="text-gray-400 text-sm mb-8">目前在線人數過多，請稍候...</p>
-        
-        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 w-full max-w-xs shadow-xl">
-            <div className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-1">Queue Position</div>
-            <div className="text-5xl font-mono font-black text-blue-500 mb-2">{position}</div>
-            <div className="text-xs text-gray-400 flex items-center justify-center gap-2">
-                <Loader2 size={12} className="animate-spin" /> 預估等待時間: {Math.ceil(position * 2)} 秒
+const LoginQueueOverlay = ({ position, onCancel }: { position: number, onCancel: () => void }) => {
+    const peopleAhead = Math.max(0, position - 1);
+    
+    return (
+        <div className="fixed inset-0 z-[999] bg-[#0f172a] flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
+            <div className="w-24 h-24 bg-blue-500/10 rounded-full flex items-center justify-center mb-8 border border-blue-500/30 shadow-[0_0_40px_rgba(59,130,246,0.3)] relative overflow-hidden">
+                <div className="absolute inset-0 bg-blue-500/20 animate-ping rounded-full"></div>
+                <Users size={40} className="text-blue-400 relative z-10" />
             </div>
-        </div>
+            
+            <h1 className="text-3xl font-black mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
+                伺服器滿載
+            </h1>
+            <p className="text-slate-400 text-sm mb-10 font-medium">目前登入人數過多，請依序排隊...</p>
+            
+            <div className="bg-slate-800/50 backdrop-blur-md p-8 rounded-3xl border border-slate-700 w-full max-w-xs shadow-2xl relative overflow-hidden">
+                {/* Progress Bar Background */}
+                <div className="absolute bottom-0 left-0 h-1 bg-blue-600 animate-[pulse_2s_infinite]" style={{width: '100%'}}></div>
+                
+                <div className="flex justify-between items-center mb-6">
+                    <div className="text-left">
+                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Queue Position</div>
+                        <div className="text-4xl font-mono font-black text-white">#{position}</div>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">People Ahead</div>
+                        <div className="text-4xl font-mono font-black text-blue-500">{peopleAhead}</div>
+                    </div>
+                </div>
+                
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 bg-slate-900/50 py-2 rounded-lg">
+                    <Clock size={14} className="text-blue-400 animate-spin-slow" /> 
+                    <span>預估等待: <span className="text-white font-bold">{Math.ceil(position * 1.5)}</span> 秒</span>
+                </div>
+            </div>
 
-        <button 
-            onClick={onCancel}
-            className="mt-8 text-gray-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors"
-        >
-            <X size={16} /> 取消排隊
-        </button>
-    </div>
-);
+            <button 
+                onClick={onCancel}
+                className="mt-12 text-slate-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors px-6 py-3 rounded-full hover:bg-white/5"
+            >
+                <X size={18} /> 取消排隊
+            </button>
+        </div>
+    );
+};
 
 // Header Component
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
@@ -234,12 +255,13 @@ const App = () => {
 
   // --- Queue Logic ---
   const startQueue = (targetUser: User) => {
-      // Simulate server load check (Random 30% chance to queue for non-admins)
-      const isServerBusy = Math.random() > 0.7 && !targetUser.isAdmin;
+      // Simulate server load check
+      // 50% chance to enter queue if not admin, to simulate traffic for demo
+      const isServerBusy = Math.random() > 0.5 && !targetUser.isAdmin;
       
       if (isServerBusy) {
-          // Assign random queue position
-          const pos = Math.floor(Math.random() * 20) + 5;
+          // Assign random queue position (e.g. 10 to 30)
+          const pos = Math.floor(Math.random() * 20) + 10;
           setQueuePosition(pos);
           
           // Start countdown
@@ -253,10 +275,10 @@ const App = () => {
                       setUser(targetUser); // Login Success
                       return null;
                   }
-                  // Randomly decrement by 1 or 2 to simulate movement
-                  return Math.max(1, prev - Math.floor(Math.random() * 2 + 1));
+                  // Randomly decrement by 1 or 3 to simulate movement
+                  return Math.max(1, prev - Math.floor(Math.random() * 3 + 1));
               });
-          }, 2000); // Check every 2s
+          }, 1500); // Check every 1.5s
       } else {
           // No queue needed
           setUser(targetUser);
