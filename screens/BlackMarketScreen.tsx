@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ArrowLeft, ShoppingBag, Shield, Skull, Zap, Crown, UserMinus, Volume2, Gem, TrendingUp, TrendingDown, Users, ArrowRightLeft, Database, Eye, Activity, Target, AlertTriangle, Siren, Crosshair, Loader2, RefreshCw } from 'lucide-react';
 import { User, Product, LeaderboardEntry } from '../types';
 import { updateUserInDb } from '../services/authService';
-import { fetchClassLeaderboard, transferBlackCoins, fetchBlackMarketStats } from '../services/dataService';
+import { transferBlackCoins, fetchBlackMarketStats, fetchUserListLite } from '../services/dataService';
 import { createNotification } from '../services/notificationService';
 
 interface BlackMarketScreenProps {
@@ -50,7 +50,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
     const [isMarketLoading, setIsMarketLoading] = useState(true); 
 
     // Interaction Data
-    const [userList, setUserList] = useState<(LeaderboardEntry & { isStealth?: boolean })[]>([]);
+    const [userList, setUserList] = useState<(any)[]>([]); // Use any to allow lightweight objects
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [wantedList, setWantedList] = useState<any[]>([]); // Simplified type for stats
     const [heistLog, setHeistLog] = useState<string[]>([]);
@@ -110,16 +110,17 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         };
 
         updateEconomy();
-        const interval = setInterval(updateEconomy, 3000); // 3s polling for economy is fine if optimized
+        const interval = setInterval(updateEconomy, 5000); // Reduced polling frequency to 5s
         return () => clearInterval(interval);
     }, [user.blackMarketCoins]);
 
-    // 2. Heavy User List Fetching (Only on Interact Tab or Mount)
+    // 2. User List Fetching (Only on Interact Tab)
     const loadFullUserList = async () => {
         setIsLoadingUsers(true);
         try {
-            const users = await fetchClassLeaderboard();
-            const otherUsers = users.filter(u => u.studentId !== user.studentId);
+            // Optimized Lite Fetch
+            const users = await fetchUserListLite();
+            const otherUsers = users.filter((u: any) => u.studentId !== user.studentId);
             setUserList(otherUsers);
         } catch (e) {
             console.error(e);
@@ -232,7 +233,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
         const target = userList.find(u => u.studentId === targetId);
         if (!target) return;
 
-        const isWanted = wantedList.some(w => w.student_id === targetId); // Note: wantedList uses DB column names now
+        const isWanted = wantedList.some(w => w.student_id === targetId); 
 
         const toolId = tool === 'basic' ? 'chip_basic' : 'chip_adv';
         const toolIdx = user.inventory.indexOf(toolId);
@@ -526,7 +527,9 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     wantedList.map((target, idx) => (
                                         <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center relative overflow-hidden">
                                             <div className="text-xs text-red-400 font-bold mb-1">NO.{idx+1}</div>
-                                            <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatar_color} flex items-center justify-center font-bold`}>{target.name[0]}</div>
+                                            <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatar_color} flex items-center justify-center font-bold overflow-hidden`}>
+                                                {target.avatar_image ? <img src={target.avatar_image} className="w-full h-full object-cover"/> : target.name[0]}
+                                            </div>
                                             <div className="text-xs text-gray-300 truncate">{target.name}</div>
                                             <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.black_market_coins}</div>
                                             <div className="absolute inset-0 border-2 border-red-600/30 animate-pulse pointer-events-none"></div>
@@ -540,7 +543,7 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             <div>
                                 <h3 className="font-bold text-white mb-2 flex items-center gap-2"><Activity size={18}/> 玩家列表</h3>
                                 <p className="text-xs text-gray-400 leading-relaxed">
-                                    載入列表以互動
+                                    載入列表以互動 (不顯示圖片)
                                 </p>
                             </div>
                             <button 
@@ -579,13 +582,14 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     return (
                                         <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
                                             <div className="flex items-center gap-3">
+                                                {/* Optimized: Using color only, no image */}
                                                 <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
                                                 <div>
                                                     <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
                                                         {u.isStealth ? 'UNKOWN' : u.name}
                                                         {isWanted && <span className="text-[9px] bg-red-600 text-white px-1.5 rounded animate-pulse">WANTED</span>}
                                                     </div>
-                                                    <div className="text-[10px] text-gray-500">Lv.{u.level}</div>
+                                                    <div className="text-[10px] text-gray-500">Lv.{u.level} • {u.blackMarketCoins} BMC</div>
                                                 </div>
                                             </div>
                                             <div className="flex gap-2">
