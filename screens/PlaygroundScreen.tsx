@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll, Circle, RefreshCw, Rocket, Target, Box } from 'lucide-react';
+import { Trophy, Zap, Gamepad2, Sparkles, BookOpen, Coins, Grid3X3, Swords, BrainCircuit, Calculator, Wrench, Shapes, GraduationCap, Binary, Cpu, ArrowRight, LayoutGrid, Puzzle, Bot, PenTool, Dices, Hammer, Palette, Flame, Skull, Gem, Crosshair, Bomb, Scroll, Circle, RefreshCw, Rocket, Target, Box, Lock } from 'lucide-react';
 import { User } from '../types';
 
 interface PlaygroundScreenProps {
   user: User;
   onNavigate: (featureId: string, params?: any) => void;
   setUser?: (user: User) => void;
+  isBlackMarketOpen?: boolean; // New prop
 }
 
 type ViewState = 'HOME' | 'LEARN' | 'PUZZLE' | 'TOOLS' | 'GAMBLE';
@@ -79,7 +80,8 @@ const GameItem = ({ title, desc, icon, colorClass, onClick, tags=[], limit }: an
 export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({ 
     user,
     onNavigate,
-    setUser
+    setUser,
+    isBlackMarketOpen = true
 }) => {
   const [view, setView] = useState<ViewState>('HOME');
 
@@ -243,24 +245,29 @@ export const PlaygroundScreen: React.FC<PlaygroundScreenProps> = ({
               <div className="space-y-4 animate-in slide-in-from-right duration-300">
                   <SubPageHeader title="博弈娛樂" onBack={() => setView('HOME')} />
                   
-                  {/* Black Market Entry */}
+                  {/* Black Market Entry (Conditional) */}
                   <div 
-                      onClick={() => onNavigate('black_market')}
-                      className="bg-gray-900 p-4 rounded-2xl shadow-lg border-2 border-purple-500/50 relative overflow-hidden group cursor-pointer"
+                      onClick={() => isBlackMarketOpen && onNavigate('black_market')}
+                      className={`bg-gray-900 p-4 rounded-2xl shadow-lg border-2 relative overflow-hidden group transition-all ${isBlackMarketOpen ? 'border-purple-500/50 cursor-pointer hover:shadow-purple-500/20' : 'border-gray-700 opacity-60 cursor-not-allowed'}`}
                   >
                       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
                       <div className="absolute top-0 right-0 p-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                          <Skull size={48} className="text-purple-700"/>
+                          {isBlackMarketOpen ? <Skull size={48} className="text-purple-700"/> : <Lock size={48} className="text-gray-600"/>}
                       </div>
                       <div className="relative z-10 flex gap-4 items-center">
-                          <div className="w-14 h-14 rounded-2xl bg-purple-900 flex items-center justify-center text-purple-300 border border-purple-700">
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${isBlackMarketOpen ? 'bg-purple-900 text-purple-300 border-purple-700' : 'bg-gray-800 text-gray-500 border-gray-600'}`}>
                               <Gem size={24} />
                           </div>
                           <div>
                               <h4 className="font-black text-white text-lg flex items-center gap-2">
-                                  暗巷交易所 <span className="text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded">PvP</span>
+                                  暗巷交易所 
+                                  {isBlackMarketOpen ? (
+                                      <span className="text-[10px] bg-red-600 text-white px-1.5 py-0.5 rounded">PvP</span>
+                                  ) : (
+                                      <span className="text-[10px] bg-gray-600 text-gray-300 px-1.5 py-0.5 rounded">CLOSED</span>
+                                  )}
                               </h4>
-                              <p className="text-xs text-gray-400">駭客行動與非法道具</p>
+                              <p className="text-xs text-gray-400">{isBlackMarketOpen ? '駭客行動與非法道具' : '目前暫停營業'}</p>
                           </div>
                       </div>
                   </div>

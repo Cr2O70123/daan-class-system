@@ -130,8 +130,8 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
             const users = await fetchUserListLite();
             const otherUsers = users.filter((u: any) => u.studentId !== user.studentId);
             setUserList(otherUsers);
-        } catch (e) {
-            console.error("Failed to load user list:", e);
+        } catch (e: any) {
+            console.error("Failed to load user list:", e.message || JSON.stringify(e));
             setUserListError(true);
         } finally {
             setIsLoadingUsers(false);
@@ -480,6 +480,128 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                             <input type="number" value={exchangeAmount} onChange={(e) => setExchangeAmount(e.target.value)} placeholder="數量" className="w-full bg-black text-white p-3 rounded-lg border border-gray-700 outline-none font-mono text-lg text-center" />
                             <button onClick={handleExchange} className="w-full py-3 rounded-xl font-black bg-blue-600 hover:bg-blue-500 transition-colors">確認交易</button>
                         </div>
+                    </div>
+                )}
+
+                {/* --- INTERACT TAB --- */}
+                {tab === 'INTERACT' && (
+                    <div className="space-y-4">
+                        {/* Wanted List */}
+                        <div className="bg-gradient-to-r from-red-900/40 to-black border border-red-800 rounded-xl p-4 relative overflow-hidden">
+                            <div className="absolute right-0 top-0 opacity-20"><Siren size={80} className="text-red-500"/></div>
+                            <h3 className="font-black text-red-500 text-lg mb-3 flex items-center gap-2 relative z-10">
+                                <Target size={20}/> 懸賞名單 (Top 3)
+                            </h3>
+                            <div className="grid grid-cols-3 gap-2 relative z-10">
+                                {isMarketLoading ? (
+                                    [1, 2, 3].map(i => (
+                                        <div key={i} className="bg-black/60 p-2 rounded-lg border border-red-900/30 text-center relative overflow-hidden animate-pulse">
+                                            <div className="h-3 w-8 bg-red-900/50 rounded mx-auto mb-2"></div>
+                                            <div className="w-10 h-10 rounded-full mx-auto mb-2 bg-gray-800"></div>
+                                            <div className="h-3 w-16 bg-gray-800 rounded mx-auto"></div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    wantedList.map((target, idx) => (
+                                        <div key={idx} className="bg-black/60 p-2 rounded-lg border border-red-900/50 text-center relative overflow-hidden">
+                                            <div className="text-xs text-red-400 font-bold mb-1">NO.{idx+1}</div>
+                                            <div className={`w-10 h-10 rounded-full mx-auto mb-1 ${target.avatar_color} flex items-center justify-center font-bold overflow-hidden`}>
+                                                {target.avatar_image ? <img src={target.avatar_image} className="w-full h-full object-cover"/> : target.name[0]}
+                                            </div>
+                                            <div className="text-xs text-gray-300 truncate">{target.name}</div>
+                                            <div className="text-[10px] text-yellow-500 font-mono mt-1">{target.black_market_coins}</div>
+                                            <div className="absolute inset-0 border-2 border-red-600/30 animate-pulse pointer-events-none"></div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-900 border border-gray-700 p-4 rounded-xl mb-4 flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-white mb-2 flex items-center gap-2"><Activity size={18}/> 玩家列表</h3>
+                                <p className="text-xs text-gray-400 leading-relaxed">
+                                    載入列表以互動 (不顯示圖片)
+                                </p>
+                            </div>
+                            <button 
+                                onClick={loadFullUserList} 
+                                disabled={isLoadingUsers}
+                                className="bg-blue-900 hover:bg-blue-800 text-blue-100 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors disabled:opacity-50"
+                            >
+                                <RefreshCw size={12} className={isLoadingUsers ? "animate-spin" : ""}/> {isLoadingUsers ? '載入中' : '刷新列表'}
+                            </button>
+                        </div>
+
+                        {heistLog.length > 0 && (
+                            <div className="bg-black border border-green-900/50 p-3 rounded-lg font-mono text-xs h-32 overflow-y-auto mb-4 text-green-400 space-y-1">
+                                {heistLog.map((log, i) => <div key={i}>{'>'} {log}</div>)}
+                            </div>
+                        )}
+
+                        {userListError ? (
+                            <div className="text-center p-6 border border-red-900/50 rounded-xl bg-red-900/20 text-red-400 flex flex-col items-center justify-center gap-3 animate-in fade-in">
+                                <div className="bg-red-900/30 p-3 rounded-full"><WifiOff size={24} /></div>
+                                <div>
+                                    <h4 className="font-bold text-sm mb-1">加密連線失敗 (Offline Mode)</h4>
+                                    <p className="text-xs opacity-80">無法載入玩家列表。請檢查網路或稍後再試。</p>
+                                </div>
+                                <button onClick={loadFullUserList} className="px-4 py-2 bg-red-800 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors">
+                                    重新連線
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {isLoadingUsers ? (
+                                    [1, 2, 3, 4, 5].map(i => (
+                                        <div key={i} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex justify-between items-center animate-pulse">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-gray-800"></div>
+                                                <div>
+                                                    <div className="h-3 w-20 bg-gray-800 rounded mb-1"></div>
+                                                    <div className="h-2 w-10 bg-gray-800 rounded"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : userList.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500 text-xs">點擊「刷新列表」查看玩家</div>
+                                ) : (
+                                    userList.map(u => {
+                                        const isWanted = wantedList.some(w => w.student_id === u.studentId);
+                                        return (
+                                            <div key={u.studentId} className={`bg-gray-900 p-3 rounded-xl border flex justify-between items-center group transition-colors ${isWanted ? 'border-red-800 bg-red-900/10' : 'border-gray-800 hover:border-blue-900'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    {/* Optimized: Using color only, no image for lists */}
+                                                    <div className={`w-8 h-8 rounded-full ${u.avatarColor} flex items-center justify-center text-xs font-bold`}>{u.name[0]}</div>
+                                                    <div>
+                                                        <div className="text-sm font-bold text-gray-200 flex items-center gap-2">
+                                                            {u.isStealth ? 'UNKOWN' : u.name}
+                                                            {isWanted && <span className="text-[9px] bg-red-600 text-white px-1.5 rounded animate-pulse">WANTED</span>}
+                                                        </div>
+                                                        <div className="text-[10px] text-gray-500">Lv.{u.level} • {u.blackMarketCoins} BMC</div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => handleP2PTransfer(u.studentId, u.name)}
+                                                        className="px-3 py-1 bg-gray-800 hover:bg-blue-900 text-blue-400 text-xs rounded border border-blue-900 transition-colors"
+                                                    >
+                                                        轉帳
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleHack(u.studentId, 'basic')}
+                                                        className={`px-3 py-1 text-xs rounded border transition-colors flex items-center gap-1 ${isWanted ? 'bg-red-900 hover:bg-red-800 text-white border-red-500 shadow-sm shadow-red-900' : 'bg-gray-800 hover:bg-red-900 text-red-400 border-red-900'}`}
+                                                    >
+                                                        {isWanted && <Crosshair size={10}/>} 駭入
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )
+                                    })
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 

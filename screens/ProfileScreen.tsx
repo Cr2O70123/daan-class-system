@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { User, Question, Resource } from '../types';
-import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap, Key, Image as ImageIcon, Cone, Activity } from 'lucide-react';
+import { LogOut, Moon, FileText, Camera, Trophy, BookOpen, MessageCircle, HelpCircle, X, Trash2, ShieldAlert, Calendar, RefreshCw, Package, Crown, Zap, Key, Image as ImageIcon, Cone, Activity, ShoppingCart } from 'lucide-react';
 import { calculateProgress } from '../services/levelService';
 import { getDailyPasscode } from '../services/authService';
 import { supabase } from '../services/supabaseClient';
@@ -73,6 +73,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [activeHistoryTab, setActiveHistoryTab] = useState<'questions' | 'answers' | 'resources' | 'inventory'>('questions');
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [bmToggleLoading, setBmToggleLoading] = useState(false);
   
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
@@ -124,44 +125,67 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setMaintenanceLoading(true);
       
       try {
-          // 1. Check current status
           const { data } = await supabase.from('notifications').select('*').eq('type', 'system').eq('title', 'MAINTENANCE_MODE').eq('content', 'ON').limit(1);
           const isCurrentlyOn = data && data.length > 0;
           
           if (isCurrentlyOn) {
-              // Turn OFF: Delete the specific notification
               await supabase.from('notifications').delete().eq('type', 'system').eq('title', 'MAINTENANCE_MODE');
-              
-              // Broadcast OFF
-              await supabase.channel('maintenance_channel').send({
+              await supabase.channel('system_status_channel').send({
                   type: 'broadcast',
                   event: 'MAINTENANCE_TRIGGER',
                   payload: { status: 'OFF' }
               });
               alert("維護模式已關閉");
           } else {
-              // Turn ON: Create blocking notification
-              // We use createNotification helper but targeting admin ID as placeholder, main logic is the filter in App.tsx
               await supabase.from('notifications').insert([{
-                  user_id: user.studentId, // Associated with admin
+                  user_id: user.studentId,
                   type: 'system',
                   title: 'MAINTENANCE_MODE',
                   content: 'ON',
                   is_read: false
               }]);
-
-              // Broadcast ON (Kicks online users)
-              await supabase.channel('maintenance_channel').send({
+              await supabase.channel('system_status_channel').send({
                   type: 'broadcast',
                   event: 'MAINTENANCE_TRIGGER',
                   payload: { status: 'ON' }
               });
-              alert("維護模式已開啟，用戶將被踢出");
+              alert("維護模式已開啟");
           }
-      } catch (e) {
-          alert("操作失敗");
-      }
+      } catch (e) { alert("操作失敗"); }
       setMaintenanceLoading(false);
+  };
+
+  // BLACK MARKET TOGGLE
+  const toggleBlackMarket = async () => {
+      if (!confirm("確定要切換黑市交易所狀態嗎？")) return;
+      setBmToggleLoading(true);
+      
+      try {
+          const { data } = await supabase.from('notifications').select('*').eq('type', 'system').eq('title', 'BLACK_MARKET_STATUS').limit(1);
+          const currentStatus = (data && data.length > 0) ? data[0].content : 'OPEN';
+          const newStatus = currentStatus === 'OPEN' ? 'CLOSED' : 'OPEN';
+
+          if (data && data.length > 0) {
+              await supabase.from('notifications').update({ content: newStatus }).eq('id', data[0].id);
+          } else {
+              await supabase.from('notifications').insert([{
+                  user_id: user.studentId,
+                  type: 'system',
+                  title: 'BLACK_MARKET_STATUS',
+                  content: newStatus,
+                  is_read: false
+              }]);
+          }
+
+          await supabase.channel('system_status_channel').send({
+              type: 'broadcast',
+              event: 'BLACK_MARKET_TRIGGER',
+              payload: { status: newStatus }
+          });
+          
+          alert(`交易所已${newStatus === 'OPEN' ? '開啟' : '關閉'}`);
+      } catch(e) { alert("操作失敗"); }
+      setBmToggleLoading(false);
   };
 
   const renderInventory = () => {
@@ -441,6 +465,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                              </div>
                              <div className="bg-white/20 px-3 py-1 rounded-full text-xs font-black">
                                  {maintenanceLoading ? '...' : '切換'}
+                             </div>
+                         </button>
+
+                         {/* Black Market Toggle */}
+                         <button 
+                            onClick={toggleBlackMarket}
+                            disabled={bmToggleLoading}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-white rounded-2xl p-3 flex items-center justify-between shadow-lg shadow-purple-500/20"
+                         >
+                             <div className="flex items-center gap-3">
+                                 <div className="bg-white/20 p-2 rounded-xl">
+                                     <ShoppingCart size={20} />
+                                 </div>
+                                 <div className="text-left">
+                                     <div className="text-sm font-bold">黑市交易所開關</div>
+                                     <div className="text-[10px] opacity-80">管控經濟體系</div>
+                                 </div>
+                             </div>
+                             <div className="bg-white/20 px-3 py-1 rounded-full text-xs font-black">
+                                 {bmToggleLoading ? '...' : '切換'}
                              </div>
                          </button>
 

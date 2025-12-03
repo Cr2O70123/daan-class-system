@@ -92,58 +92,6 @@ const MaintenanceScreen = () => (
     </div>
 );
 
-// Simulated Login Queue Overlay (Low CPU)
-const LoginQueueOverlay = ({ position, onCancel }: { position: number, onCancel: () => void }) => {
-    const peopleAhead = Math.max(0, position - 1);
-    const estTime = Math.ceil(position * 2.5); // Slow movement simulation
-    
-    return (
-        <div className="fixed inset-0 z-[999] bg-[#000510] flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
-            {/* Server Status Header */}
-            <div className="absolute top-8 left-0 right-0 flex justify-center">
-                <div className="bg-red-900/30 backdrop-blur px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-mono border border-red-800 animate-pulse">
-                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                    <span className="text-red-200">SERVER TRAFFIC: HIGH</span>
-                </div>
-            </div>
-
-            <div className="relative mb-10">
-                <div className="w-32 h-32 bg-indigo-500/10 rounded-full flex items-center justify-center border border-indigo-500/30 shadow-[0_0_50px_rgba(99,102,241,0.2)] relative overflow-hidden">
-                    <div className="absolute inset-0 bg-indigo-500/10 animate-ping rounded-full" style={{animationDuration: '3s'}}></div>
-                    <Lock size={48} className="text-indigo-400 relative z-10" />
-                </div>
-            </div>
-            
-            <h1 className="text-3xl font-black mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
-                排隊等待中
-            </h1>
-            <p className="text-slate-400 text-sm mb-8 font-medium">目前伺服器滿載，請依序進入...</p>
-            
-            <div className="bg-slate-900/80 backdrop-blur-md p-6 rounded-3xl border border-slate-800 w-full max-w-xs shadow-2xl relative overflow-hidden">
-                <div className="grid grid-cols-1 gap-4 mb-6">
-                    <div className="text-center p-4 bg-black/40 rounded-xl border border-slate-800">
-                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Queue Position</div>
-                        <div className="text-5xl font-mono font-black text-white">#{position}</div>
-                        <div className="text-xs text-slate-500 mt-2">約需等待 <span className="text-white font-bold">{estTime}</span> 秒</div>
-                    </div>
-                </div>
-                
-                <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
-                    <Loader2 size={12} className="animate-spin" /> 
-                    <span>系統將自動遞補，請勿關閉</span>
-                </div>
-            </div>
-
-            <button 
-                onClick={onCancel}
-                className="mt-12 text-slate-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors px-6 py-3 rounded-full hover:bg-white/5 border border-transparent hover:border-slate-700"
-            >
-                <X size={18} /> 取消排隊
-            </button>
-        </div>
-    );
-};
-
 // Header Component
 const Header = ({ user, onOpenNotifications, unreadCount }: { user: User, onOpenNotifications: () => void, unreadCount: number }) => {
     const xp = user.points;
@@ -206,11 +154,7 @@ const App = () => {
   const [currentTab, setCurrentTab] = useState<Tab>(Tab.HOME);
   const [isLoading, setIsLoading] = useState(true);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
-  
-  // Simulated Queue State
-  const [queuePosition, setQueuePosition] = useState<number | null>(null);
-  const queueIntervalRef = useRef<number | null>(null);
-  const targetUserRef = useRef<User | null>(null);
+  const [isBlackMarketOpen, setIsBlackMarketOpen] = useState(true); // Control Black Market State
   
   // Data States
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -233,69 +177,54 @@ const App = () => {
   type ActiveFeature = { id: string; params?: any } | null;
   const [activeFeature, setActiveFeature] = useState<ActiveFeature>(null);
 
-  // --- Maintenance Check ---
+  // --- System Status Checks (Maintenance & Black Market) ---
   useEffect(() => {
-      const checkMaintenance = async () => {
-          const { data } = await supabase
+      const checkSystemStatus = async () => {
+          // 1. Check Maintenance
+          const { data: maintData } = await supabase
               .from('notifications')
               .select('*')
               .eq('type', 'system')
               .eq('title', 'MAINTENANCE_MODE')
               .eq('content', 'ON')
               .limit(1);
+          setIsMaintenanceMode(!!(maintData && maintData.length > 0));
+
+          // 2. Check Black Market Status
+          const { data: bmData } = await supabase
+              .from('notifications')
+              .select('*')
+              .eq('type', 'system')
+              .eq('title', 'BLACK_MARKET_STATUS')
+              .limit(1);
           
-          if (data && data.length > 0) setIsMaintenanceMode(true);
-          else setIsMaintenanceMode(false);
+          // If a record exists, use its content ('OPEN' or 'CLOSED'). Default to OPEN if not found.
+          if (bmData && bmData.length > 0) {
+              setIsBlackMarketOpen(bmData[0].content === 'OPEN');
+          } else {
+              setIsBlackMarketOpen(true);
+          }
       };
 
-      checkMaintenance();
+      checkSystemStatus();
 
-      const channel = supabase.channel('maintenance_channel')
+      // Realtime Listener for System Changes
+      const channel = supabase.channel('system_status_channel')
           .on('broadcast', { event: 'MAINTENANCE_TRIGGER' }, ({ payload }) => {
               setIsMaintenanceMode(payload.status === 'ON');
+          })
+          .on('broadcast', { event: 'BLACK_MARKET_TRIGGER' }, ({ payload }) => {
+              setIsBlackMarketOpen(payload.status === 'OPEN');
+              // If user is currently IN the black market and it closes, kick them out
+              if (payload.status === 'CLOSED' && activeFeature?.id === 'black_market') {
+                  alert("交易所已暫時關閉進行維護。");
+                  setActiveFeature(null);
+              }
           })
           .subscribe();
 
       return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  // --- Queue Logic (Simulated for CPU Safety) ---
-  const startQueue = (targetUser: User) => {
-      // 30% chance to enter simulated queue to mimic load without checking DB
-      const isServerBusy = Math.random() > 0.7 && !targetUser.isAdmin;
-      
-      if (isServerBusy) {
-          // Simulated position 5-15
-          const pos = Math.floor(Math.random() * 10) + 5;
-          setQueuePosition(pos);
-          targetUserRef.current = targetUser;
-          
-          if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
-          
-          // Move queue locally without DB hits
-          queueIntervalRef.current = window.setInterval(() => {
-              setQueuePosition(prev => {
-                  if (prev === null) return null;
-                  if (prev <= 1) {
-                      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
-                      setUser(targetUserRef.current); // Login Success
-                      return null;
-                  }
-                  // Random drop 1 or 0
-                  return Math.max(1, prev - (Math.random() > 0.3 ? 1 : 0));
-              });
-          }, 1500); 
-      } else {
-          // No queue needed
-          setUser(targetUser);
-      }
-  };
-
-  const cancelQueue = () => {
-      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
-      setQueuePosition(null);
-      targetUserRef.current = null;
-  };
+  }, [activeFeature]);
 
   const handleTabChange = (newTab: Tab) => {
       setActiveFeature(null);
@@ -321,6 +250,13 @@ const App = () => {
           alertMaintenance();
           return;
       }
+      
+      // Black Market Check
+      if (featureId === 'black_market' && !isBlackMarketOpen) {
+          alert("黑市交易所目前暫停營業，請稍後再來。");
+          return;
+      }
+
       pushHistory();
       setActiveFeature({ id: featureId, params });
   };
@@ -446,7 +382,7 @@ const App = () => {
   const handleLogin = async (name: string, studentId: string) => {
     try {
         const loggedUser = await login(name, studentId);
-        startQueue(loggedUser);
+        setUser(loggedUser);
         if (loggedUser) checkDailyReset(loggedUser);
     } catch (error: any) { alert("登入失敗: " + error.message); }
   };
@@ -612,9 +548,6 @@ const App = () => {
   
   // Login Screen
   if (!user) {
-      if (queuePosition !== null) {
-          return <LoginQueueOverlay position={queuePosition} onCancel={cancelQueue} />;
-      }
       return <LoginScreen onLogin={handleLogin} />;
   }
 
@@ -786,7 +719,8 @@ const App = () => {
                     <PlaygroundScreen 
                         user={user}
                         onNavigate={handleNavigateToFeature}
-                        setUser={handleUpdateUser} 
+                        setUser={handleUpdateUser}
+                        isBlackMarketOpen={isBlackMarketOpen}
                     />
                 )}
                 
