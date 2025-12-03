@@ -68,7 +68,6 @@ const getFrameStyle = (frameId?: string) => {
 };
 
 const MAX_POINT_GAIN_PER_ACTION = 500;
-const MAX_CONCURRENT_USERS = 5; // Real Server Limit
 
 // Maintenance Screen
 const MaintenanceScreen = () => (
@@ -93,9 +92,10 @@ const MaintenanceScreen = () => (
     </div>
 );
 
-// Real Login Queue Overlay
-const RealQueueOverlay = ({ position, totalUsers, onLeave }: { position: number, totalUsers: number, onLeave: () => void }) => {
+// Simulated Login Queue Overlay (Low CPU)
+const LoginQueueOverlay = ({ position, onCancel }: { position: number, onCancel: () => void }) => {
     const peopleAhead = Math.max(0, position - 1);
+    const estTime = Math.ceil(position * 2.5); // Slow movement simulation
     
     return (
         <div className="fixed inset-0 z-[999] bg-[#000510] flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
@@ -103,7 +103,7 @@ const RealQueueOverlay = ({ position, totalUsers, onLeave }: { position: number,
             <div className="absolute top-8 left-0 right-0 flex justify-center">
                 <div className="bg-red-900/30 backdrop-blur px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-mono border border-red-800 animate-pulse">
                     <div className="w-2 h-2 rounded-full bg-red-500"></div>
-                    <span className="text-red-200">SERVER FULL ({totalUsers}/{MAX_CONCURRENT_USERS})</span>
+                    <span className="text-red-200">SERVER TRAFFIC: HIGH</span>
                 </div>
             </div>
 
@@ -117,14 +117,14 @@ const RealQueueOverlay = ({ position, totalUsers, onLeave }: { position: number,
             <h1 className="text-3xl font-black mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
                 排隊等待中
             </h1>
-            <p className="text-slate-400 text-sm mb-8 font-medium">伺服器人數已達上限，請保持此頁面開啟...</p>
+            <p className="text-slate-400 text-sm mb-8 font-medium">目前伺服器滿載，請依序進入...</p>
             
             <div className="bg-slate-900/80 backdrop-blur-md p-6 rounded-3xl border border-slate-800 w-full max-w-xs shadow-2xl relative overflow-hidden">
                 <div className="grid grid-cols-1 gap-4 mb-6">
                     <div className="text-center p-4 bg-black/40 rounded-xl border border-slate-800">
-                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Your Position</div>
+                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Queue Position</div>
                         <div className="text-5xl font-mono font-black text-white">#{position}</div>
-                        <div className="text-xs text-slate-500 mt-2">前方還有 <span className="text-white font-bold">{peopleAhead}</span> 人</div>
+                        <div className="text-xs text-slate-500 mt-2">約需等待 <span className="text-white font-bold">{estTime}</span> 秒</div>
                     </div>
                 </div>
                 
@@ -135,10 +135,10 @@ const RealQueueOverlay = ({ position, totalUsers, onLeave }: { position: number,
             </div>
 
             <button 
-                onClick={onLeave}
+                onClick={onCancel}
                 className="mt-12 text-slate-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors px-6 py-3 rounded-full hover:bg-white/5 border border-transparent hover:border-slate-700"
             >
-                <X size={18} /> 放棄排隊 (登出)
+                <X size={18} /> 取消排隊
             </button>
         </div>
     );
@@ -207,9 +207,10 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
-  // Real Queue System State
-  const [queueState, setQueueState] = useState<{ inQueue: boolean, position: number, total: number }>({ inQueue: false, position: 0, total: 0 });
-  const presenceChannelRef = useRef<any>(null);
+  // Simulated Queue State
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const queueIntervalRef = useRef<number | null>(null);
+  const targetUserRef = useRef<User | null>(null);
   
   // Data States
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -258,82 +259,42 @@ const App = () => {
       return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // --- REAL QUEUE LOGIC (Global Presence) ---
-  useEffect(() => {
-      if (!user) {
-          if (presenceChannelRef.current) {
-              supabase.removeChannel(presenceChannelRef.current);
-              presenceChannelRef.current = null;
-          }
-          return;
+  // --- Queue Logic (Simulated for CPU Safety) ---
+  const startQueue = (targetUser: User) => {
+      // 30% chance to enter simulated queue to mimic load without checking DB
+      const isServerBusy = Math.random() > 0.7 && !targetUser.isAdmin;
+      
+      if (isServerBusy) {
+          // Simulated position 5-15
+          const pos = Math.floor(Math.random() * 10) + 5;
+          setQueuePosition(pos);
+          targetUserRef.current = targetUser;
+          
+          if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
+          
+          // Move queue locally without DB hits
+          queueIntervalRef.current = window.setInterval(() => {
+              setQueuePosition(prev => {
+                  if (prev === null) return null;
+                  if (prev <= 1) {
+                      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
+                      setUser(targetUserRef.current); // Login Success
+                      return null;
+                  }
+                  // Random drop 1 or 0
+                  return Math.max(1, prev - (Math.random() > 0.3 ? 1 : 0));
+              });
+          }, 1500); 
+      } else {
+          // No queue needed
+          setUser(targetUser);
       }
+  };
 
-      // Admin Bypass
-      if (user.isAdmin || user.studentId === '1204233') {
-          setQueueState({ inQueue: false, position: 0, total: 0 });
-          return;
-      }
-
-      // Connect to Global Gatekeeper Channel
-      const channel = supabase.channel('global_gatekeeper', {
-          config: { presence: { key: user.studentId } }
-      });
-
-      channel
-        .on('presence', { event: 'sync' }, () => {
-            const state = channel.presenceState();
-            const allUsers: any[] = [];
-            
-            for (const key in state) {
-                // @ts-ignore
-                const presenceList = state[key] as any[];
-                if (presenceList && presenceList.length > 0) {
-                    // Use the earliest join time for this user (in case of multi-tab, usually assumes one)
-                    const earliest = presenceList.reduce((prev, curr) => (prev.joinedAt < curr.joinedAt ? prev : curr));
-                    allUsers.push(earliest);
-                }
-            }
-
-            // Sort by Join Time (FIFO Queue)
-            allUsers.sort((a, b) => a.joinedAt - b.joinedAt);
-            
-            // Find my index
-            const myIndex = allUsers.findIndex(u => u.id === user.studentId);
-            const total = allUsers.length;
-
-            if (myIndex !== -1) {
-                if (myIndex < MAX_CONCURRENT_USERS) {
-                    // Allowed
-                    setQueueState({ inQueue: false, position: 0, total });
-                } else {
-                    // Queued
-                    // Position is (myIndex - MAX + 1). e.g. if MAX=5, index 5 is 1st in queue.
-                    const pos = myIndex - MAX_CONCURRENT_USERS + 1;
-                    setQueueState({ inQueue: true, position: pos, total });
-                }
-            }
-        })
-        .subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                // Track presence with a timestamp for fairness
-                await channel.track({ id: user.studentId, joinedAt: Date.now() });
-            }
-        });
-
-      presenceChannelRef.current = channel;
-
-      return () => {
-          if (presenceChannelRef.current) {
-              supabase.removeChannel(presenceChannelRef.current);
-              presenceChannelRef.current = null;
-          }
-      };
-  }, [user]);
-
-  const handleQueueLeave = () => {
-      logout();
-      setUser(null);
-      setQueueState({ inQueue: false, position: 0, total: 0 });
+  const cancelQueue = () => {
+      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
+      setQueuePosition(null);
+      targetUserRef.current = null;
   };
 
   const handleTabChange = (newTab: Tab) => {
@@ -485,7 +446,7 @@ const App = () => {
   const handleLogin = async (name: string, studentId: string) => {
     try {
         const loggedUser = await login(name, studentId);
-        setUser(loggedUser);
+        startQueue(loggedUser);
         if (loggedUser) checkDailyReset(loggedUser);
     } catch (error: any) { alert("登入失敗: " + error.message); }
   };
@@ -636,7 +597,6 @@ const App = () => {
       try { 
           await updateUserInDb(updatedUser); 
           setUser(updatedUser); 
-          // Do NOT close active feature, allow replay in same screen
       } catch(e) {}
   };
 
@@ -652,12 +612,10 @@ const App = () => {
   
   // Login Screen
   if (!user) {
+      if (queuePosition !== null) {
+          return <LoginQueueOverlay position={queuePosition} onCancel={cancelQueue} />;
+      }
       return <LoginScreen onLogin={handleLogin} />;
-  }
-
-  // Queue Screen Intercept
-  if (queueState.inQueue) {
-      return <RealQueueOverlay position={queueState.position} totalUsers={queueState.total} onLeave={handleQueueLeave} />;
   }
 
   // --- RENDER FULL APP ---
@@ -726,7 +684,7 @@ const App = () => {
       {/* --- RENDER FULL SCREEN FEATURES --- */}
       {renderActiveFeature()}
 
-      {/* Overlays - Increased Z-Index to [100] to be above BottomNav [50] */}
+      {/* Overlays */}
       {selectedQuestion && (
         <div className="fixed inset-0 z-[100] bg-white dark:bg-gray-900 h-full flex flex-col">
              <QuestionDetailScreen 
