@@ -19,7 +19,7 @@ import { UpdateAnnouncementModal } from './components/UpdateAnnouncementModal';
 import { AiTutorScreen } from './screens/AiTutorScreen';
 
 import { Tab, User, Question, Report, Product, Resource, Exam, GameResult, Notification, PkResult, PkGameMode } from './types';
-import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2, Users, Clock, Server, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, X, Bell, Cone, AlertTriangle, Loader2, Users, Clock, Server, CheckCircle2, Lock } from 'lucide-react';
 
 // Services
 import { calculateLevel } from './services/levelService';
@@ -68,6 +68,7 @@ const getFrameStyle = (frameId?: string) => {
 };
 
 const MAX_POINT_GAIN_PER_ACTION = 500;
+const MAX_CONCURRENT_USERS = 5; // Real Server Limit
 
 // Maintenance Screen
 const MaintenanceScreen = () => (
@@ -92,69 +93,52 @@ const MaintenanceScreen = () => (
     </div>
 );
 
-// Enhanced Login Queue Overlay
-const LoginQueueOverlay = ({ position, onCancel }: { position: number, onCancel: () => void }) => {
+// Real Login Queue Overlay
+const RealQueueOverlay = ({ position, totalUsers, onLeave }: { position: number, totalUsers: number, onLeave: () => void }) => {
     const peopleAhead = Math.max(0, position - 1);
     
-    // Simulate estimated wait time based on position
-    // Add randomness to make it feel real (sometimes stalls)
-    const estMinutes = Math.floor((position * 2) / 60);
-    const estSeconds = (position * 2) % 60;
-    
-    const formattedTime = estMinutes > 0 ? `${estMinutes}分 ${estSeconds}秒` : `${estSeconds} 秒`;
-
     return (
-        <div className="fixed inset-0 z-[999] bg-[#0f172a] flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
+        <div className="fixed inset-0 z-[999] bg-[#000510] flex flex-col items-center justify-center text-white p-6 text-center animate-in fade-in duration-500">
             {/* Server Status Header */}
             <div className="absolute top-8 left-0 right-0 flex justify-center">
-                <div className="bg-slate-800/80 backdrop-blur px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-mono border border-slate-700">
-                    <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></div>
-                    <span className="text-slate-400">SERVER LOAD: <span className="text-yellow-400 font-bold">HIGH (98%)</span></span>
+                <div className="bg-red-900/30 backdrop-blur px-4 py-1.5 rounded-full flex items-center gap-2 text-xs font-mono border border-red-800 animate-pulse">
+                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                    <span className="text-red-200">SERVER FULL ({totalUsers}/{MAX_CONCURRENT_USERS})</span>
                 </div>
             </div>
 
             <div className="relative mb-10">
-                <div className="w-32 h-32 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/30 shadow-[0_0_50px_rgba(59,130,246,0.2)] relative overflow-hidden">
-                    <div className="absolute inset-0 bg-blue-500/10 animate-ping rounded-full" style={{animationDuration: '3s'}}></div>
-                    <Server size={48} className="text-blue-400 relative z-10" />
+                <div className="w-32 h-32 bg-indigo-500/10 rounded-full flex items-center justify-center border border-indigo-500/30 shadow-[0_0_50px_rgba(99,102,241,0.2)] relative overflow-hidden">
+                    <div className="absolute inset-0 bg-indigo-500/10 animate-ping rounded-full" style={{animationDuration: '3s'}}></div>
+                    <Lock size={48} className="text-indigo-400 relative z-10" />
                 </div>
-                {/* Connecting lines decoration */}
-                <div className="absolute -left-12 top-1/2 w-12 h-[1px] bg-gradient-to-r from-transparent to-blue-500/50"></div>
-                <div className="absolute -right-12 top-1/2 w-12 h-[1px] bg-gradient-to-l from-transparent to-blue-500/50"></div>
             </div>
             
-            <h1 className="text-3xl font-black mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">
-                正在排隊進入
+            <h1 className="text-3xl font-black mb-2 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">
+                排隊等待中
             </h1>
-            <p className="text-slate-400 text-sm mb-8 font-medium">目前伺服器滿載，請勿關閉視窗...</p>
+            <p className="text-slate-400 text-sm mb-8 font-medium">伺服器人數已達上限，請保持此頁面開啟...</p>
             
-            <div className="bg-slate-800/50 backdrop-blur-md p-6 rounded-3xl border border-slate-700 w-full max-w-xs shadow-2xl relative overflow-hidden">
-                {/* Progress Bar Background */}
-                <div className="absolute top-0 left-0 h-1 bg-blue-500 animate-[loading_2s_ease-in-out_infinite]" style={{width: '30%'}}></div>
-                <style>{`@keyframes loading { 0% { left: -30%; } 100% { left: 130%; } }`}</style>
-                
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="text-left p-3 bg-slate-900/50 rounded-xl">
-                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Queue Position</div>
-                        <div className="text-3xl font-mono font-black text-white">#{position}</div>
-                    </div>
-                    <div className="text-right p-3 bg-slate-900/50 rounded-xl">
-                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">People Ahead</div>
-                        <div className="text-3xl font-mono font-black text-blue-500">{peopleAhead}</div>
+            <div className="bg-slate-900/80 backdrop-blur-md p-6 rounded-3xl border border-slate-800 w-full max-w-xs shadow-2xl relative overflow-hidden">
+                <div className="grid grid-cols-1 gap-4 mb-6">
+                    <div className="text-center p-4 bg-black/40 rounded-xl border border-slate-800">
+                        <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Your Position</div>
+                        <div className="text-5xl font-mono font-black text-white">#{position}</div>
+                        <div className="text-xs text-slate-500 mt-2">前方還有 <span className="text-white font-bold">{peopleAhead}</span> 人</div>
                     </div>
                 </div>
                 
-                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 bg-slate-900/80 py-2 rounded-lg border border-slate-700/50">
-                    <Clock size={14} className="text-blue-400 animate-pulse" /> 
-                    <span>預估等待: <span className="text-white font-bold font-mono">{formattedTime}</span></span>
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                    <Loader2 size={12} className="animate-spin" /> 
+                    <span>系統將自動遞補，請勿關閉</span>
                 </div>
             </div>
 
             <button 
-                onClick={onCancel}
+                onClick={onLeave}
                 className="mt-12 text-slate-500 hover:text-white text-sm font-bold flex items-center gap-2 transition-colors px-6 py-3 rounded-full hover:bg-white/5 border border-transparent hover:border-slate-700"
             >
-                <X size={18} /> 取消排隊
+                <X size={18} /> 放棄排隊 (登出)
             </button>
         </div>
     );
@@ -223,10 +207,9 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   
-  // Queue System State
-  const [queuePosition, setQueuePosition] = useState<number | null>(null);
-  const queueIntervalRef = useRef<number | null>(null);
-  const targetUserRef = useRef<User | null>(null); // Store user while queuing
+  // Real Queue System State
+  const [queueState, setQueueState] = useState<{ inQueue: boolean, position: number, total: number }>({ inQueue: false, position: 0, total: 0 });
+  const presenceChannelRef = useRef<any>(null);
   
   // Data States
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -275,67 +258,85 @@ const App = () => {
       return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // --- Queue Logic ---
-  const startQueue = (targetUser: User) => {
-      // Simulate server load check
-      // 50% chance to enter queue if not admin, to simulate traffic for demo
-      const isServerBusy = Math.random() > 0.5 && !targetUser.isAdmin;
-      
-      if (isServerBusy) {
-          // Assign random queue position (e.g. 50 to 150 to feel REAL)
-          const pos = Math.floor(Math.random() * 100) + 50;
-          setQueuePosition(pos);
-          targetUserRef.current = targetUser;
-          
-          // Start variable countdown (Real queue simulation)
-          // Speed depends on position: faster when far, slower when close
-          if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
-          
-          const processQueue = () => {
-              setQueuePosition(prev => {
-                  if (prev === null) return null;
-                  
-                  // If finished
-                  if (prev <= 1) {
-                      if (queueIntervalRef.current) clearInterval(queueIntervalRef.current);
-                      setUser(targetUserRef.current); // Login Success
-                      return null;
-                  }
-
-                  // Non-linear decrement logic
-                  // Sometimes stick (0 drop), sometimes fast drop (3-5), usually small drop (1-2)
-                  const rand = Math.random();
-                  let drop = 1;
-                  
-                  if (rand > 0.9) drop = 0; // Stalled
-                  else if (rand > 0.7) drop = Math.floor(Math.random() * 4) + 2; // Fast batch
-                  else drop = Math.floor(Math.random() * 2) + 1; // Normal
-
-                  return Math.max(1, prev - drop);
-              });
-              
-              // Variable interval for next tick (0.5s to 2s) to feel organic
-              const nextTick = Math.random() * 1500 + 500;
-              queueIntervalRef.current = window.setTimeout(processQueue, nextTick);
-          };
-          
-          processQueue(); // Start loop
-
-      } else {
-          // No queue needed
-          setUser(targetUser);
+  // --- REAL QUEUE LOGIC (Global Presence) ---
+  useEffect(() => {
+      if (!user) {
+          if (presenceChannelRef.current) {
+              supabase.removeChannel(presenceChannelRef.current);
+              presenceChannelRef.current = null;
+          }
+          return;
       }
-  };
 
-  const cancelQueue = () => {
-      if (queueIntervalRef.current) clearTimeout(queueIntervalRef.current);
-      setQueuePosition(null);
-      targetUserRef.current = null;
-      // Effectively cancels login process, stay on login screen
+      // Admin Bypass
+      if (user.isAdmin || user.studentId === '1204233') {
+          setQueueState({ inQueue: false, position: 0, total: 0 });
+          return;
+      }
+
+      // Connect to Global Gatekeeper Channel
+      const channel = supabase.channel('global_gatekeeper', {
+          config: { presence: { key: user.studentId } }
+      });
+
+      channel
+        .on('presence', { event: 'sync' }, () => {
+            const state = channel.presenceState();
+            const allUsers: any[] = [];
+            
+            for (const key in state) {
+                // @ts-ignore
+                const presenceList = state[key] as any[];
+                if (presenceList && presenceList.length > 0) {
+                    // Use the earliest join time for this user (in case of multi-tab, usually assumes one)
+                    const earliest = presenceList.reduce((prev, curr) => (prev.joinedAt < curr.joinedAt ? prev : curr));
+                    allUsers.push(earliest);
+                }
+            }
+
+            // Sort by Join Time (FIFO Queue)
+            allUsers.sort((a, b) => a.joinedAt - b.joinedAt);
+            
+            // Find my index
+            const myIndex = allUsers.findIndex(u => u.id === user.studentId);
+            const total = allUsers.length;
+
+            if (myIndex !== -1) {
+                if (myIndex < MAX_CONCURRENT_USERS) {
+                    // Allowed
+                    setQueueState({ inQueue: false, position: 0, total });
+                } else {
+                    // Queued
+                    // Position is (myIndex - MAX + 1). e.g. if MAX=5, index 5 is 1st in queue.
+                    const pos = myIndex - MAX_CONCURRENT_USERS + 1;
+                    setQueueState({ inQueue: true, position: pos, total });
+                }
+            }
+        })
+        .subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                // Track presence with a timestamp for fairness
+                await channel.track({ id: user.studentId, joinedAt: Date.now() });
+            }
+        });
+
+      presenceChannelRef.current = channel;
+
+      return () => {
+          if (presenceChannelRef.current) {
+              supabase.removeChannel(presenceChannelRef.current);
+              presenceChannelRef.current = null;
+          }
+      };
+  }, [user]);
+
+  const handleQueueLeave = () => {
+      logout();
+      setUser(null);
+      setQueueState({ inQueue: false, position: 0, total: 0 });
   };
 
   const handleTabChange = (newTab: Tab) => {
-      // Reset all overlays when changing tabs
       setActiveFeature(null);
       setShowLeaderboardOverlay(false);
       setSelectedQuestion(null);
@@ -343,7 +344,6 @@ const App = () => {
       setShowModeration(false);
       setShowCheckInModal(false);
       setShowNotificationScreen(false);
-      
       setCurrentTab(newTab);
   };
 
@@ -355,7 +355,6 @@ const App = () => {
       alert("系統正在進行安全性維護，相關功能暫時關閉。");
   };
 
-  // --- Generic Navigation Handler ---
   const handleNavigateToFeature = (featureId: string, params?: any) => {
       if (isMaintenanceMode && featureId !== 'base_converter' && featureId !== 'xiangqi') {
           alertMaintenance();
@@ -392,7 +391,6 @@ const App = () => {
         try {
             const sessionUser = await checkSession();
             if (sessionUser) {
-                // If session exists, skip queue for UX (or implement reduced queue)
                 setUser(sessionUser);
                 checkDailyReset(sessionUser);
                 refreshNotifications(sessionUser.studentId);
@@ -487,8 +485,7 @@ const App = () => {
   const handleLogin = async (name: string, studentId: string) => {
     try {
         const loggedUser = await login(name, studentId);
-        // Trigger Queue Check
-        startQueue(loggedUser);
+        setUser(loggedUser);
         if (loggedUser) checkDailyReset(loggedUser);
     } catch (error: any) { alert("登入失敗: " + error.message); }
   };
@@ -653,12 +650,14 @@ const App = () => {
   if (isLoading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin"/></div>;
   if (isMaintenanceMode && user && user.studentId !== '1204233') return <MaintenanceScreen />;
   
-  // Login or Queue Screen
+  // Login Screen
   if (!user) {
-      if (queuePosition !== null) {
-          return <LoginQueueOverlay position={queuePosition} onCancel={cancelQueue} />;
-      }
       return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  // Queue Screen Intercept
+  if (queueState.inQueue) {
+      return <RealQueueOverlay position={queueState.position} totalUsers={queueState.total} onLeave={handleQueueLeave} />;
   }
 
   // --- RENDER FULL APP ---

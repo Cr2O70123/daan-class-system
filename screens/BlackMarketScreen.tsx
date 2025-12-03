@@ -765,13 +765,21 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                     const totalItemPrice = dynamicPrice * qty;
                                     const canAffordTotal = (user.blackMarketCoins || 0) >= totalItemPrice;
                                     const isStackable = item.tag === '消耗品' || item.category === 'consumable';
+                                    
+                                    // Count owned quantity for stackable items
+                                    const ownedCount = user.inventory.filter(id => id === item.id).length;
 
                                     return (
                                         <div key={item.id} className="bg-gray-900 p-3 rounded-xl border border-gray-800 flex flex-col gap-3 relative overflow-hidden group">
                                             {/* Item Info */}
                                             <div className="flex gap-3 items-center relative z-10">
-                                                <div className={`w-12 h-12 rounded-lg ${item.color} flex items-center justify-center shrink-0 shadow-lg`}>
+                                                <div className={`w-12 h-12 rounded-lg ${item.color} flex items-center justify-center shrink-0 shadow-lg relative`}>
                                                     {item.icon}
+                                                    {ownedCount > 0 && isStackable && (
+                                                        <div className="absolute -top-1 -right-1 bg-green-500 text-white text-[9px] font-bold px-1.5 rounded-full shadow-sm border border-black">
+                                                            {ownedCount}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between items-start">
@@ -779,9 +787,17 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                                         {item.tag && <span className="text-[9px] bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{item.tag}</span>}
                                                     </div>
                                                     <p className="text-[10px] text-gray-500 line-clamp-1">{item.description}</p>
-                                                    <div className="text-purple-400 font-mono text-xs font-bold mt-1">
-                                                        {dynamicPrice.toLocaleString()} BMC 
-                                                        {inflationMultiplier > 1.05 && <span className="text-[9px] text-red-500 ml-1">↑</span>}
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <div className="text-purple-400 font-mono text-xs font-bold">
+                                                            {dynamicPrice.toLocaleString()} BMC 
+                                                            {inflationMultiplier > 1.05 && <span className="text-[9px] text-red-500 ml-1">↑</span>}
+                                                        </div>
+                                                        {ownedCount > 0 && !isStackable && (
+                                                            <span className="text-[9px] text-green-500 font-bold bg-green-900/20 px-1 rounded">已擁有</span>
+                                                        )}
+                                                        {ownedCount > 0 && isStackable && (
+                                                            <span className="text-[9px] text-green-500 font-bold bg-green-900/20 px-1 rounded">持有: {ownedCount}</span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -800,17 +816,17 @@ export const BlackMarketScreen: React.FC<BlackMarketScreenProps> = ({ user, onBa
                                                 )}
 
                                                 <button 
-                                                    disabled={!canAffordTotal || (isOwned)}
+                                                    disabled={!canAffordTotal || (isOwned && !isStackable)}
                                                     onClick={() => handleBuyItem(item)}
                                                     className={`px-4 py-2 rounded-lg text-xs font-bold flex-1 transition-all ${
-                                                        isOwned
+                                                        (isOwned && !isStackable)
                                                             ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
                                                             : canAffordTotal
                                                                 ? 'bg-purple-700 text-white hover:bg-purple-600 shadow-lg shadow-purple-900/50'
                                                                 : 'bg-gray-800 text-gray-500 border border-red-900/50 cursor-not-allowed'
                                                     }`}
                                                 >
-                                                    {isOwned ? '已擁有' : `購買 (${totalItemPrice.toLocaleString()})`}
+                                                    {(isOwned && !isStackable) ? '已擁有' : `購買 (${totalItemPrice.toLocaleString()})`}
                                                 </button>
                                             </div>
                                         </div>
