@@ -198,7 +198,6 @@ const App = () => {
               .eq('title', 'BLACK_MARKET_STATUS')
               .limit(1);
           
-          // If a record exists, use its content ('OPEN' or 'CLOSED'). Default to OPEN if not found.
           if (bmData && bmData.length > 0) {
               setIsBlackMarketOpen(bmData[0].content === 'OPEN');
           } else {
@@ -208,14 +207,13 @@ const App = () => {
 
       checkSystemStatus();
 
-      // Realtime Listener for System Changes
+      // Realtime Listener for System Changes (Only system events, low frequency)
       const channel = supabase.channel('system_status_channel')
           .on('broadcast', { event: 'MAINTENANCE_TRIGGER' }, ({ payload }) => {
               setIsMaintenanceMode(payload.status === 'ON');
           })
           .on('broadcast', { event: 'BLACK_MARKET_TRIGGER' }, ({ payload }) => {
               setIsBlackMarketOpen(payload.status === 'OPEN');
-              // If user is currently IN the black market and it closes, kick them out
               if (payload.status === 'CLOSED' && activeFeature?.id === 'black_market') {
                   alert("交易所已暫時關閉進行維護。");
                   setActiveFeature(null);
@@ -225,6 +223,10 @@ const App = () => {
 
       return () => { supabase.removeChannel(channel); };
   }, [activeFeature]);
+
+  // --- OPTIMIZATION: REMOVED Realtime Notification Listener ---
+  // To save quota, we only fetch notifications on load or manual refresh.
+  // The previous useEffect tracking 'public:notifications' is removed.
 
   const handleTabChange = (newTab: Tab) => {
       setActiveFeature(null);
@@ -301,19 +303,6 @@ const App = () => {
     initSession();
     loadData();
   }, []);
-
-    useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel('public:notifications')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.studentId}` },
-        (payload) => { setUnreadNotifications(prev => prev + 1); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
 
   useEffect(() => {
       if (user?.settings?.darkMode) {
